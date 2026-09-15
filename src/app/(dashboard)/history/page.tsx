@@ -4,6 +4,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
+import AppHeader from '@/components/layout/AppHeader'
+import { GolfBallIcon } from '@/components/icons'
 
 interface BetRecord {
   id: string
@@ -97,10 +99,10 @@ export default function HistoryPage() {
   return (
     <PhoneFrame statusTheme="dark" hideSponsor>
       <div className="screen-history">
-        {/* Header */}
-        <header className="history-header">
-          <h1 className="history-title">My Bets</h1>
-          <div style={{ fontSize: 'var(--text-body)', color: 'var(--gray-light)', fontWeight: 600 }}>
+        <AppHeader tone="light" />
+        <header className="page-head">
+          <h1 className="page-title">My Bets</h1>
+          <div className="page-sub" style={{ whiteSpace: 'nowrap', paddingBottom: 4 }}>
             {loading ? '—' : allBets.length} total
           </div>
         </header>
@@ -170,7 +172,7 @@ export default function HistoryPage() {
             ))
           ) : filtered.length === 0 ? (
             <div className="history-empty">
-              <div className="history-empty-icon">🏌️</div>
+              <div className="history-empty-icon" aria-hidden><GolfBallIcon size={52} ball="#fff" style={{ color: 'var(--green)' }} /></div>
               <div className="history-empty-title">
                 {filter === 'all' ? 'No bets yet' : `No ${FILTERS.find(f => f.key === filter)?.label.toLowerCase()} bets`}
               </div>

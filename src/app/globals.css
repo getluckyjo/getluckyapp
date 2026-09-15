@@ -564,6 +564,35 @@ body {
 .form-row { display: flex; gap: 12px; }
 .form-row .form-group { flex: 1; }
 
+/* Titles on the age-check and payment-setup forms. These had no rule of
+   their own and inherited the body's white text — invisible on the surface. */
+.signup-title {
+  font-family: var(--font-heading); font-weight: 800;
+  font-size: clamp(28px, 8.5vw, 36px); line-height: 1.1;
+  text-transform: uppercase; color: var(--green);
+  margin: 0 0 8px;
+}
+.signup-sub {
+  font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.45;
+  color: var(--green); opacity: 0.85; margin: 0;
+}
+
+/* Page heading on the list screens (My bets, Winners, Account) — the same
+   display voice as the designed screens, one size down. */
+.page-title {
+  font-family: var(--font-heading); font-weight: 800;
+  font-size: clamp(30px, 9.5vw, 40px); line-height: 1.05;
+  text-transform: uppercase; color: var(--green); margin: 0;
+}
+.page-sub {
+  font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.4;
+  color: var(--green); opacity: 0.8; margin: 4px 0 0;
+}
+.page-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+  padding: clamp(10px, 2.4vh, 22px) var(--page-px) 0;
+}
+
 /* Legacy compat — keep for payment-setup page */
 .signup-header { padding: var(--space-lg) var(--page-px) 0; }
 .back-btn {
@@ -574,12 +603,13 @@ body {
 .signup-title-area { padding: var(--space-lg) var(--page-px); }
 .signup-footer { padding: var(--space-md) var(--page-px) var(--space-2xl); }
 
-/* ── SCREEN: PAYMENT ── */
+/* ── SCREEN: PAYMENT / AGE CHECK ── */
 .screen-payment {
   width: 100%; height: 100%;
   background: var(--cream-light);
-  display: flex; flex-direction: column; padding-top: 50px;
+  display: flex; flex-direction: column;
   overflow-y: auto;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
 }
 .payment-card-preview {
   margin: 20px 24px; height: 175px;
@@ -620,7 +650,7 @@ body {
 .screen-bet {
   width: 100%; height: 100%;
   background: linear-gradient(180deg, #1e3120 0%, #335231 50%, #142619 100%);
-  display: flex; flex-direction: column; padding-top: 50px; color: var(--cream);
+  display: flex; flex-direction: column; padding-top: max(50px, calc(env(safe-area-inset-top, 0px) + 12px)); color: var(--cream);
 }
 .bet-header { padding: var(--space-lg) var(--page-px); text-align: center; }
 .bet-title { font-family: 'Poster Gothic', sans-serif; font-size: var(--text-xl); font-weight: 900; margin-bottom: 6px; letter-spacing: -0.3px; text-transform: uppercase; }
@@ -673,7 +703,7 @@ body {
 /* ── SCREEN: CONFIRM ── */
 .screen-confirm {
   width: 100%; height: 100%; background: var(--cream-light);
-  display: flex; flex-direction: column; padding-top: 50px;
+  display: flex; flex-direction: column; padding-top: max(50px, calc(env(safe-area-inset-top, 0px) + 12px));
   overflow-y: auto;
 }
 .confirm-video { margin: var(--space-md) var(--page-px); height: clamp(180px, 50vw, 220px); background: linear-gradient(150deg, #1e3120, #335231); border-radius: 16px; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; }
@@ -688,7 +718,7 @@ body {
 /* ── SCREEN: TRY AGAIN ── */
 .screen-tryagain {
   width: 100%; height: 100%; background: var(--cream-light);
-  display: flex; flex-direction: column; align-items: center; padding-top: 50px;
+  display: flex; flex-direction: column; align-items: center; padding-top: max(50px, calc(env(safe-area-inset-top, 0px) + 12px));
   overflow-y: auto;
 }
 .tryagain-illustration { margin-top: 56px; font-size: 76px; margin-bottom: 20px; }
@@ -703,7 +733,7 @@ body {
 /* ── SCREEN: UPLOAD PROOF ── */
 .screen-upload {
   width: 100%; height: 100%; background: var(--cream-light);
-  display: flex; flex-direction: column; padding-top: 50px;
+  display: flex; flex-direction: column; padding-top: max(50px, calc(env(safe-area-inset-top, 0px) + 12px));
   overflow-y: auto;
 }
 .upload-celebration { text-align: center; padding: var(--space-lg) var(--page-px); }
@@ -727,7 +757,7 @@ body {
 /* ── SCREEN: VERIFY ── */
 .screen-verify {
   width: 100%; height: 100%; background: var(--cream-light);
-  display: flex; flex-direction: column; align-items: center; padding-top: 50px;
+  display: flex; flex-direction: column; align-items: center; padding-top: max(50px, calc(env(safe-area-inset-top, 0px) + 12px));
   overflow-y: auto;
 }
 .verify-animation { margin-top: 56px; width: clamp(90px, 28vw, 116px); height: clamp(90px, 28vw, 116px); position: relative; margin-bottom: 26px; }
@@ -753,7 +783,7 @@ body {
 .screen-home {
   width: 100%; height: 100%;
   background: var(--cream-light);
-  display: flex; flex-direction: column; padding-top: 50px; overflow-y: auto;
+  display: flex; flex-direction: column; padding-top: max(50px, calc(env(safe-area-inset-top, 0px) + 12px)); overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
 .home-header { padding: var(--space-lg) var(--page-px) 0; display: flex; justify-content: space-between; align-items: center; }
@@ -918,7 +948,9 @@ body {
 .app-header {
   position: relative; z-index: 20;
   display: flex; align-items: flex-start; justify-content: space-between;
-  padding: calc(clamp(28px, 6vh, 52px) + env(safe-area-inset-top, 0px)) var(--page-px) 0;
+  /* Clear the status bar on a notched phone (safe-area inset + breathing
+     room), otherwise the design's own top margin — whichever is larger. */
+  padding: max(clamp(28px, 6vh, 52px), calc(env(safe-area-inset-top, 0px) + 12px)) var(--page-px) 0;
   flex-shrink: 0;
 }
 .app-header-burger {
@@ -964,12 +996,14 @@ body {
   background: none; border: none; color: var(--white);
   font-size: 34px; line-height: 1; cursor: pointer; border-radius: 10px;
 }
-.app-menu-primary { display: flex; flex-direction: column; gap: 4px; }
+.app-menu-primary { display: flex; flex-direction: column; gap: 2px; }
 .app-menu-primary button {
   text-align: left; background: none; border: none; cursor: pointer;
   color: var(--white);
-  font-family: var(--font-heading); font-size: clamp(26px, 8vw, 32px); font-weight: 800;
-  text-transform: uppercase; line-height: 1.2; padding: 6px 0;
+  /* Scales with the screen's height so the sign-out / sign-in control at the
+     foot of the drawer stays on screen on a short phone. */
+  font-family: var(--font-heading); font-size: clamp(22px, 4.2vh, 32px); font-weight: 800;
+  text-transform: uppercase; line-height: 1.2; padding: clamp(3px, 0.6vh, 6px) 0;
   transition: color 0.15s;
 }
 .app-menu-primary button:hover { color: var(--lime); }
@@ -982,7 +1016,7 @@ body {
   text-align: left; background: none; border: none; cursor: pointer;
   color: rgba(255,255,255,0.85);
   font-family: 'Inter', sans-serif; font-size: var(--text-md); font-weight: 500;
-  padding: 8px 0;
+  padding: clamp(5px, 1vh, 8px) 0;
 }
 .app-menu-secondary button:hover { color: var(--lime); }
 .app-menu-foot { margin-top: auto; padding-top: 28px; }
@@ -1078,8 +1112,9 @@ body {
   position: relative; z-index: 1;
   flex: 1; min-height: 0;
   display: flex; flex-direction: column; align-items: center;
-  padding: calc(clamp(56px, 12vh, 110px) + env(safe-area-inset-top, 0px)) var(--page-px) 24px;
+  padding: max(clamp(56px, 12vh, 110px), calc(env(safe-area-inset-top, 0px) + 40px)) var(--page-px) 24px;
   text-align: center;
+  overflow-y: auto;
 }
 .landing-welcome {
   font-family: var(--font-heading); font-weight: 800;
@@ -1263,11 +1298,34 @@ body {
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+/* ── SHORT PHONES (iPhone SE, small Androids, landscape) ──
+   Everything above the tab bar has to fit without a scroll on the designed
+   screens, so the display sizes and the vertical rhythm step down. */
+@media (max-height: 720px) {
+  .app-header { padding-top: max(20px, calc(env(safe-area-inset-top, 0px) + 8px)); }
+  .app-header-logo { width: clamp(64px, 18vw, 72px); }
+  .v2-title { font-size: clamp(32px, 10.5vw, 42px); margin-bottom: 12px; }
+  .v2-sub { font-size: clamp(16px, 4.8vw, 19px); margin-bottom: 18px; }
+  .v2-hero { padding: 12px 0; }
+  .v2-step { margin-top: 16px; }
+  .v2-legal { margin-top: 12px; font-size: var(--text-xs); }
+  .signin-actions { gap: 12px; }
+  .signin-social { gap: 10px; }
+  .btn-tile, .btn-lime { min-height: 44px; }
+  .landing-welcome { font-size: clamp(24px, 7.5vw, 30px); margin-bottom: 14px; }
+  .landing-lockup { width: min(60%, 220px); }
+  .landing-cta { margin-top: 20px; }
+  .sponsor-band { padding-top: 12px; }
+  .cs-title { margin-top: 8px; margin-bottom: 12px; }
+  .cs-list { padding-top: 22px; gap: 22px; }
+  .page-head { padding-top: 6px; }
+}
+
 /* ── SCREEN: HISTORY ── */
 .screen-history {
   width: 100%; height: 100%;
   background: var(--cream-light);
-  display: flex; flex-direction: column; padding-top: 50px;
+  display: flex; flex-direction: column;
   overflow: hidden;
 }
 .history-header {
@@ -1402,7 +1460,7 @@ body {
 .screen-leaderboard {
   width: 100%; height: 100%;
   background: var(--cream-light);
-  display: flex; flex-direction: column; padding-top: 50px;
+  display: flex; flex-direction: column;
   overflow: hidden;
 }
 .leaderboard-header {

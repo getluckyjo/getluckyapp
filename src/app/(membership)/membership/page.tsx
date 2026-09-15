@@ -1,9 +1,9 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check } from 'lucide-react'
+import { Check } from 'lucide-react'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
+import AppHeader from '@/components/layout/AppHeader'
 import MemberBadge from '@/components/membership/MemberBadge'
 import { useMembership } from '@/hooks/useMembership'
 import { MEMBERSHIP_PLANS, MEMBERSHIP_PERKS, MEMBERSHIP_FUNNEL_URL } from '@/lib/membership'
@@ -22,7 +22,6 @@ function planLabel(plan: string | null) {
 }
 
 export default function MembershipPage() {
-  const router = useRouter()
   const { isMember, status, plan, joinedDate, foundingMember, loading } = useMembership()
 
   return (
@@ -33,27 +32,16 @@ export default function MembershipPage() {
         <div style={{
           position: 'relative',
           background: 'linear-gradient(150deg, #1e3120 0%, var(--green-deep) 55%, #4a7a3d 100%)',
-          padding: '56px var(--page-px) var(--space-xl)',
+          padding: '0 0 var(--space-xl)',
           color: 'white',
         }}>
-          <button
-            onClick={() => router.back()}
-            aria-label="Back"
-            style={{
-              position: 'absolute', top: 52, left: 'var(--page-px)',
-              width: 36, height: 36, background: 'rgba(255,255,255,0.12)',
-              border: 'none', borderRadius: 'var(--radius-sm)', color: 'white',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-            }}
-          >
-            <ArrowLeft size={18} strokeWidth={2} />
-          </button>
+          <AppHeader tone="dark" />
 
-          <div style={{ textAlign: 'center', marginTop: 8 }}>
+          <div style={{ textAlign: 'center', marginTop: 'clamp(8px, 2vh, 18px)', padding: '0 var(--page-px)' }}>
             <MemberBadge style={{ marginBottom: 14 }} />
             <h1 style={{
-              fontFamily: 'Poster Gothic, sans-serif', fontSize: 'var(--text-2xl)',
-              fontWeight: 900, lineHeight: 1.1, marginBottom: 8,
+              fontFamily: 'var(--font-heading)', fontSize: 'clamp(28px, 8.5vw, 36px)',
+              fontWeight: 800, lineHeight: 1.1, marginBottom: 8, textTransform: 'uppercase',
             }}>
               Get Lucky Golf Club
             </h1>

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
+import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
 import { useMembership } from '@/hooks/useMembership'
 import MemberBadge from '@/components/membership/MemberBadge'
@@ -62,19 +63,12 @@ export default function AccountPage() {
 
       {/* ── Scrollable body ── */}
       <div style={{ overflowY: 'auto', height: '100%', background: 'var(--cream)' }}>
+        <AppHeader tone="light" />
 
         {/* Header */}
-        <header style={{ padding: '60px var(--page-px) 0' }}>
-          <h1 style={{
-            fontFamily: 'Poster Gothic, sans-serif',
-            fontSize: 'var(--text-2xl)', fontWeight: 900, color: 'var(--green-deep)',
-            marginBottom: 4,
-          }}>
-            My Account
-          </h1>
-          <div style={{ fontSize: 'var(--text-body)', color: 'var(--gray-light)', marginBottom: 'var(--space-lg)' }}>
-            Manage your profile &amp; preferences
-          </div>
+        <header className="page-head" style={{ display: 'block', paddingBottom: 'var(--space-lg)' }}>
+          <h1 className="page-title">My Account</h1>
+          <div className="page-sub">Manage your profile &amp; preferences</div>
         </header>
 
         {/* ── Identity card ── */}

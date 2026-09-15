@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 
@@ -54,13 +55,8 @@ export default function PaymentSetupPage() {
   return (
     <PhoneFrame statusTheme="dark">
       <div className="screen-payment">
-        <div className="signup-header" style={{ padding: 'var(--space-lg) var(--page-px) 0' }}>
-          <button className="back-btn" onClick={() => router.back()}>←</button>
-        </div>
-        <div style={{ textAlign: 'center', padding: 'var(--space-sm) var(--page-px) 0' }}>
-          <img src="/brand/logo-lockup.svg" alt="Get Lucky Hole-in-1 Challenge" className="logo-header-dark" style={{ width: "clamp(96px, 28vw, 116px)" }} />
-        </div>
-        <div className="signup-title-area" style={{ padding: 'var(--space-sm) var(--page-px) var(--space-sm)' }}>
+        <AppHeader tone="light" />
+        <div className="signup-title-area" style={{ padding: 'clamp(8px, 2vh, 20px) var(--page-px) var(--space-md)' }}>
           <h3 className="signup-title">Payment Setup</h3>
           <p className="signup-sub">Choose how you'll pay when you play</p>
         </div>
