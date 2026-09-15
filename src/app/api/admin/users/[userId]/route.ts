@@ -1,46 +1,35 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
-import { MOCK_ADMIN_USERS, MOCK_ADMIN_BETS } from '@/lib/admin-mock-data'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
+import { BET_SELECT, namesForBets, toAdminBetRecord, type BetRowLike } from '@/lib/admin/data'
+import { log } from '@/lib/observability/log'
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ userId: string }> }
-) {
+type Params = { params: Promise<{ userId: string }> }
+
+export async function GET(_request: Request, { params }: Params) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const { userId } = await params
+  if (!uuid.safeParse(userId).success) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
+    const { data: profile, error } = await auth.adminClient.from('profiles').select('*').eq('id', userId).maybeSingle()
+    if (error) throw error
+    if (!profile) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const { userId } = await params
-
-    if (auth.isMock || !auth.adminClient) {
-      const user = MOCK_ADMIN_USERS.find(u => u.id === userId)
-      if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-      const bets = MOCK_ADMIN_BETS.filter(b => b.userId === userId)
-      return NextResponse.json({ user, bets })
-    }
-
-    const adminClient = auth.adminClient
-
-    const { data: profile, error } = await adminClient
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    if (error || !profile) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const { data: userBets } = await adminClient
+    const { data: betsRaw, error: betsErr } = await auth.adminClient
       .from('bets')
-      .select(`*, courses ( name ), holes ( hole_number )`)
+      .select(BET_SELECT)
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(50)
+    if (betsErr) throw betsErr
+    const bets = (betsRaw ?? []) as BetRowLike[]
+    const names = await namesForBets(auth.adminClient, bets)
 
-    const bets = userBets ?? []
-    const totalStaked = bets.reduce((sum, b) => sum + (b.stake_pence ?? 0), 0)
-    const totalWon = bets
-      .filter(b => b.status === 'paid' || b.status === 'verified')
-      .reduce((sum, b) => sum + (b.potential_win_pence ?? 0), 0)
+    const totalStaked = bets.reduce((s, b) => s + (b.stake_pence ?? 0), 0)
+    const totalWon = bets.filter(b => b.status === 'paid' || b.status === 'verified').reduce((s, b) => s + (b.potential_win_pence ?? 0), 0)
 
     return NextResponse.json({
       user: {
@@ -57,65 +46,40 @@ export async function GET(
         suspendedReason: profile.suspended_reason,
         createdAt: profile.created_at,
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      bets: bets.map((b: any) => ({
-        id: b.id,
-        userId: b.user_id,
-        userName: profile.name,
-        tier: b.tier,
-        stakeCents: b.stake_pence,
-        potentialWinCents: b.potential_win_pence,
-        status: b.status,
-        declaredResult: b.declared_result,
-        declaredAt: b.declared_at,
-        videoUrl: b.video_url,
-        paymentIntentId: b.payment_intent_id,
-        courseName: b.courses?.name ?? '',
-        courseId: b.course_id,
-        holeNumber: b.holes?.hole_number ?? 0,
-        holeId: b.hole_id,
-        createdAt: b.created_at,
-      })),
+      bets: bets.map(b => toAdminBetRecord(b, names)),
     })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.users.detail_failed', err, { path: 'admin_review' })
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ userId: string }> }
-) {
+const Body = z.object({
+  suspended: z.boolean(),
+  reason: z.string().trim().max(500).optional(),
+})
+
+export async function PATCH(request: Request, { params }: Params) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const { userId } = await params
+  const body = await parseBody(request, Body)
+  if (!body.ok) return body.response
+
+  if (userId === auth.user.id && body.data.suspended) {
+    return NextResponse.json({ error: 'You cannot suspend your own account', code: 'SELF_SUSPEND' }, { status: 409 })
+  }
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
+    const updates = body.data.suspended
+      ? { suspended_at: new Date().toISOString(), suspended_reason: body.data.reason ?? null }
+      : { suspended_at: null, suspended_reason: null }
+    const { data, error } = await auth.adminClient.from('profiles').update(updates).eq('id', userId).select('id')
+    if (error) throw error
+    if (!data || data.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    const { userId } = await params
-    const body = await request.json()
-    const { suspended, reason } = body
-
-    if (auth.isMock || !auth.adminClient) {
-      return NextResponse.json({ success: true, source: 'mock' })
-    }
-
-    const updates: Record<string, unknown> = {}
-    if (suspended === true) {
-      updates.suspended_at = new Date().toISOString()
-      if (reason) updates.suspended_reason = reason
-    } else if (suspended === false) {
-      updates.suspended_at = null
-      updates.suspended_reason = null
-    }
-
-    const { error } = await auth.adminClient
-      .from('profiles')
-      .update(updates)
-      .eq('id', userId)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
+    log.info('admin.user_suspension', { admin_id: auth.user.id, user_id: userId, suspended: body.data.suspended, reason: body.data.reason ?? null })
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.users.update_failed', err, { path: 'admin_review' })
   }
 }

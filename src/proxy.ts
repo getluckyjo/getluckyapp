@@ -70,9 +70,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
-  // Skip auth gate if Supabase is not yet configured
+  // Without a Supabase URL there is no session to check; let the page render
+  // its signed-out state rather than crashing in the proxy.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  if (!supabaseUrl || supabaseUrl.includes('YOUR_PROJECT_REF')) {
+  if (!supabaseUrl) {
     return NextResponse.next({ request })
   }
 

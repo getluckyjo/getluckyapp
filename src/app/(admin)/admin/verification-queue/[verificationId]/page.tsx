@@ -7,7 +7,7 @@ import StatusBadge from '@/components/admin/StatusBadge'
 import VideoPlayer from '@/components/admin/VideoPlayer'
 import DocumentViewer from '@/components/admin/DocumentViewer'
 import ConfirmModal from '@/components/admin/ConfirmModal'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { VerificationDetail } from '@/types/admin'
 
@@ -55,7 +55,8 @@ export default function VerificationDetailPage() {
         const data = await fetch(`/api/admin/verifications/${verificationId}`).then(r => r.json())
         setDetail(data)
       }
-    } catch {
+    } catch (err) {
+      console.error('[admin] review request failed:', err)
       // error
     } finally {
       setSubmitting(false)

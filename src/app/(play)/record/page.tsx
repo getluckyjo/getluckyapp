@@ -74,7 +74,8 @@ export default function RecordPage() {
         try {
           const status = await navigator.permissions.query({ name: 'camera' as PermissionName })
           setPermissionState(status.state === 'denied' ? 'denied' : 'prompt')
-        } catch {
+        } catch (err) {
+          console.warn('[record] camera permission query failed:', err)
           // permissions.query not supported — assume prompt can be retried
           setPermissionState('denied')
         }
@@ -104,7 +105,8 @@ export default function RecordPage() {
           return
         }
         // 'granted' or 'prompt' — proceed to request
-      } catch {
+      } catch (err) {
+        console.warn('[record] recorder setup failed:', err)
         // permissions API not supported — just request directly
       }
 

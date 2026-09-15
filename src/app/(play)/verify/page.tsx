@@ -83,7 +83,7 @@ export default function VerifyPage() {
 
   // Real polling from Supabase (when betId is real)
   useEffect(() => {
-    if (!betId || betId.startsWith('bet_mock') || betId.startsWith('bet_fallback')) return
+    if (!betId) return
 
     async function poll() {
       try {
@@ -99,7 +99,8 @@ export default function VerifyPage() {
         // Reset on success
         errorCountRef.current = 0
         pollIntervalRef.current = 10_000
-      } catch {
+      } catch (err) {
+        console.warn('[verify] status poll failed:', err)
         // Exponential backoff: 10s → 20s → 40s → max 60s
         errorCountRef.current += 1
         pollIntervalRef.current = Math.min(10_000 * Math.pow(2, errorCountRef.current), 60_000)

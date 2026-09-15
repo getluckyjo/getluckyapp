@@ -6,7 +6,7 @@ import { Eye, CheckCircle, XCircle, Clock } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import Pagination from '@/components/admin/Pagination'
 import ConfirmModal from '@/components/admin/ConfirmModal'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 import type { VerificationQueueItem, PaginatedResponse, VerificationStatus } from '@/types/admin'
 import { TIER_LABELS } from '@/lib/tiers'
 
@@ -42,7 +42,8 @@ export default function VerificationQueuePage() {
       setData(json.data || [])
       setTotal(json.total || 0)
       setTotalPages(json.totalPages || 1)
-    } catch {
+    } catch (err) {
+      console.error('[admin] request failed:', err)
       setData([])
     } finally {
       setLoading(false)
@@ -59,7 +60,8 @@ export default function VerificationQueuePage() {
         counts[stage.status] = json.total || 0
       }
       setPipelineCounts(counts)
-    } catch {
+    } catch (err) {
+      console.error('[admin] request failed:', err)
       // ignore
     }
   }, [])
@@ -92,7 +94,8 @@ export default function VerificationQueuePage() {
       setBatchNotes('')
       fetchData()
       fetchPipelineCounts()
-    } catch {
+    } catch (err) {
+      console.error('[admin] request failed:', err)
       // error handled silently
     }
   }

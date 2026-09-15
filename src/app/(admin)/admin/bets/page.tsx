@@ -5,7 +5,7 @@ import { Download } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import SearchInput from '@/components/admin/SearchInput'
 import Pagination from '@/components/admin/Pagination'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
 

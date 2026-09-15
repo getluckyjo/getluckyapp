@@ -8,21 +8,21 @@ import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
+
+// The body's course, hole and tier are advisory: the authoritative values come
+// from the payments ledger. They are still required so a malformed client
+// fails fast rather than after a ledger round trip.
+const Body = z.object({
+  paymentIntentId: z.string().trim().min(1).max(100),
+  tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]),
+  courseId: uuid,
+  holeId: uuid,
+})
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { courseId, holeId, tier, paymentIntentId } = body as Record<string, unknown>
-
-    if (!courseId || !holeId || !tier || !paymentIntentId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
-    }
-
-    // Body tier is advisory — the authoritative tier comes from the payments
-    // ledger below. Rejecting an unknown one early still saves a round trip.
-    if (!BET_TIERS.some(t => t.tier === tier)) {
-      return NextResponse.json({ error: 'Invalid tier' }, { status: 400 })
-    }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -32,6 +32,9 @@ export async function POST(request: NextRequest) {
     }
     const limited = await enforceRateLimit(RULES.betCreate, { userId: user.id, ip: clientIp(request) })
     if (limited) return limited
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { paymentIntentId } = body.data
 
     await assertNotSuspended(supabase, user.id)
 
@@ -174,7 +177,7 @@ export async function POST(request: NextRequest) {
         }
       }
       await alertOps({ event: 'bets.create.insert_failed', path: 'bets_create', summary: 'A verified payment could not be turned into a bet.', details: { user_id: user.id, m_payment_id: paymentIntentId, code: error.code, details: error.details }, err: error })
-      return NextResponse.json({ error: 'Failed to create bet' }, { status: 500 })
+      return apiError('bets.create.insert_failed', error, { path: 'bets_create', message: 'Could not create your bet. Please contact support.' })
     }
 
     // Link the ledger row to the bet it produced (reconciliation), and bump
@@ -184,19 +187,14 @@ export async function POST(request: NextRequest) {
       .update({ bet_id: bet.id })
       .eq('m_payment_id', paymentIntentId)
     if (linkErr) log.warn('bets.create.ledger_link_failed', { bet_id: bet.id, m_payment_id: paymentIntentId, error: linkErr.message })
-    try {
-      await admin.rpc('increment_attempts', { user_id: user.id })
-    } catch {
-      // Safe to ignore if RPC fails
-    }
+    const { error: rpcErr } = await admin.rpc('increment_attempts', { user_id: user.id })
+    if (rpcErr) log.warn('bets.create.attempt_counter_failed', { user_id: user.id, error: rpcErr.message })
 
     log.info('bets.create.created', { user_id: user.id, bet_id: bet.id, m_payment_id: paymentIntentId, tier: paidTier.tier })
     return NextResponse.json({ betId: bet.id })
   } catch (err) {
     const known = claimErrorResponse(err)
     if (known) return known
-    log.error('bets.create.unhandled', err, { path: 'bets_create' })
-    const msg = err instanceof Error ? err.message : 'Internal error'
-    return NextResponse.json({ error: msg }, { status: 500 })
+    return apiError('bets.create.unhandled', err, { path: 'bets_create' })
   }
 }

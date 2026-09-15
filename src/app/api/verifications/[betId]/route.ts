@@ -8,6 +8,13 @@ import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import {
   OPEN_VERIFICATION_STATUSES, ClaimError, assertNotSuspended, assertOpen, claimErrorResponse, transitionBet,
 } from '@/lib/claims/state-machine'
+import { z } from 'zod'
+import { apiError, parseBody } from '@/lib/api/http'
+
+const Body = z.object({
+  certificatePath: z.string().max(500).nullable().optional(),
+  affidavitPath: z.string().max(500).nullable().optional(),
+})
 
 // GET — poll verification status
 export async function GET(
@@ -48,8 +55,7 @@ export async function GET(
 
     return NextResponse.json({ verification, source: 'database' })
   } catch (err) {
-    log.error('claim.status_unhandled', err, { path: 'claim' })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return apiError('claim.status_unhandled', err, { path: 'claim' })
   }
 }
 
@@ -68,9 +74,6 @@ export async function POST(
 ) {
   try {
     const { betId } = await params
-    const { certificatePath, affidavitPath } = await request.json().catch(() => ({})) as {
-      certificatePath?: unknown; affidavitPath?: unknown
-    }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -79,6 +82,9 @@ export async function POST(
     }
     const limited = await enforceRateLimit(RULES.claim, { userId: user.id, ip: clientIp(request) })
     if (limited) return limited
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { certificatePath, affidavitPath } = body.data
 
     // Ownership: RLS only shows the caller their own bets.
     const { data: bet } = await supabase
@@ -97,8 +103,8 @@ export async function POST(
     const prefix = `${user.id}/${betId}/`
     for (const p of [certificatePath, affidavitPath]) {
       if (p == null) continue
-      if (typeof p !== 'string' || !p.startsWith(prefix) || p.includes('..')) {
-        return NextResponse.json({ error: 'Invalid document path' }, { status: 400 })
+      if (!p.startsWith(prefix) || p.includes('..')) {
+        return NextResponse.json({ error: 'Invalid document path', code: 'INVALID_INPUT' }, { status: 400 })
       }
     }
 
@@ -148,7 +154,6 @@ export async function POST(
   } catch (err) {
     const known = claimErrorResponse(err)
     if (known) return known
-    log.error('claim.submit_unhandled', err, { path: 'claim' })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return apiError('claim.submit_unhandled', err, { path: 'claim', message: 'Could not record your claim.' })
   }
 }

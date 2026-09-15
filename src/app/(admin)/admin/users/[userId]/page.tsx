@@ -6,7 +6,7 @@ import { ArrowLeft, Ban, CheckCircle, User, Trophy, Ticket, CreditCard } from 'l
 import StatCard from '@/components/admin/StatCard'
 import StatusBadge from '@/components/admin/StatusBadge'
 import ConfirmModal from '@/components/admin/ConfirmModal'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminUserRecord, AdminBetRecord } from '@/types/admin'
 

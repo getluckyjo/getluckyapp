@@ -1,110 +1,74 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { MOCK_ADMIN_COURSES } from '@/lib/admin-mock-data'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
+import { log } from '@/lib/observability/log'
+import { CourseFieldsBase } from '@/lib/admin/schemas'
 
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ courseId: string }> }
-) {
+type Params = { params: Promise<{ courseId: string }> }
+
+export async function GET(_request: Request, { params }: Params) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const { courseId } = await params
+  if (!uuid.safeParse(courseId).success) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-    const { courseId } = await params
+    const { data: course, error } = await auth.adminClient.from('courses').select('*').eq('id', courseId).maybeSingle()
+    if (error) throw error
+    if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (auth.isMock || !auth.adminClient) {
-      const course = MOCK_ADMIN_COURSES.find(c => c.id === courseId)
-      if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-      return NextResponse.json({ course, holes: [] })
-    }
-
-    const adminClient = auth.adminClient
-    const { data: course, error } = await adminClient
-      .from('courses')
-      .select('*')
-      .eq('id', courseId)
-      .single()
-
-    if (error || !course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-
-    const { data: holes } = await adminClient
+    const { data: holes, error: holesErr } = await auth.adminClient
       .from('holes')
       .select('*')
       .eq('course_id', courseId)
       .order('hole_number', { ascending: true })
+    if (holesErr) throw holesErr
 
     return NextResponse.json({ course, holes: holes ?? [] })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.courses.detail_failed', err, { path: 'admin_review' })
   }
 }
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ courseId: string }> }
-) {
+const Patch = CourseFieldsBase.partial().refine(v => Object.keys(v).length > 0, 'No valid fields to update')
+
+export async function PATCH(request: Request, { params }: Params) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const { courseId } = await params
+  const body = await parseBody(request, Patch)
+  if (!body.ok) return body.response
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-    const { courseId } = await params
-    const body = await request.json()
-
-    if (auth.isMock || !auth.adminClient) {
-      return NextResponse.json({ success: true, source: 'mock' })
-    }
-
-    // Whitelist allowed fields to prevent mass assignment
-    const ALLOWED_FIELDS = ['name', 'location_text', 'region', 'country', 'lat', 'lng', 'image_url', 'is_partner'] as const
-    const updates: Record<string, unknown> = {}
-    for (const key of ALLOWED_FIELDS) {
-      if (body[key] !== undefined) updates[key] = body[key]
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
-    }
-
-    const { error } = await auth.adminClient
-      .from('courses')
-      .update(updates)
-      .eq('id', courseId)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const { data, error } = await auth.adminClient.from('courses').update(body.data).eq('id', courseId).select('id')
+    if (error) throw error
+    if (!data || data.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    log.info('admin.course_updated', { admin_id: auth.user.id, course_id: courseId, fields: Object.keys(body.data) })
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.courses.update_failed', err, { path: 'admin_review' })
   }
 }
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ courseId: string }> }
-) {
+export async function DELETE(_request: Request, { params }: Params) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const { courseId } = await params
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-    const { courseId } = await params
-
-    if (auth.isMock || !auth.adminClient) {
-      return NextResponse.json({ success: true, source: 'mock' })
-    }
-
-    // Check if any bets reference this course
-    const { count } = await auth.adminClient
-      .from('bets')
-      .select('id', { count: 'exact', head: true })
-      .eq('course_id', courseId)
-
+    const { count } = await auth.adminClient.from('bets').select('id', { count: 'exact', head: true }).eq('course_id', courseId)
     if (count && count > 0) {
-      return NextResponse.json({ error: 'Cannot delete course with existing bets' }, { status: 400 })
+      return NextResponse.json({ error: 'Cannot delete a course with existing bets', code: 'HAS_BETS' }, { status: 409 })
     }
 
-    // Delete holes first, then course
-    await auth.adminClient.from('holes').delete().eq('course_id', courseId)
+    const { error: holesErr } = await auth.adminClient.from('holes').delete().eq('course_id', courseId)
+    if (holesErr) throw holesErr
     const { error } = await auth.adminClient.from('courses').delete().eq('id', courseId)
+    if (error) throw error
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    log.info('admin.course_deleted', { admin_id: auth.user.id, course_id: courseId })
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.courses.delete_failed', err, { path: 'admin_review' })
   }
 }

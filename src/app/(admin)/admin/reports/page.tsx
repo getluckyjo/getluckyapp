@@ -5,7 +5,7 @@ import { DollarSign, TrendingUp, BarChart3, Trophy, Download } from 'lucide-reac
 import StatCard from '@/components/admin/StatCard'
 import StatusBadge from '@/components/admin/StatusBadge'
 import Pagination from '@/components/admin/Pagination'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 
 interface RevenueData {
   totalRevenue: number

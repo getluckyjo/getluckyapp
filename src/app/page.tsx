@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { log } from '@/lib/observability/log'
 
 // A sign-in credential that lands here (Supabase's Site URL fallback) is
 // forwarded to /auth/callback or /auth/confirm by the proxy before this
@@ -11,8 +12,9 @@ export default async function RootPage() {
     const supabase = await createClient()
     const { data } = await supabase.auth.getSession()
     session = data.session
-  } catch {
-    // Supabase not configured yet — fall through to splash
+  } catch (err) {
+    // Supabase unreachable — fall through to splash rather than a 500 on the root.
+    log.error('root.session_check_failed', err)
   }
 
   if (!session) {

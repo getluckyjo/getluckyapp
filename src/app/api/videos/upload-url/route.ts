@@ -5,6 +5,10 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { assertOpen, claimErrorResponse } from '@/lib/claims/state-machine'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
+
+const Body = z.object({ betId: uuid, mimeType: z.string().max(100).default('video/webm') })
 
 /**
  * POST /api/videos/upload-url
@@ -18,11 +22,6 @@ import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
  */
 export async function POST(request: NextRequest) {
   try {
-    const { betId, mimeType = 'video/webm' } = await request.json().catch(() => ({})) as { betId?: unknown; mimeType?: unknown }
-
-    if (typeof betId !== 'string' || !betId) {
-      return NextResponse.json({ error: 'betId required' }, { status: 400 })
-    }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -32,6 +31,9 @@ export async function POST(request: NextRequest) {
     }
     const limited = await enforceRateLimit(RULES.upload, { userId: user.id, ip: clientIp(request) })
     if (limited) return limited
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { betId, mimeType } = body.data
 
     // Verify bet belongs to the current user (prevent IDOR)
     const { data: bet } = await supabase
@@ -47,7 +49,7 @@ export async function POST(request: NextRequest) {
 
     assertOpen(bet)
 
-    const ext = typeof mimeType === 'string' && mimeType.includes('mp4') ? 'mp4' : 'webm'
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
     const storagePath = `${user.id}/${betId}/shot.${ext}`
 
     const { data, error } = await supabase.storage
@@ -55,8 +57,7 @@ export async function POST(request: NextRequest) {
       .createSignedUploadUrl(storagePath)
 
     if (error) {
-      log.error('claim.upload_url_failed', error, { path: 'claim', user_id: user.id, bet_id: betId })
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return apiError('claim.upload_url_failed', error, { path: 'claim', fields: { user_id: user.id, bet_id: betId }, message: 'Could not prepare the upload.' })
     }
 
     const { error: linkErr } = await createAdminClient()
@@ -77,7 +78,6 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const known = claimErrorResponse(err)
     if (known) return known
-    log.error('claim.upload_url_unhandled', err, { path: 'claim' })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return apiError('claim.upload_url_unhandled', err, { path: 'claim' })
   }
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { DollarSign, Ticket, ClipboardCheck, Trophy, Users, ArrowRight } from 'lucide-react'
 import StatCard from '@/components/admin/StatCard'
 import StatusBadge from '@/components/admin/StatusBadge'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminStats } from '@/types/admin'
 

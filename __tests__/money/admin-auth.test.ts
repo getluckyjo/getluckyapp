@@ -39,22 +39,22 @@ describe('requireAdmin', () => {
     const { requireAdmin } = await load()
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: null }))
     const auth = await requireAdmin()
-    expect(auth.error?.status).toBe(401)
-    expect(auth.adminClient).toBeNull()
+    expect(auth.ok).toBe(false)
+    if (!auth.ok) expect(auth.error.status).toBe(401)
   })
 
-  it('403 for a signed-in user whose profile is not admin', async () => {
+  it('403 for a signed-in user whose profile is not admin, or has no profile', async () => {
     const { requireAdmin } = await load()
     db.seed('profiles', { id: USER_A.id, is_admin: false })
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
     const auth = await requireAdmin()
-    expect(auth.error?.status).toBe(403)
-  })
+    expect(auth.ok).toBe(false)
+    if (!auth.ok) expect(auth.error.status).toBe(403)
 
-  it('403 when the profile row is missing entirely', async () => {
-    const { requireAdmin } = await load()
-    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
-    expect((await requireAdmin()).error?.status).toBe(403)
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_B }))
+    const noProfile = await requireAdmin()
+    expect(noProfile.ok).toBe(false)
+    if (!noProfile.ok) expect(noProfile.error.status).toBe(403)
   })
 
   it('passes an admin through with a service-role client', async () => {
@@ -62,21 +62,25 @@ describe('requireAdmin', () => {
     db.seed('profiles', { id: USER_A.id, is_admin: true })
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
     const auth = await requireAdmin()
-    expect(auth.error).toBeNull()
-    expect(auth.isMock).toBe(false)
-    expect(auth.user?.id).toBe(USER_A.id)
-    expect(auth.adminClient).not.toBeNull()
+    expect(auth.ok).toBe(true)
+    if (auth.ok) {
+      expect(auth.user.id).toBe(USER_A.id)
+      expect(auth.adminClient).toBeTruthy()
+    }
   })
 
-  it('never falls back to the mock admin in production, even with ENABLE_MOCK_ADMIN set', async () => {
-    const { requireAdmin } = await load({ ENABLE_MOCK_ADMIN: 'true' })
+  it('has no development bypass: a broken auth check is a 500, never a mock admin', async () => {
+    const { requireAdmin } = await load({ ENABLE_MOCK_ADMIN: 'true', NODE_ENV: 'development' })
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: null }))
-    expect((await requireAdmin()).error?.status).toBe(401)
+    const anon = await requireAdmin()
+    expect(anon.ok).toBe(false)
+    if (!anon.ok) expect(anon.error.status).toBe(401)
 
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     serverClient.createClient.mockRejectedValue(new Error('supabase down'))
     const broken = await requireAdmin()
-    expect(broken.isMock).toBe(false)
-    expect(broken.error?.status).toBe(500)
+    expect(broken.ok).toBe(false)
+    if (!broken.ok) expect(broken.error.status).toBe(500)
   })
 })
 
