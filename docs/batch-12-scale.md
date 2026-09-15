@@ -84,8 +84,21 @@ Errors of any kind other than 202 on `bet_create` are findings.
 
 ## Results
 
-_Not run yet. Needs a preview URL and the staging keys, which I do not
-have. Paste the table here and I will read it in the next session._
+_Not run yet._
+
+**Attempt of 2026-09-15 (cloud session, environment "Get Lucky").** Not
+run, and nothing was written anywhere. The key check found that all four
+`STAGING_*` variables in the handover environment resolved to the
+production project: the ref inside `STAGING_SUPABASE_URL`, the `ref` claim
+inside both JWTs and `STAGING_PROJECT_REF` itself were all the production
+ref, so the seed, the bootstrap and this test all refused (as they
+should). `BASE_URL` also lacked its `https://` scheme, and no Supabase,
+Vercel or Sentry API token reached the session. The preview that `BASE_URL`
+named (deployment `dpl_DvGsQ3mzqX5X7SBBRjQAByTU4iRX`, the merge of #23)
+answered 200 once the scheme was added. Redo parts 4 (variables) and 5
+(credentials) of the handover with the staging project's URL and keys, then
+run the block above or the manual workflow in
+`.github/workflows/load-test.yml`, and paste the table here.
 
 ## Remaining risk, and what was left alone
 

@@ -60,6 +60,18 @@ Before (paste output)
 After (paste output)
 ```
 
+## Timings
+
+_Not captured yet._ The script now has a second way in for environments
+that cannot open a Postgres connection: with `STAGING_DATABASE_URL` unset
+and `STAGING_PROJECT_REF` set, each `EXPLAIN` goes through the Supabase
+management API (`POST /v1/projects/<ref>/database/query`; see
+`scripts/staging/db.mjs` for where the token comes from). It still refuses
+the production ref. The attempt of 2026-09-15 stopped there: the handover
+environment's `STAGING_PROJECT_REF` was the production ref, so the script
+refused and no timings were taken. When it has run, paste the table here
+with the date and whether it ran over Postgres or the management API.
+
 ## Apply order
 
 Migration 010 first, then deploy.

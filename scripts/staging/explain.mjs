@@ -5,21 +5,17 @@
  * and paste both tables into docs/batch-6-admin-queries.md.
  *
  *   STAGING_DATABASE_URL='postgresql://…' node scripts/staging/explain.mjs
+ *   STAGING_PROJECT_REF=<ref>            node scripts/staging/explain.mjs   # over the management API
  *
  * Refuses to run against production. Read-only (EXPLAIN ANALYZE executes the
- * SELECTs but changes nothing).
+ * SELECTs but changes nothing). See scripts/staging/db.mjs for the two modes.
  */
-import pg from 'pg'
+import { connect } from './db.mjs'
 
-const PRODUCTION_REF = 'ajsgzeofswlizwwdkesp'
-const url = process.env.STAGING_DATABASE_URL
-if (!url) { console.error('STAGING_DATABASE_URL is required'); process.exit(1) }
-if (url.includes(PRODUCTION_REF)) { console.error('Refusing to run against production.'); process.exit(1) }
+const db = await connect()
+console.log(`explain via ${db.label}`)
 
-const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } })
-await client.connect()
-
-const { rows: [{ user_id, course_id }] } = await client.query(
+const { rows: [{ user_id, course_id } = { user_id: null, course_id: null }] } = await db.query(
   `select user_id, course_id from public.bets order by created_at desc limit 1`,
 ).catch(() => ({ rows: [{ user_id: null, course_id: null }] }))
 
@@ -47,12 +43,19 @@ const QUERIES = [
   ['deleted account by email hash',       `select bets from public.deleted_accounts where email_hash = 'none'`],
 ]
 
+/** `pg` hands the json plan back parsed; the management API may hand it back as a string. */
+function readPlan(row) {
+  let plan = row['QUERY PLAN']
+  if (typeof plan === 'string') plan = JSON.parse(plan)
+  return Array.isArray(plan) ? plan[0] : plan
+}
+
 const results = []
 for (const [label, sql, params = []] of QUERIES) {
   if (params.some(p => p === null)) { results.push({ query: label, note: 'skipped: no data' }); continue }
   try {
-    const { rows } = await client.query(`explain (analyze, format json) ${sql}`, params)
-    const plan = rows[0]['QUERY PLAN'][0]
+    const { rows } = await db.query(`explain (analyze, format json) ${sql}`, params)
+    const plan = readPlan(rows[0])
     const root = plan.Plan
     const scans = []
     ;(function walk(n) {
@@ -72,4 +75,4 @@ for (const [label, sql, params = []] of QUERIES) {
   }
 }
 console.table(results)
-await client.end()
+await db.end()
