@@ -43,6 +43,7 @@ export const RULES = {
   admin:       { name: 'admin',       perUser: 600, perIp: null, windowSeconds: TEN_MINUTES } as RateRule,
   accountDelete: { name: 'account_delete', perUser: 5, perIp: 100, windowSeconds: ONE_HOUR } as RateRule,
   authConfirm: { name: 'auth_confirm', perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only
+  witness:     { name: 'witness',     perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // public confirmation page: IP only
 } as const
 
 export interface RateScope {

@@ -77,6 +77,14 @@ export interface ClaimWitness {
   role: 'witness' | 'club_official'
   name: string
   email: string
+  /** Named by the claimant, or added from the course's standing contacts. */
+  source: 'claimant' | 'course'
+  requestedAt: string | null
+  requestCount: number
+  respondedAt: string | null
+  response: 'confirmed' | 'denied' | null
+  responseNote: string | null
+  linkExpired: boolean
   createdAt: string
 }
 

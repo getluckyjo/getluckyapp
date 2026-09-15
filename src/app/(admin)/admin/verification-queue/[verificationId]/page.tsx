@@ -35,6 +35,39 @@ export default function VerificationDetailPage() {
   const [actionError, setActionError] = useState<string | null>(null)
   const [payoutReference, setPayoutReference] = useState('')
   const [checklist, setChecklist] = useState<Record<string, boolean>>({})
+  const [packHash, setPackHash] = useState<string | null>(null)
+  const [witnessBusy, setWitnessBusy] = useState<string | null>(null)
+
+  const reload = async () => {
+    const data = await fetch(`/api/admin/verifications/${verificationId}`).then(r => r.json())
+    setDetail(data)
+  }
+
+  const sendAgain = async (witnessId?: string) => {
+    setWitnessBusy(witnessId ?? 'all')
+    try {
+      await fetch(`/api/admin/verifications/${verificationId}/witness-requests`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(witnessId ? { witnessId } : {}),
+      })
+      await reload()
+    } finally {
+      setWitnessBusy(null)
+    }
+  }
+
+  const exportPack = async () => {
+    const res = await fetch(`/api/admin/verifications/${verificationId}/evidence-pack`)
+    if (!res.ok) { setPackHash('export failed'); return }
+    const hash = res.headers.get('x-evidence-sha256')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `evidence-${detail?.betId ?? verificationId}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    setPackHash(hash)
+  }
   const checklistComplete = REVIEW_CHECKLIST.every(i => checklist[i.key])
   const notesOk = notes.trim().length >= MIN_DECISION_NOTES
 
@@ -298,14 +331,35 @@ export default function VerificationDetailPage() {
             {detail.witnesses.length === 0 ? (
               <div style={{ fontSize: 13, color: '#999' }}>No witnesses named (claim predates Batch 9)</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-                {detail.witnesses.map(w => (
-                  <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                    <span><strong style={{ color: '#111' }}>{w.name}</strong> <span style={{ color: '#666' }}>· {w.email}</span></span>
-                    <span style={{ color: '#999', whiteSpace: 'nowrap' }}>{w.role === 'club_official' ? 'Club official' : 'Playing partner'}</span>
-                  </div>
-                ))}
-                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>Confirmation requests to these people arrive with Batch 11. Until then, phone the club.</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                {detail.witnesses.map(w => {
+                  const status = w.response === 'confirmed' ? { text: `Confirmed ${w.respondedAt ? new Date(w.respondedAt).toLocaleString('en-ZA') : ''}`, color: '#1a7f37' }
+                    : w.response === 'denied' ? { text: `Said no ${w.respondedAt ? new Date(w.respondedAt).toLocaleString('en-ZA') : ''}`, color: '#c0392b' }
+                    : w.linkExpired ? { text: 'Link expired, no answer', color: '#b8860b' }
+                    : w.requestedAt ? { text: `Asked ${new Date(w.requestedAt).toLocaleDateString('en-ZA')}${w.requestCount > 1 ? ` (×${w.requestCount})` : ''}, no answer yet`, color: '#666' }
+                    : { text: 'Not asked yet', color: '#c0392b' }
+                  return (
+                    <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                      <div>
+                        <div><strong style={{ color: '#111' }}>{w.name}</strong> <span style={{ color: '#666' }}>· {w.email}</span></div>
+                        <div style={{ fontSize: 12, color: '#999' }}>
+                          {w.role === 'club_official' ? 'Club official' : 'Playing partner'}{w.source === 'course' ? ' (course contact)' : ''} · <span style={{ color: status.color, fontWeight: 600 }}>{status.text}</span>
+                        </div>
+                        {w.responseNote && <div style={{ fontSize: 12, color: '#333', marginTop: 2 }}>“{w.responseNote}”</div>}
+                      </div>
+                      {!w.response && (
+                        <button
+                          onClick={() => sendAgain(w.id)}
+                          disabled={witnessBusy !== null}
+                          style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer', color: '#335231', whiteSpace: 'nowrap' }}
+                        >
+                          {witnessBusy === w.id ? 'Sending…' : w.requestedAt ? 'Send again' : 'Send request'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>Answers go to this page and the evidence pack, never to the golfer. Links work once and expire after 14 days.</div>
               </div>
             )}
           </div>
@@ -340,7 +394,20 @@ export default function VerificationDetailPage() {
 
           {/* Audit trail */}
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Audit Trail</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', margin: 0 }}>Audit Trail</h3>
+              <button
+                onClick={exportPack}
+                style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer', color: '#335231', fontWeight: 600 }}
+              >
+                Export evidence pack
+              </button>
+            </div>
+            {packHash && (
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 10, wordBreak: 'break-all' }}>
+                Pack SHA-256: <code style={{ fontSize: 11, color: '#111' }}>{packHash}</code>. Send the file and this hash together; the insurer verifies with <code>sha256sum</code>.
+              </div>
+            )}
             {detail.events.length === 0 ? (
               <div style={{ fontSize: 13, color: '#999' }}>No events recorded (bet predates the audit log)</div>
             ) : (

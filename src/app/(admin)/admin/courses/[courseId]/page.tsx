@@ -14,6 +14,11 @@ export default function AdminEditCoursePage() {
 
   const [course, setCourse] = useState<CourseRow | null>(null)
   const [holes, setHoles] = useState<HoleRow[]>([])
+  type ContactRow = { id: string; name: string; email: string; role: string; created_at: string }
+  const [contacts, setContacts] = useState<ContactRow[]>([])
+  const [newContact, setNewContact] = useState({ name: '', email: '' })
+  const [contactError, setContactError] = useState('')
+  const [addingContact, setAddingContact] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -30,6 +35,7 @@ export default function AdminEditCoursePage() {
         setCourse(data.course)
         setCoords({ lat: data.course?.lat != null ? String(data.course.lat) : '', lng: data.course?.lng != null ? String(data.course.lng) : '' })
         setHoles(data.holes || [])
+        setContacts(data.contacts || [])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -71,6 +77,31 @@ export default function AdminEditCoursePage() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleAddContact = async () => {
+    setAddingContact(true)
+    setContactError('')
+    try {
+      const res = await fetch(`/api/admin/courses/${courseId}/contacts`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newContact),
+      })
+      const data = await res.json()
+      if (!res.ok) setContactError(data.error || 'Could not add the contact')
+      else {
+        setContacts([...contacts, data.contact])
+        setNewContact({ name: '', email: '' })
+      }
+    } catch {
+      setContactError('Could not add the contact')
+    } finally {
+      setAddingContact(false)
+    }
+  }
+
+  const removeContact = async (id: string) => {
+    await fetch(`/api/admin/courses/${courseId}/contacts?id=${id}`, { method: 'DELETE' })
+    setContacts(contacts.filter(c => c.id !== id))
   }
 
   const handleAddHole = async () => {
@@ -208,6 +239,49 @@ export default function AdminEditCoursePage() {
             <Save size={16} /> {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>
+      </div>
+
+      {/* Club contacts */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 24, marginBottom: 24 }}>
+        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111', marginBottom: 4 }}>Club contacts ({contacts.length})</h3>
+        <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
+          Every hole-in-one claim at this course emails these people a one-tap question: did the club issue the certificate? Independent of what the golfer uploads.
+        </p>
+        {contacts.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 16 }}>
+            <tbody>
+              {contacts.map(c => (
+                <tr key={c.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+                  <td style={{ padding: '8px 10px', fontWeight: 500, color: '#111' }}>{c.name}</td>
+                  <td style={{ padding: '8px 10px', color: '#666' }}>{c.email}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'right' }}>
+                    <button onClick={() => removeContact(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b' }} title="Remove">
+                      <Trash2 size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <div style={{ borderTop: contacts.length ? '1px solid #e5e5e5' : 'none', paddingTop: contacts.length ? 16 : 0, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>Name</label>
+            <input type="text" value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} placeholder="Club manager" style={inputStyle} />
+          </div>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>Email</label>
+            <input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} placeholder="manager@club.co.za" style={inputStyle} />
+          </div>
+          <button
+            onClick={handleAddContact}
+            disabled={addingContact || !newContact.name || !newContact.email}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 16px', borderRadius: 8, border: 'none', background: '#335231', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}
+          >
+            <Plus size={14} /> Add contact
+          </button>
+        </div>
+        {contactError && <div style={{ marginTop: 10, fontSize: 13, color: '#c0392b' }}>{contactError}</div>}
       </div>
 
       {/* Holes management */}

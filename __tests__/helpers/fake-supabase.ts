@@ -233,7 +233,8 @@ export class Builder implements PromiseLike<Result> {
         const rows = this.matching()
         const all = this.db.rows(this.table)
         for (const r of rows) all.splice(all.indexOf(r), 1)
-        return { data: null, error: null }
+        // PostgREST returns the deleted rows when .select() follows .delete().
+        return this.returning ? this.shape(rows) : { data: null, error: null }
       }
     }
   }

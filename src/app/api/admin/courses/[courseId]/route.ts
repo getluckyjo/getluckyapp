@@ -24,7 +24,14 @@ export async function GET(_request: Request, { params }: Params) {
       .order('hole_number', { ascending: true })
     if (holesErr) throw holesErr
 
-    return NextResponse.json({ course, holes: holes ?? [] })
+    const { data: contacts, error: contactsErr } = await auth.adminClient
+      .from('course_contacts')
+      .select('id, name, email, role, created_at')
+      .eq('course_id', courseId)
+      .order('created_at', { ascending: true })
+    if (contactsErr) throw contactsErr
+
+    return NextResponse.json({ course, holes: holes ?? [], contacts: contacts ?? [] })
   } catch (err) {
     return apiError('admin.courses.detail_failed', err, { path: 'admin_review' })
   }

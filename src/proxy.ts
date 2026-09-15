@@ -5,7 +5,8 @@ import type { Database } from '@/types/database'
 
 // ── Route config ──────────────────────────────────────────────────────────
 // Reachable signed out. Marketing, legal, and the sign-in flow itself.
-const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play']
+// /witness is the one-question page a named witness reaches from their email; they have no account.
+const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play', '/witness']
 
 // Reachable signed out because the app still shows something useful, or because
 // bouncing would be worse than letting them through:

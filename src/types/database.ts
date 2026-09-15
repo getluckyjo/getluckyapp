@@ -21,6 +21,8 @@ export type Json =
   | Json[]
 
 export type WitnessRole = 'witness' | 'club_official'
+export type WitnessSource = 'claimant' | 'course'
+export type WitnessResponse = 'confirmed' | 'denied'
 export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
 export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
@@ -440,6 +442,16 @@ export interface Database {
           role: WitnessRole
           name: string
           email: string
+          source: WitnessSource
+          token_hash: string | null
+          token_expires_at: string | null
+          requested_at: string | null
+          request_count: number
+          responded_at: string | null
+          response: WitnessResponse | null
+          response_note: string | null
+          response_ip_hash: string | null
+          response_user_agent: string | null
           created_at: string
         }
         Insert: {
@@ -449,6 +461,16 @@ export interface Database {
           role: WitnessRole
           name: string
           email: string
+          source?: WitnessSource
+          token_hash?: string | null
+          token_expires_at?: string | null
+          requested_at?: string | null
+          request_count?: number
+          responded_at?: string | null
+          response?: WitnessResponse | null
+          response_note?: string | null
+          response_ip_hash?: string | null
+          response_user_agent?: string | null
           created_at?: string
         }
         Update: {
@@ -456,7 +478,23 @@ export interface Database {
           role?: WitnessRole
           name?: string
           email?: string
+          source?: WitnessSource
+          token_hash?: string | null
+          token_expires_at?: string | null
+          requested_at?: string | null
+          request_count?: number
+          responded_at?: string | null
+          response?: WitnessResponse | null
+          response_note?: string | null
+          response_ip_hash?: string | null
+          response_user_agent?: string | null
         }
+        Relationships: []
+      }
+      course_contacts: {
+        Row: { id: string; course_id: string; name: string; email: string; role: 'club_official'; created_at: string }
+        Insert: { id?: string; course_id: string; name: string; email: string; role?: 'club_official'; created_at?: string }
+        Update: { name?: string; email?: string }
         Relationships: []
       }
       rate_limits: {
