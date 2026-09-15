@@ -6,6 +6,8 @@ import { BET_SELECT, namesForBets, toAdminBetRecord, toQueueItem, type BetRowLik
 import { VERIFICATION_STATUSES, claimErrorResponse, reviewVerification } from '@/lib/claims/state-machine'
 import { log } from '@/lib/observability/log'
 import { witnessesForBet } from '@/lib/claims/witnesses'
+import { ChecklistSchema, MIN_DECISION_NOTES } from '@/lib/claims/checklist'
+import { tryRefreshClaimRisk } from '@/lib/risk/rules'
 import type { CaptureAttestation, VerificationDetail } from '@/types/admin'
 
 type Params = { params: Promise<{ verificationId: string }> }
@@ -63,6 +65,10 @@ export async function GET(_request: Request, { params }: Params) {
       .maybeSingle()
     const bet = (betRaw ?? undefined) as BetDetailRow | undefined
 
+    // Re-evaluate the risk rules every time a reviewer opens the claim, so
+    // what they see reflects everything that has happened since submission.
+    const risk = bet ? await tryRefreshClaimRisk(admin, bet.id) : null
+
     const [historyRes, profileRes, eventsRes, witnesses] = await Promise.all([
       bet ? admin.from('bets').select(BET_SELECT).eq('user_id', bet.user_id).order('created_at', { ascending: false }).limit(5) : Promise.resolve({ data: [] as BetRowLike[] }),
       bet ? admin.from('profiles').select('total_attempts').eq('id', bet.user_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -92,6 +98,10 @@ export async function GET(_request: Request, { params }: Params) {
       certificateSeal: { sha256: row.certificate_sha256 ?? null, bytes: row.certificate_bytes ?? null },
       affidavitSeal: { sha256: row.affidavit_sha256 ?? null, bytes: row.affidavit_bytes ?? null },
       witnesses: witnesses.map(w => ({ id: w.id, role: w.role, name: w.name, email: w.email, createdAt: w.created_at })),
+      riskScore: risk?.score ?? 0,
+      riskFlags: risk?.flags ?? [],
+      reviewChecklist: (row.review_checklist as Record<string, unknown> | null) ?? null,
+      payoutReference: bet?.payout_reference ?? null,
       userBetHistory: history.map(b => toAdminBetRecord(b, names)),
       userTotalAttempts: profileRes.data?.total_attempts ?? 0,
       betStatus: bet?.status ?? null,
@@ -111,6 +121,8 @@ export async function GET(_request: Request, { params }: Params) {
 const Body = z.object({
   status: z.enum(VERIFICATION_STATUSES),
   reviewerNotes: z.string().trim().max(2000).optional(),
+  /** Required, all true, to approve. */
+  checklist: z.record(z.string(), z.boolean()).optional(),
 })
 
 export async function PATCH(request: Request, { params }: Params) {
@@ -120,12 +132,28 @@ export async function PATCH(request: Request, { params }: Params) {
   const body = await parseBody(request, Body)
   if (!body.ok) return body.response
 
+  // A decision carries its reason. Approval also carries what was checked.
+  const notes = body.data.reviewerNotes ?? ''
+  const isDecision = body.data.status === 'approved' || body.data.status === 'rejected'
+  if (isDecision && notes.length < MIN_DECISION_NOTES) {
+    return NextResponse.json({ error: `Say why, in at least ${MIN_DECISION_NOTES} characters. The reason is part of the record.`, code: 'NOTES_REQUIRED' }, { status: 400 })
+  }
+  let extra: Record<string, unknown> = {}
+  if (body.data.status === 'approved') {
+    const checklist = ChecklistSchema.safeParse(body.data.checklist ?? {})
+    if (!checklist.success) {
+      return NextResponse.json({ error: 'Every item on the review checklist must be confirmed before approving.', code: 'CHECKLIST_INCOMPLETE' }, { status: 400 })
+    }
+    extra = { review_checklist: { ...checklist.data, completed_by: auth.user.id, completed_at: new Date().toISOString() } }
+  }
+
   try {
     const { betId } = await reviewVerification(auth.adminClient, {
       verificationId,
       to: body.data.status,
       actorId: auth.user.id,
       notes: body.data.reviewerNotes,
+      extra,
     })
     log.info('admin.review', { admin_id: auth.user.id, verification_id: verificationId, bet_id: betId, status: body.data.status })
     return NextResponse.json({ success: true, verificationId, newStatus: body.data.status })

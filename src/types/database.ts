@@ -47,6 +47,7 @@ export interface Database {
           date_of_birth: string | null
           age_verified_at: string | null
           terms_accepted_at: string | null
+          updated_by: string | null
           created_at: string
         }
         Insert: {
@@ -66,6 +67,7 @@ export interface Database {
           date_of_birth?: string | null
           age_verified_at?: string | null
           terms_accepted_at?: string | null
+          updated_by?: string | null
           created_at?: string
         }
         Update: {
@@ -85,6 +87,7 @@ export interface Database {
           date_of_birth?: string | null
           age_verified_at?: string | null
           terms_accepted_at?: string | null
+          updated_by?: string | null
           created_at?: string
         }
         Relationships: []
@@ -186,6 +189,13 @@ export interface Database {
           capture_accuracy_m: number | null
           capture_distance_m: number | null
           capture_user_agent: string | null
+          created_ip_hash: string | null
+          claim_ip_hash: string | null
+          claim_ua_hash: string | null
+          risk_score: number
+          risk_flags: Json | null
+          risk_evaluated_at: string | null
+          payout_reference: string | null
           declared_result: 'miss' | 'win' | null
           declared_at: string | null
           expires_at: string
@@ -217,6 +227,13 @@ export interface Database {
           capture_accuracy_m?: number | null
           capture_distance_m?: number | null
           capture_user_agent?: string | null
+          created_ip_hash?: string | null
+          claim_ip_hash?: string | null
+          claim_ua_hash?: string | null
+          risk_score?: number
+          risk_flags?: Json | null
+          risk_evaluated_at?: string | null
+          payout_reference?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -248,6 +265,13 @@ export interface Database {
           capture_accuracy_m?: number | null
           capture_distance_m?: number | null
           capture_user_agent?: string | null
+          created_ip_hash?: string | null
+          claim_ip_hash?: string | null
+          claim_ua_hash?: string | null
+          risk_score?: number
+          risk_flags?: Json | null
+          risk_evaluated_at?: string | null
+          payout_reference?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -273,6 +297,7 @@ export interface Database {
           certificate_bytes: number | null
           affidavit_sha256: string | null
           affidavit_bytes: number | null
+          review_checklist: Json | null
           reviewer_notes: string | null
           reviewed_by: string | null
           updated_at: string | null
@@ -294,6 +319,7 @@ export interface Database {
           certificate_bytes?: number | null
           affidavit_sha256?: string | null
           affidavit_bytes?: number | null
+          review_checklist?: Json | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
           updated_at?: string | null
@@ -315,6 +341,7 @@ export interface Database {
           certificate_bytes?: number | null
           affidavit_sha256?: string | null
           affidavit_bytes?: number | null
+          review_checklist?: Json | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
           updated_at?: string | null
@@ -383,6 +410,25 @@ export interface Database {
           created_at: string
         }
         Insert: never
+        Update: never
+        Relationships: []
+      }
+      account_events: {
+        Row: {
+          id: number
+          profile_id: string
+          actor_id: string | null
+          actor_role: string
+          changed: Json
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      deleted_accounts: {
+        Row: { id: string; email_hash: string; bets: number; claims: number; deleted_at: string }
+        Insert: { id?: string; email_hash: string; bets?: number; claims?: number; deleted_at?: string }
         Update: never
         Relationships: []
       }

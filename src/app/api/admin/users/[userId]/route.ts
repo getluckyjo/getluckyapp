@@ -71,8 +71,8 @@ export async function PATCH(request: Request, { params }: Params) {
 
   try {
     const updates = body.data.suspended
-      ? { suspended_at: new Date().toISOString(), suspended_reason: body.data.reason ?? null }
-      : { suspended_at: null, suspended_reason: null }
+      ? { suspended_at: new Date().toISOString(), suspended_reason: body.data.reason ?? null, updated_by: auth.user.id }
+      : { suspended_at: null, suspended_reason: null, updated_by: auth.user.id }
     const { data, error } = await auth.adminClient.from('profiles').update(updates).eq('id', userId).select('id')
     if (error) throw error
     if (!data || data.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })

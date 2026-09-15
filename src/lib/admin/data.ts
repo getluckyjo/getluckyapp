@@ -23,6 +23,9 @@ export interface BetRowLike {
   video_url: string | null
   payment_intent_id: string | null
   created_at: string
+  risk_score?: number | null
+  risk_flags?: unknown
+  payout_reference?: string | null
 }
 
 export interface VerificationRowLike {
@@ -41,6 +44,7 @@ export interface VerificationRowLike {
   certificate_bytes?: number | null
   affidavit_sha256?: string | null
   affidavit_bytes?: number | null
+  review_checklist?: unknown
 }
 
 export interface Names {
@@ -113,6 +117,8 @@ export function toQueueItem(v: VerificationRowLike, bet: BetRowLike | undefined,
     reviewedBy: v.reviewed_by,
     verifiedAt: v.verified_at,
     payoutInitiatedAt: v.payout_initiated_at,
+    riskScore: bet?.risk_score ?? 0,
+    riskFlagCount: Array.isArray(bet?.risk_flags) ? bet.risk_flags.length : 0,
   }
 }
 
@@ -127,7 +133,7 @@ export async function betsForVerifications(admin: SupabaseClient, rows: Pick<Ver
   return new Map(((data ?? []) as BetRowLike[]).map(b => [b.id, b]))
 }
 
-export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, status, declared_result, declared_at, video_url, payment_intent_id, created_at'
+export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, status, declared_result, declared_at, video_url, payment_intent_id, created_at, risk_score, risk_flags, payout_reference'
 
 /**
  * A search term safe to embed in a PostgREST `.or()` filter string: the

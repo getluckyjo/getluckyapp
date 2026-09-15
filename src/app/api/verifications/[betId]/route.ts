@@ -12,6 +12,8 @@ import { z } from 'zod'
 import { apiError, parseBody } from '@/lib/api/http'
 import { DocumentMissingError, sealDocument } from '@/lib/claims/documents'
 import { WitnessesSchema, hasPlayingPartner, replaceWitnesses, witnessesForBet } from '@/lib/claims/witnesses'
+import { hashIdentifier } from '@/lib/risk/hash'
+import { tryRefreshClaimRisk } from '@/lib/risk/rules'
 
 const Body = z.object({
   certificatePath: z.string().max(500).nullable().optional(),
@@ -155,14 +157,23 @@ export async function POST(
     }
 
     const now = new Date().toISOString()
+    // Where and from what the claim was made: the clustering signals for
+    // the shared_ip and shared_device rules. Recorded on the first submission.
+    const signals = { claim_ip_hash: hashIdentifier('ip', clientIp(request)), claim_ua_hash: hashIdentifier('ua', request.headers.get('user-agent')) }
 
     if (bet.status === 'active') {
       assertOpen(bet)
       await transitionBet(admin, {
         betId, from: 'active', to: 'claimed', actor: 'player', actorId: user.id, userId: user.id,
-        extra: { declared_result: 'win', declared_at: now },
+        extra: { declared_result: 'win', declared_at: now, ...signals },
       })
-    } else if (bet.status !== 'claimed') {
+    } else if (bet.status === 'claimed') {
+      if (!existing) {
+        // Declared a win earlier, submitting documents now: this is the first submission.
+        const { error: sigErr } = await admin.from('bets').update(signals).eq('id', betId).is('claim_ip_hash', null)
+        if (sigErr) log.warn('claim.signals_write_failed', { bet_id: betId, error: sigErr.message })
+      }
+    } else {
       throw new ClaimError('INVALID_TRANSITION', `This bet is already ${bet.status}.`, 409)
     }
 
@@ -196,7 +207,8 @@ export async function POST(
       }
     }
 
-    log.info('claim.submitted', { user_id: user.id, bet_id: betId, has_certificate: !!certificatePath, has_affidavit: !!affidavitPath, witnesses: namedNow.length, resubmission: !!existing })
+    const risk = await tryRefreshClaimRisk(admin, betId)
+    log.info('claim.submitted', { user_id: user.id, bet_id: betId, has_certificate: !!certificatePath, has_affidavit: !!affidavitPath, witnesses: namedNow.length, resubmission: !!existing, risk_score: risk?.score ?? null, risk_rules: risk?.flags.map(f => f.rule) ?? null })
     return NextResponse.json({ success: true, source: 'database' })
   } catch (err) {
     const known = claimErrorResponse(err)

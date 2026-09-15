@@ -111,7 +111,7 @@ export class Builder implements PromiseLike<Result> {
   neq(col: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
   in(col: string, vals: unknown[]) { this.filters.push(r => vals.includes(r[col])); return this }
   is(col: string, val: unknown) { this.filters.push(r => (val === null ? r[col] == null : r[col] === val)); return this }
-  not(col: string, _op: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
+  not(col: string, _op: string, val: unknown) { this.filters.push(r => (val === null ? r[col] != null : r[col] !== val)); return this }
   gte(col: string, val: string) { this.filters.push(r => String(r[col]) >= val); return this }
   lte(col: string, val: string) { this.filters.push(r => String(r[col]) <= val); return this }
   ilike(col: string, val: string) {

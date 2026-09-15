@@ -107,8 +107,8 @@ describe('input validation', () => {
 
   it('batch review: ids must be uuids, at most 50, action from the fixed set', async () => {
     asAdmin()
-    expect((await batchReview(jsonRequest('http://x', { ids: ['v1'], action: 'approve' }) as never)).status).toBe(400)
-    expect((await batchReview(jsonRequest('http://x', { ids: Array(51).fill(COURSE_ID), action: 'approve' }) as never)).status).toBe(400)
+    expect((await batchReview(jsonRequest('http://x', { ids: ['v1'], action: 'approve', notes: 'All four checked by phone with the club.' }) as never)).status).toBe(400)
+    expect((await batchReview(jsonRequest('http://x', { ids: Array(51).fill(COURSE_ID), action: 'approve', notes: 'All four checked by phone with the club.' }) as never)).status).toBe(400)
     expect((await batchReview(jsonRequest('http://x', { ids: [COURSE_ID], action: 'pay' }) as never)).status).toBe(400)
   })
 

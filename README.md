@@ -58,6 +58,7 @@ npm run test:staging         # Row Level Security probed as a real user
 | `OPS_ALERT_EMAIL` | server | where money-path alerts are emailed |
 | `BET_WINDOW_HOURS` | server | play window after purchase, default 24 |
 | `CRON_SECRET` | server | Vercel sends it as the bearer token to `/api/cron/retention`; the sweep refuses to run without it |
+| `RISK_HASH_SALT` | server | at least 16 random characters; salts the hashed IP, device and email used by the risk rules. Without it those rules stay quiet and the log says so once |
 | `RETENTION_DAYS` | server | footage of misses and documents of rejected claims are purged after this many days, default 90 |
 
 A preview deployment refuses to start if it points at the production database
@@ -73,6 +74,7 @@ src/lib/claims/         the claim state machine: the only place a bet or claim c
 src/lib/payfast/        PayFast configuration and address list
 src/lib/rate-limit.ts   Postgres-backed limiter
 src/lib/account/        account deletion: what goes, what stays, what blocks it
+src/lib/risk/           the velocity and anomaly rules, thresholds, hashing
 src/lib/retention.ts    the nightly purge of footage and documents (vercel.json schedules it)
 src/lib/observability/  structured log + ops alerts (Sentry + email)
 src/lib/api/http.ts     parseBody / parseQuery / apiError

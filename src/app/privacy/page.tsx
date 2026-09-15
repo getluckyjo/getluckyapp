@@ -21,7 +21,7 @@ export default function PrivacyPage() {
         <li><strong>Footage:</strong> the video of your shot, with the time it was uploaded and a fingerprint of the file so it cannot be swapped later.</li>
         <li><strong>Claim documents:</strong> the scorecard or certificate and the witness affidavit you upload for a hole-in-one claim. These contain other people&apos;s names and signatures; by uploading them you confirm those people know and agree.</li>
         <li><strong>Witnesses:</strong> the names and email addresses of the playing partners and club official you name on a claim, used to ask them to confirm what they saw. You are responsible for telling them you have given us their details.</li>
-        <li><strong>Technical:</strong> your IP address and device details in server logs and error reports, kept for a short time to keep the service running and to stop abuse.</li>
+        <li><strong>Technical:</strong> your IP address and device details in server logs and error reports, kept for a short time to keep the service running and to stop abuse. A scrambled (hashed) form of your IP address and device is kept with each challenge and claim so that one person using several accounts can be noticed; it cannot be turned back into the address.</li>
       </ul>
 
       <h2>Why</h2>

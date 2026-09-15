@@ -10,7 +10,7 @@ import type { VerificationQueueItem, PaginatedResponse } from '@/types/admin'
 const Query = pagination.extend({
   status: z.enum(VERIFICATION_STATUSES).optional(),
   tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
-  sort: z.enum(['oldest', 'newest', 'highest']).default('oldest'),
+  sort: z.enum(['oldest', 'newest', 'highest', 'risk']).default('oldest'),
 })
 
 /** Only bets in these states can have a verification at all. */
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     let rows: VerificationRowLike[]
     let total: number
 
-    if (tier || sort === 'highest') {
+    if (tier || sort === 'highest' || sort === 'risk') {
       // Tier and prize live on the bet. Resolve the ordered set of claimed
       // bets first (small: only bets that reached a claim), then page over
       // their verifications in that order. Count and pages are exact.
@@ -37,6 +37,8 @@ export async function GET(request: Request) {
       if (tier) bq = bq.eq('tier', tier)
       bq = sort === 'highest'
         ? bq.order('potential_win_pence', { ascending: false })
+        : sort === 'risk'
+        ? bq.order('risk_score', { ascending: false })
         : bq.order('created_at', { ascending: sort !== 'newest' })
       const { data: betIdsRaw, error: betErr } = await bq.limit(5000)
       if (betErr) throw betErr

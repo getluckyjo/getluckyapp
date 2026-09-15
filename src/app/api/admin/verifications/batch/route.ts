@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { ClaimError, reviewVerification } from '@/lib/claims/state-machine'
+import { MIN_DECISION_NOTES } from '@/lib/claims/checklist'
 import { log } from '@/lib/observability/log'
 import type { BatchActionResult } from '@/types/admin'
 
@@ -21,12 +22,19 @@ export async function POST(request: Request) {
   if (!body.ok) return body.response
   const { ids, action, notes } = body.data
   const newStatus = STATUS[action]
+  if ((action === 'approve' || action === 'reject') && (notes ?? '').length < MIN_DECISION_NOTES) {
+    return NextResponse.json({ error: `Say why, in at least ${MIN_DECISION_NOTES} characters. The reason is part of the record for every claim in the batch.`, code: 'NOTES_REQUIRED' }, { status: 400 })
+  }
+  // A batch approval skips the per-claim checklist; the record says so.
+  const extra = action === 'approve'
+    ? { review_checklist: { batch: true, completed_by: auth.user.id, completed_at: new Date().toISOString() } }
+    : {}
 
   try {
     const results: BatchActionResult[] = []
     for (const id of ids) {
       try {
-        await reviewVerification(auth.adminClient, { verificationId: id, to: newStatus, actorId: auth.user.id, notes })
+        await reviewVerification(auth.adminClient, { verificationId: id, to: newStatus, actorId: auth.user.id, notes, extra })
         results.push({ id, success: true })
       } catch (err) {
         if (err instanceof ClaimError) {

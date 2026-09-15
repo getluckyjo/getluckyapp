@@ -17,6 +17,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { log } from '@/lib/observability/log'
 import { USER_BUCKETS, listObjectsUnder, removeObjects } from '@/lib/storage/objects'
+import { hashIdentifier } from '@/lib/risk/hash'
 
 export type DeletionBlock = 'ACCOUNT_SUSPENDED' | 'CLAIM_OPEN'
 
@@ -26,6 +27,9 @@ export interface DeletionStatus {
   /** Bets still inside their play window; deleting forfeits them. */
   activeBets: number
   bets: number
+  /** Bets that reached a claim, for the deleted-accounts record. */
+  claims: number
+  email: string | null
 }
 
 /** A claim in one of these states is evidence that must outlive the account. */
@@ -35,11 +39,16 @@ type Admin = SupabaseClient<Database>
 
 export async function deletionStatus(admin: Admin, userId: string): Promise<DeletionStatus> {
   const [{ data: profile }, { data: bets }] = await Promise.all([
-    admin.from('profiles').select('suspended_at').eq('id', userId).maybeSingle(),
+    admin.from('profiles').select('suspended_at, email').eq('id', userId).maybeSingle(),
     admin.from('bets').select('id, status').eq('user_id', userId),
   ])
   const list = bets ?? []
-  const base = { activeBets: list.filter(b => b.status === 'active').length, bets: list.length }
+  const base = {
+    activeBets: list.filter(b => b.status === 'active').length,
+    bets: list.length,
+    claims: list.filter(b => b.status === 'claimed' || b.status === 'verified' || b.status === 'paid').length,
+    email: profile?.email ?? null,
+  }
 
   if (profile?.suspended_at) return { canDelete: false, reason: 'ACCOUNT_SUSPENDED', ...base }
   if (list.some(b => b.status === 'verified' || b.status === 'paid')) return { canDelete: false, reason: 'CLAIM_OPEN', ...base }
@@ -75,6 +84,14 @@ export async function deleteAccount(admin: Admin, userId: string): Promise<Delet
     const paths = await listObjectsUnder(admin, bucket, userId)
     await removeObjects(admin, bucket, paths)
     objectsRemoved += paths.length
+  }
+
+  // Remember that this email left, and with what history, so a returning
+  // deleter is visible to the deleted_and_back risk rule. Hashed; no name, no id.
+  const emailHash = hashIdentifier('email', status.email)
+  if (emailHash) {
+    const { error: memErr } = await admin.from('deleted_accounts').insert({ email_hash: emailHash, bets: status.bets, claims: status.claims })
+    if (memErr) log.error('account.delete_memory_failed', memErr, { user_id: userId })
   }
 
   const { error } = await admin.auth.admin.deleteUser(userId)

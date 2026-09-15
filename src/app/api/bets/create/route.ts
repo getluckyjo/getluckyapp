@@ -10,6 +10,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
+import { hashIdentifier } from '@/lib/risk/hash'
 
 // The body's course, hole and tier are advisory: the authoritative values come
 // from the payments ledger. They are still required so a malformed client
@@ -149,6 +150,7 @@ export async function POST(request: NextRequest) {
     const { data: bet, error } = await admin
       .from('bets')
       .insert({
+        created_ip_hash: hashIdentifier('ip', clientIp(request)),
         user_id:             user.id,
         course_id:           payment.course_id,
         hole_id:             payment.hole_id,

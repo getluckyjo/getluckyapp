@@ -41,6 +41,8 @@ export interface VerificationQueueItem {
   reviewedBy: string | null
   verifiedAt: string | null
   payoutInitiatedAt: string | null
+  riskScore: number
+  riskFlagCount: number
 }
 
 export interface ClaimEvent {
@@ -52,6 +54,9 @@ export interface ClaimEvent {
   changed: Record<string, { from: unknown; to: unknown }> | null
   created_at: string
 }
+
+import type { RiskFlag } from '@/lib/risk/labels'
+export type { RiskFlag }
 
 export interface CaptureAttestation {
   startedAt: string | null
@@ -85,6 +90,10 @@ export interface VerificationDetail extends VerificationQueueItem {
   certificateSeal: DocumentSealInfo
   affidavitSeal: DocumentSealInfo
   witnesses: ClaimWitness[]
+  riskScore: number
+  riskFlags: RiskFlag[]
+  reviewChecklist: Record<string, unknown> | null
+  payoutReference: string | null
   userBetHistory: AdminBetRecord[]
   userTotalAttempts: number
   betStatus: BetStatus | null

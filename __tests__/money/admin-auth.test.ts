@@ -5,6 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B } from '../helpers/fake-supabase'
+import { REVIEW_CHECKLIST } from '@/lib/claims/checklist'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
 const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
@@ -86,6 +87,9 @@ describe('requireAdmin', () => {
 
 describe('PATCH /api/admin/verifications/[id]', () => {
   const params = (id: string) => ({ params: Promise.resolve({ verificationId: id }) })
+  const CHECKLIST = Object.fromEntries(REVIEW_CHECKLIST.map(i => [i.key, true]))
+  const APPROVE = { status: 'approved', reviewerNotes: 'Footage and certificate check out; phoned the pro shop.', checklist: CHECKLIST }
+  const REJECT = { status: 'rejected', reviewerNotes: 'Footage shows the ball stopping short of the hole.' }
 
   it('is refused for non-admins and changes nothing', async () => {
     const { PATCH } = await load()
@@ -94,7 +98,7 @@ describe('PATCH /api/admin/verifications/[id]', () => {
     const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'claimed' })
     const [v] = db.seed('verifications', { bet_id: bet.id, status: 'documents_received' })
 
-    const res = await PATCH(jsonRequest('http://x', { status: 'approved' }, { method: 'PATCH' }) as never, params(v.id as string))
+    const res = await PATCH(jsonRequest('http://x', APPROVE, { method: 'PATCH' }) as never, params(v.id as string))
     expect(res.status).toBe(403)
     expect(v.status).toBe('documents_received')
     expect(bet.status).toBe('claimed')
@@ -107,10 +111,11 @@ describe('PATCH /api/admin/verifications/[id]', () => {
     const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'claimed' })
     const [v] = db.seed('verifications', { bet_id: bet.id, status: 'under_review' })
 
-    const res = await PATCH(jsonRequest('http://x', { status: 'approved', reviewerNotes: 'Footage and certificate check out' }, { method: 'PATCH' }) as never, params(v.id as string))
+    const res = await PATCH(jsonRequest('http://x', APPROVE, { method: 'PATCH' }) as never, params(v.id as string))
     expect(res.status).toBe(200)
-    expect(v).toMatchObject({ status: 'approved', reviewed_by: USER_A.id, reviewer_notes: 'Footage and certificate check out' })
+    expect(v).toMatchObject({ status: 'approved', reviewed_by: USER_A.id, reviewer_notes: APPROVE.reviewerNotes })
     expect(typeof v.verified_at).toBe('string')
+    expect(v.review_checklist).toMatchObject({ ...CHECKLIST, completed_by: USER_A.id })
     expect(bet.status).toBe('verified')
   })
 
@@ -121,7 +126,7 @@ describe('PATCH /api/admin/verifications/[id]', () => {
     const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'claimed' })
     const [v] = db.seed('verifications', { bet_id: bet.id, status: 'under_review' })
 
-    await PATCH(jsonRequest('http://x', { status: 'rejected' }, { method: 'PATCH' }) as never, params(v.id as string))
+    await PATCH(jsonRequest('http://x', REJECT, { method: 'PATCH' }) as never, params(v.id as string))
     expect(v.status).toBe('rejected')
     expect(bet.status).toBe('claimed')
   })
@@ -141,7 +146,7 @@ describe('PATCH /api/admin/verifications/[id]', () => {
     const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'claimed' })
     const [rejected] = db.seed('verifications', { bet_id: bet.id, status: 'rejected' })
     for (const status of ['under_review', 'approved', 'documents_received']) {
-      const res = await PATCH(jsonRequest('http://x', { status }, { method: 'PATCH' }) as never, params(rejected.id as string))
+      const res = await PATCH(jsonRequest('http://x', { ...APPROVE, status }, { method: 'PATCH' }) as never, params(rejected.id as string))
       expect(res.status, status).toBe(409)
       expect((await res.json()).code).toBe('INVALID_TRANSITION')
     }
@@ -155,7 +160,7 @@ describe('PATCH /api/admin/verifications/[id]', () => {
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
     const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'miss' })
     const [v] = db.seed('verifications', { bet_id: bet.id, status: 'under_review' })
-    const res = await PATCH(jsonRequest('http://x', { status: 'approved' }, { method: 'PATCH' }) as never, params(v.id as string))
+    const res = await PATCH(jsonRequest('http://x', APPROVE, { method: 'PATCH' }) as never, params(v.id as string))
     expect(res.status).toBe(409)
     expect(v.status).toBe('under_review')
     expect(bet.status).toBe('miss')
@@ -167,7 +172,7 @@ describe('PATCH /api/admin/verifications/[id]', () => {
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
     const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'claimed' })
     const [v] = db.seed('verifications', { bet_id: bet.id, status: 'documents_received' })
-    await PATCH(jsonRequest('http://x', { status: 'approved' }, { method: 'PATCH' }) as never, params(v.id as string))
+    await PATCH(jsonRequest('http://x', APPROVE, { method: 'PATCH' }) as never, params(v.id as string))
     expect(v.updated_by).toBe(USER_A.id)
     expect(bet.updated_by).toBe(USER_A.id)
   })
@@ -187,9 +192,10 @@ describe('PATCH /api/admin/bets/[betId]', () => {
     db.seed('profiles', { id: USER_A.id, is_admin: true })
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
     const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'verified' })
-    const res = await PATCH(jsonRequest('http://x', { status: 'paid' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    const res = await PATCH(jsonRequest('http://x', { status: 'paid', payoutReference: 'FNB-2026-09-15-0042' }, { method: 'PATCH' }) as never, params(bet.id as string))
     expect(res.status).toBe(200)
     expect(bet.status).toBe('paid')
+    expect(bet.payout_reference).toBe('FNB-2026-09-15-0042')
     expect(bet.updated_by).toBe(USER_A.id)
   })
 

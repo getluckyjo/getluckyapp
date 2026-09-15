@@ -26,7 +26,11 @@ export async function GET(_request: Request, { params }: Params) {
   }
 }
 
-const Body = z.object({ status: z.enum(BET_STATUSES) })
+const Body = z.object({
+  status: z.enum(BET_STATUSES),
+  /** The bank or PayFast reference. Required when confirming a payout. */
+  payoutReference: z.string().trim().max(120).optional(),
+})
 
 /**
  * The only direct admin change to a bet is confirming a payout
@@ -40,6 +44,8 @@ export async function PATCH(request: Request, { params }: Params) {
   const body = await parseBody(request, Body)
   if (!body.ok) return body.response
 
+  const payoutReference = body.data.payoutReference ?? ''
+
   try {
     const { data: bet } = await auth.adminClient.from('bets').select('id, status').eq('id', betId).maybeSingle()
     if (!bet) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -49,9 +55,20 @@ export async function PATCH(request: Request, { params }: Params) {
         { status: 409 },
       )
     }
+    if (body.data.status === 'paid' && payoutReference.length < 3) {
+      return NextResponse.json({ error: 'Enter the bank or PayFast reference for the payout. "Paid" is never recorded without one.', code: 'PAYOUT_REFERENCE_REQUIRED' }, { status: 400 })
+    }
 
-    await transitionBet(auth.adminClient, { betId, from: bet.status, to: body.data.status, actor: 'admin', actorId: auth.user.id })
-    log.info('admin.bet_transition', { admin_id: auth.user.id, bet_id: betId, from: bet.status, to: body.data.status })
+    const now = new Date().toISOString()
+    await transitionBet(auth.adminClient, {
+      betId, from: bet.status, to: body.data.status, actor: 'admin', actorId: auth.user.id,
+      extra: body.data.status === 'paid' ? { payout_reference: payoutReference } : {},
+    })
+    if (body.data.status === 'paid') {
+      const { error } = await auth.adminClient.from('verifications').update({ payout_initiated_at: now, updated_by: auth.user.id }).eq('bet_id', betId)
+      if (error) log.error('admin.payout_timestamp_failed', error, { path: 'admin_review', bet_id: betId })
+    }
+    log.info('admin.bet_transition', { admin_id: auth.user.id, bet_id: betId, from: bet.status, to: body.data.status, payout_reference: body.data.status === 'paid' ? payoutReference : undefined })
     return NextResponse.json({ success: true, betId })
   } catch (err) {
     const known = claimErrorResponse(err)
