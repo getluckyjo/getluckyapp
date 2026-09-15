@@ -21,173 +21,98 @@ function planLabel(plan: string | null) {
   return plan.charAt(0).toUpperCase() + plan.slice(1)
 }
 
+function formatRand(n: number) {
+  return `R${n.toLocaleString('en-ZA').replace(/,/g, ' ')}`
+}
+
+/**
+ * Club — the Get Lucky Golf Club in the V2 system.
+ * Non-members see the two plans as white tiles, the perks with lime checks,
+ * and one lime JOIN that hands off to the funnel. Members see their status
+ * in a green card with a quiet manage link, then the perks they already have.
+ */
 export default function MembershipPage() {
-  const { isMember, status, plan, joinedDate, foundingMember, loading } = useMembership()
+  const { isMember, plan, joinedDate, foundingMember, loading } = useMembership()
 
   return (
-    <PhoneFrame statusTheme="dark" hideSponsor>
-      <div style={{ overflowY: 'auto', height: '100%', background: 'var(--cream)' }}>
+    <PhoneFrame statusTheme="dark">
+      <div className="v2-screen">
+        <AppHeader tone="light" />
 
-        {/* ── Hero ── */}
-        <div style={{
-          position: 'relative',
-          background: 'linear-gradient(150deg, #1e3120 0%, var(--green-deep) 55%, #4a7a3d 100%)',
-          padding: '0 0 var(--space-xl)',
-          color: 'white',
-        }}>
-          <AppHeader tone="dark" />
+        <div className="vf-scroll">
+          <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Get Lucky\nGolf Club'}</h1>
+          <p className="vf-sub">
+            {isMember
+              ? 'Thanks for being a member. Here’s your status and what it gets you.'
+              : 'Join the club for status, perks and a fully insured shot at glory.'}
+          </p>
 
-          <div style={{ textAlign: 'center', marginTop: 'clamp(8px, 2vh, 18px)', padding: '0 var(--page-px)' }}>
-            <MemberBadge style={{ marginBottom: 14 }} />
-            <h1 style={{
-              fontFamily: 'var(--font-heading)', fontSize: 'clamp(28px, 8.5vw, 36px)',
-              fontWeight: 800, lineHeight: 1.1, marginBottom: 8, textTransform: 'uppercase',
-            }}>
-              Get Lucky Golf Club
-            </h1>
-            <p style={{ fontSize: 'var(--text-body)', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
-              {isMember
-                ? 'Thanks for being a member. Here’s your status & benefits.'
-                : 'Join the club for status, perks & a fully-insured shot at glory.'}
-            </p>
-          </div>
-        </div>
-
-        {/* ── Member status card (active members only) ── */}
-        {isMember ? (
-          <div style={{ padding: 'var(--space-lg) var(--page-px) 0' }}>
-            <div style={{
-              background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid #e8e4dc',
-              padding: 'var(--space-lg)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-md)' }}>
-                <div style={{ fontSize: 'var(--text-body)', fontWeight: 700, color: 'var(--green-deep)' }}>
-                  Your Membership
-                </div>
+          {loading ? (
+            <div className="club-plans" aria-hidden>
+              <div className="club-plan skeleton" style={{ minHeight: 108 }} />
+              <div className="club-plan skeleton" style={{ minHeight: 108 }} />
+            </div>
+          ) : isMember ? (
+            <div className="club-status">
+              <div className="club-status-top">
+                <span className="club-status-label">Your membership</span>
                 <MemberBadge size="sm" />
               </div>
-              {[
-                { label: 'Status', value: 'Active' },
-                { label: 'Plan', value: planLabel(plan) },
-                { label: 'Member since', value: formatDate(joinedDate) },
-                ...(foundingMember ? [{ label: 'Tier', value: 'Founding Member' }] : []),
-              ].map((row, i, arr) => (
-                <div key={row.label} style={{
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  padding: 'var(--space-sm) 0',
-                  borderBottom: i < arr.length - 1 ? '1px solid #f5f0e8' : 'none',
-                }}>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--gray-light)' }}>{row.label}</span>
-                  <span style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--black)' }}>{row.value}</span>
-                </div>
-              ))}
-
-              <a
-                href={MEMBERSHIP_FUNNEL_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'block', width: '100%', marginTop: 'var(--space-md)', padding: 'var(--space-sm)',
-                  background: 'white', border: '1.5px solid #e0dbd0', borderRadius: 'var(--radius-md)',
-                  fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--green-deep)',
-                  textAlign: 'center', textDecoration: 'none', boxSizing: 'border-box',
-                }}
-              >
-                Manage membership →
+              <dl className="club-rows">
+                <div><dt>Status</dt><dd>Active</dd></div>
+                <div><dt>Plan</dt><dd>{planLabel(plan)}</dd></div>
+                <div><dt>Member since</dt><dd>{formatDate(joinedDate)}</dd></div>
+                {foundingMember && <div><dt>Tier</dt><dd>Founding member</dd></div>}
+              </dl>
+              <a href={MEMBERSHIP_FUNNEL_URL} target="_blank" rel="noopener noreferrer" className="btn-tile btn-tile--block club-manage">
+                Manage membership
               </a>
             </div>
-          </div>
-        ) : (
-          /* ── Plan preview (non-members) ── */
-          !loading && (
-            <div style={{ padding: 'var(--space-lg) var(--page-px) 0' }}>
-              <div style={{ display: 'flex', gap: 10 }}>
-                {(['monthly', 'annual'] as const).map(p => {
-                  const pc = MEMBERSHIP_PLANS[p]
-                  return (
-                    <div
-                      key={p}
-                      style={{
-                        flex: 1, textAlign: 'left',
-                        background: 'white',
-                        border: p === 'annual' ? '2px solid var(--gold)' : '1.5px solid #e8e4dc',
-                        borderRadius: 'var(--radius-lg)', padding: 'var(--space-md)',
-                        position: 'relative',
-                      }}
-                    >
-                      {p === 'annual' && (
-                        <span style={{
-                          position: 'absolute', top: -9, right: 10, background: 'var(--gold)',
-                          color: '#3a2f12', fontSize: 9, fontWeight: 800, padding: '2px 8px',
-                          borderRadius: 10, letterSpacing: '0.03em',
-                        }}>
-                          BEST VALUE
-                        </span>
-                      )}
-                      <div style={{ fontSize: 'var(--text-sm)', fontWeight: 700, color: 'var(--green-deep)' }}>{pc.label}</div>
-                      <div style={{ fontFamily: 'Poster Gothic, sans-serif', fontSize: 'var(--text-xl)', fontWeight: 900, color: 'var(--green-deep)', marginTop: 2 }}>
-                        R{pc.priceZAR.toLocaleString('en-ZA')}
-                      </div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-light)' }}>{pc.cadence}</div>
-                    </div>
-                  )
-                })}
-              </div>
+          ) : (
+            <div className="club-plans">
+              {(['monthly', 'annual'] as const).map(p => {
+                const pc = MEMBERSHIP_PLANS[p]
+                const best = p === 'annual'
+                return (
+                  <div key={p} className={`club-plan${best ? ' is-best' : ''}`}>
+                    {best && <span className="club-plan-flag">Best value</span>}
+                    <span className="club-plan-name">{pc.label}</span>
+                    <span className="club-plan-price">{formatRand(pc.priceZAR)}</span>
+                    <span className="club-plan-cadence">{pc.cadence}</span>
+                  </div>
+                )
+              })}
             </div>
-          )
-        )}
+          )}
 
-        {/* ── Perks ── */}
-        <div style={{ padding: 'var(--space-lg) var(--page-px) 0' }}>
-          <div style={{ background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid #e8e4dc', padding: 'var(--space-lg)' }}>
-            <div style={{ fontSize: 'var(--text-body)', fontWeight: 700, color: 'var(--green-deep)', marginBottom: 'var(--space-md)' }}>
-              Member Benefits
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+          <section className="club-perks">
+            <h2 className="club-perks-title">{isMember ? 'Your benefits' : 'What you get'}</h2>
+            <ul>
               {MEMBERSHIP_PERKS.map(perk => (
-                <div key={perk} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <span style={{
-                    flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
-                    background: 'rgba(74,122,61,0.12)', display: 'flex', alignItems: 'center',
-                    justifyContent: 'center', marginTop: 1,
-                  }}>
-                    <Check size={13} strokeWidth={3} color="var(--green-mid)" />
-                  </span>
-                  <span style={{ fontSize: 'var(--text-sm)', color: 'var(--black)', lineHeight: 1.4 }}>{perk}</span>
-                </div>
+                <li key={perk}>
+                  <span className="club-check" aria-hidden><Check size={13} strokeWidth={3.2} /></span>
+                  <span>{perk}</span>
+                </li>
               ))}
+            </ul>
+          </section>
+
+          {!isMember && !loading && (
+            <div className="club-cta">
+              <a href={MEMBERSHIP_FUNNEL_URL} target="_blank" rel="noopener noreferrer" className="btn-lime btn-lime--block">
+                Join the club
+              </a>
+              <p className="club-legal">
+                Secure signup at membership.getluckygolfclub.com
+                <br />
+                Prizes fully insured · Underwritten by Indwe Risk Services
+              </p>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* ── Sticky CTA (join → external funnel) ── */}
-        {!isMember && !loading && (
-          <div style={{ padding: 'var(--space-lg) var(--page-px) var(--tab-bar-pb)' }}>
-            <a
-              href={MEMBERSHIP_FUNNEL_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-gold"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: '100%', padding: '16px', fontSize: 'var(--text-base)', fontWeight: 700,
-                textDecoration: 'none', boxSizing: 'border-box',
-              }}
-            >
-              Join the Club →
-            </a>
-            <p style={{ fontSize: 10, color: 'var(--gray-light)', textAlign: 'center', marginTop: 10, lineHeight: 1.5 }}>
-              Secure signup at membership.getluckygolfclub.com
-              <br />
-              Prizes fully insured · Underwritten by Indwe Risk Services
-            </p>
-          </div>
-        )}
-
-        {(isMember || loading) && <div style={{ height: 'var(--tab-bar-pb)' }} />}
+        <BottomTabBar active="membership" />
       </div>
-
-      <BottomTabBar active="membership" />
     </PhoneFrame>
   )
 }

@@ -17,6 +17,18 @@ function getInitials(name: string | null | undefined, email: string | null | und
   return 'GL'
 }
 
+const Chevron = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M9 5l7 7-7 7" />
+  </svg>
+)
+
+/**
+ * Account — the golfer's own card in the V2 system.
+ * A green identity card with a lime initials disc, two stat tiles, then
+ * white cards for profile details (with inline edit), the club, and the
+ * legal links. Sign out sits last and quiet.
+ */
 export default function AccountPage() {
   const router = useRouter()
   const { user, profile, signOut, refreshProfile, loading } = useAuth()
@@ -38,7 +50,7 @@ export default function AccountPage() {
   const displayName = profile?.name ?? user?.user_metadata?.full_name ?? null
   const initials    = getInitials(displayName, user?.email)
   const memberSince = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString('en-ZA', { month: 'long', year: 'numeric' })
+    ? new Date(user.created_at).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })
     : '—'
 
   async function saveProfile() {
@@ -55,360 +67,199 @@ export default function AccountPage() {
     await refreshProfile()
     setSavingProfile(false)
     setEditingProfile(false)
-    showToast('Profile updated ✓')
+    showToast('Profile updated')
   }
 
-  return (
-    <PhoneFrame statusTheme="dark" hideSponsor>
+  function startEditing() {
+    setEditName(displayName ?? '')
+    setEditHandicap(profile?.handicap != null ? String(profile.handicap) : '')
+    setEditingProfile(true)
+  }
 
-      {/* ── Scrollable body ── */}
-      <div style={{ overflowY: 'auto', height: '100%', background: 'var(--cream)' }}>
+  const clubLine = (() => {
+    const planKey = plan?.toLowerCase()
+    const planText = planKey === 'monthly' || planKey === 'annual' ? MEMBERSHIP_PLANS[planKey].label : 'Active'
+    const since = joinedDate
+      ? ` · since ${new Date(joinedDate).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })}`
+      : ''
+    return `${planText}${since}`
+  })()
+
+  return (
+    <PhoneFrame statusTheme="dark">
+      <div className="v2-screen">
         <AppHeader tone="light" />
 
-        {/* Header */}
-        <header className="page-head" style={{ display: 'block', paddingBottom: 'var(--space-lg)' }}>
-          <h1 className="page-title">My Account</h1>
-          <div className="page-sub">Manage your profile &amp; preferences</div>
-        </header>
+        <div className="vf-scroll">
+          <h1 className="v2-title" style={{ marginBottom: 16 }}>{'My\naccount'}</h1>
 
-        {/* ── Identity card ── */}
-        <div style={{ padding: '0 var(--page-px)', marginBottom: 'var(--space-lg)' }}>
-          <div style={{
-            background: 'linear-gradient(135deg, var(--green-deep) 0%, #2d6a3f 100%)',
-            borderRadius: 'var(--radius-lg)', padding: 'var(--space-xl) var(--page-px)',
-            display: 'flex', alignItems: 'center', gap: 'var(--space-lg)',
-          }}>
+          {/* ── Identity card ── */}
+          <div className="acct-id">
             {loading ? (
-              <div className="skeleton" style={{ width: 72, height: 72, borderRadius: '50%', flexShrink: 0, opacity: 0.3 }} />
+              <div className="skeleton acct-avatar" style={{ opacity: 0.35 }} />
             ) : (
-              <div style={{
-                width: 'clamp(60px, 18vw, 72px)', height: 'clamp(60px, 18vw, 72px)', borderRadius: '50%',
-                background: 'rgba(255,255,255,0.15)',
-                border: '2.5px solid rgba(255,255,255,0.3)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 'var(--text-2xl)', fontWeight: 800, color: 'white', flexShrink: 0,
-                fontFamily: 'Poster Gothic, sans-serif',
-              }}>
-                {initials}
-              </div>
+              <span className="acct-avatar" aria-hidden>{initials}</span>
             )}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="acct-id-text">
               {loading ? (
                 <>
-                  <div className="skeleton" style={{ height: 20, width: '60%', marginBottom: 8, borderRadius: 4 }} />
-                  <div className="skeleton" style={{ height: 13, width: '80%', borderRadius: 4 }} />
+                  <div className="skeleton" style={{ height: 22, width: '60%', marginBottom: 8, opacity: 0.35 }} />
+                  <div className="skeleton" style={{ height: 13, width: '80%', opacity: 0.35 }} />
                 </>
               ) : (
                 <>
-                  <div style={{
-                    fontSize: 'var(--text-lg)', fontWeight: 700, color: 'white',
-                    lineHeight: 1.3,
-                    fontFamily: 'Poster Gothic, sans-serif',
-                  }}>
-                    {displayName ?? 'Golfer'}
-                  </div>
-                  <div style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.7)', marginTop: 3, overflowWrap: 'break-word', wordBreak: 'break-word' }}>
-                    {user?.email}
-                  </div>
-                  {profile?.handicap != null && (
-                    <div style={{
-                      display: 'inline-flex', alignItems: 'center',
-                      marginTop: 'var(--space-xs)', padding: '3px 10px',
-                      background: 'rgba(255,255,255,0.15)',
-                      borderRadius: 20, fontSize: 'var(--text-xs)', fontWeight: 600,
-                      color: 'rgba(255,255,255,0.9)',
-                    }}>
-                      HCP {profile.handicap}
+                  <div className="acct-name">{displayName ?? 'Golfer'}</div>
+                  <div className="acct-email">{user?.email ?? 'Not signed in'}</div>
+                  {(profile?.handicap != null || isMember) && (
+                    <div className="acct-chips">
+                      {profile?.handicap != null && <span className="acct-chip">HCP {profile.handicap}</span>}
+                      {isMember && <MemberBadge size="sm" />}
                     </div>
                   )}
                 </>
               )}
             </div>
           </div>
-        </div>
 
-        {/* ── Profile details ── */}
-        <div style={{ padding: '0 var(--page-px)', marginBottom: 'var(--space-md)' }}>
-          <div style={{ background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid #e8e4dc', overflow: 'hidden' }}>
+          {/* ── Stats ── */}
+          <div className="acct-stats">
+            {[
+              { label: 'Member since', value: memberSince },
+              { label: 'Attempts',     value: loading ? null : String(profile?.total_attempts ?? 0) },
+            ].map(stat => (
+              <div key={stat.label} className="acct-stat">
+                {loading || stat.value === null ? (
+                  <>
+                    <div className="skeleton" style={{ height: 24, width: '55%', margin: '0 auto 6px' }} />
+                    <div className="skeleton" style={{ height: 10, width: '45%', margin: '0 auto' }} />
+                  </>
+                ) : (
+                  <>
+                    <div className="acct-stat-val">{stat.value}</div>
+                    <div className="acct-stat-label">{stat.label}</div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
 
-            {/* Section header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid #f0ebe0',
-            }}>
-              <div style={{ fontSize: 'var(--text-body)', fontWeight: 700, color: 'var(--green-deep)' }}>Profile Details</div>
+          {/* ── Profile details ── */}
+          <section className="acct-card">
+            <header className="acct-card-head">
+              <h2>Profile</h2>
               {!editingProfile && (
-                <button
-                  onClick={() => {
-                    setEditName(displayName ?? '')
-                    setEditHandicap(profile?.handicap != null ? String(profile.handicap) : '')
-                    setEditingProfile(true)
-                  }}
-                  style={{
-                    padding: '5px 12px', background: '#f5f0e8', border: 'none',
-                    borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', fontWeight: 600,
-                    color: 'var(--green-deep)', cursor: 'pointer',
-                  }}
-                >
+                <button type="button" className="acct-edit" onClick={startEditing} disabled={loading || !user}>
                   Edit
                 </button>
               )}
-            </div>
+            </header>
 
             {editingProfile ? (
-              /* Edit form */
-              <div style={{ padding: 'var(--space-lg)' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
-                  <div>
-                    <label style={{
-                      fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-light)',
-                      display: 'block', marginBottom: 6,
-                      textTransform: 'uppercase' as const, letterSpacing: '0.5px',
-                    }}>
-                      Full Name
-                    </label>
-                    <input
-                      value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                      placeholder="Your name"
-                      style={{
-                        width: '100%', padding: 'var(--space-sm) var(--space-md)', borderRadius: 'var(--radius-sm)',
-                        border: '1.5px solid #d0c9be', fontSize: 'var(--text-body)', outline: 'none',
-                        boxSizing: 'border-box' as const, background: '#faf8f4', color: 'var(--green-deep)',
-                      }}
-                    />
-                  </div>
-                  <div>
-                    <label style={{
-                      fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--gray-light)',
-                      display: 'block', marginBottom: 6,
-                      textTransform: 'uppercase' as const, letterSpacing: '0.5px',
-                    }}>
-                      Handicap (0 – 54)
-                    </label>
-                    <input
-                      type="number"
-                      value={editHandicap}
-                      onChange={e => setEditHandicap(e.target.value)}
-                      placeholder="e.g. 18"
-                      min={0} max={54}
-                      style={{
-                        width: '100%', padding: 'var(--space-sm) var(--space-md)', borderRadius: 'var(--radius-sm)',
-                        border: '1.5px solid #d0c9be', fontSize: 'var(--text-body)', outline: 'none',
-                        boxSizing: 'border-box' as const, background: '#faf8f4', color: 'var(--green-deep)',
-                      }}
-                    />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 'var(--space-sm)', marginTop: 'var(--space-md)' }}>
-                  <button
-                    onClick={() => setEditingProfile(false)}
-                    style={{
-                      flex: 1, padding: 'var(--space-sm)', background: '#f5f0e8', border: 'none',
-                      borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)', fontWeight: 600,
-                      color: '#888', cursor: 'pointer',
-                    }}
-                  >
+              <div className="acct-form">
+                <label className="acct-field">
+                  <span>Full name</span>
+                  <input
+                    className="acct-input"
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    placeholder="Your name"
+                    autoComplete="name"
+                  />
+                </label>
+                <label className="acct-field">
+                  <span>Handicap (0 – 54)</span>
+                  <input
+                    className="acct-input"
+                    type="number"
+                    inputMode="numeric"
+                    value={editHandicap}
+                    onChange={e => setEditHandicap(e.target.value)}
+                    placeholder="e.g. 18"
+                    min={0} max={54}
+                  />
+                </label>
+                <div className="acct-form-actions">
+                  <button type="button" className="btn-tile" onClick={() => setEditingProfile(false)}>
                     Cancel
                   </button>
-                  <button
-                    disabled={savingProfile}
-                    onClick={saveProfile}
-                    style={{
-                      flex: 2, padding: 'var(--space-sm)', background: 'var(--green-deep)',
-                      border: 'none', borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-md)',
-                      fontWeight: 700, color: 'white', cursor: 'pointer',
-                      opacity: savingProfile ? 0.7 : 1,
-                    }}
-                  >
-                    {savingProfile ? 'Saving…' : 'Save Changes'}
+                  <button type="button" className="btn-lime" disabled={savingProfile} onClick={saveProfile}>
+                    {savingProfile ? 'Saving…' : 'Save'}
                   </button>
                 </div>
               </div>
             ) : (
-              /* Read-only rows */
-              <>
-                {[
-                  { label: 'Full Name', value: displayName ?? '—' },
-                  { label: 'Email',     value: user?.email ?? '—' },
-                  { label: 'Handicap',  value: profile?.handicap != null ? String(profile.handicap) : '—' },
-                ].map((row, i, arr) => (
-                  <div
-                    key={row.label}
-                    style={{
-                      padding: 'var(--space-md) var(--space-lg)',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                      borderBottom: i < arr.length - 1 ? '1px solid #f8f4ee' : 'none',
-                    }}
-                  >
-                    <span style={{ fontSize: 'var(--text-body)', color: 'var(--gray-light)' }}>{row.label}</span>
-                    {loading ? (
-                      <div className="skeleton" style={{ height: 14, width: row.label === 'Email' ? 140 : 80, borderRadius: 4 }} />
-                    ) : (
-                      <span style={{
-                        fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--black)',
-                        textAlign: 'right', wordBreak: 'break-word',
-                      }}>
-                        {row.value}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* ── Stats ── */}
-        <div style={{ padding: '0 var(--page-px)', marginBottom: 'var(--space-md)' }}>
-          <div style={{ background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid #e8e4dc', overflow: 'hidden' }}>
-            <div style={{ padding: 'var(--space-md) var(--space-lg)', borderBottom: '1px solid #f0ebe0' }}>
-              <div style={{ fontSize: 'var(--text-body)', fontWeight: 700, color: 'var(--green-deep)' }}>Your Stats</div>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, background: '#f0ebe0' }}>
-              {[
-                { label: 'Member Since',    value: memberSince },
-                { label: 'Total Attempts',  value: loading ? null : String(profile?.total_attempts ?? 0) },
-              ].map(stat => (
-                <div key={stat.label} style={{ background: 'white', padding: 'var(--space-lg)', textAlign: 'center' }}>
-                  {loading || stat.value === null ? (
-                    <>
-                      <div className="skeleton" style={{ height: 20, width: '65%', margin: '0 auto 6px', borderRadius: 4 }} />
-                      <div className="skeleton" style={{ height: 11, width: '50%', margin: '0 auto', borderRadius: 4 }} />
-                    </>
+              [
+                { label: 'Name',     value: displayName ?? '—', wide: false },
+                { label: 'Email',    value: user?.email ?? '—', wide: true },
+                { label: 'Handicap', value: profile?.handicap != null ? String(profile.handicap) : '—', wide: false },
+              ].map(row => (
+                <div key={row.label} className="acct-row">
+                  <span className="acct-row-label">{row.label}</span>
+                  {loading ? (
+                    <div className="skeleton" style={{ height: 14, width: row.wide ? 140 : 80 }} />
                   ) : (
-                    <>
-                      <div style={{
-                        fontFamily: 'Poster Gothic, sans-serif',
-                        fontSize: 'var(--text-md)', fontWeight: 800, color: 'var(--green-deep)',
-                      }}>
-                        {stat.value}
-                      </div>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-light)', marginTop: 3 }}>{stat.label}</div>
-                    </>
+                    <span className="acct-row-val">{row.value}</span>
                   )}
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
+              ))
+            )}
+          </section>
 
-        {/* ── Membership ── */}
-        <div style={{ padding: '0 var(--page-px)', marginBottom: 'var(--space-md)' }}>
+          {/* ── Club ── */}
           {isMember ? (
-            <button
-              onClick={() => router.push('/membership')}
-              style={{
-                width: '100%', textAlign: 'left', cursor: 'pointer',
-                background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid #e8e4dc',
-                padding: 'var(--space-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 'var(--text-body)', fontWeight: 700, color: 'var(--green-deep)' }}>Get Lucky Golf Club</span>
-                  <MemberBadge size="sm" />
-                </div>
-                <div style={{ fontSize: 'var(--text-sm)', color: 'var(--gray-light)' }}>
-                  {(() => {
-                    const planKey = plan?.toLowerCase()
-                    const planText = planKey === 'monthly' || planKey === 'annual'
-                      ? MEMBERSHIP_PLANS[planKey].label
-                      : 'Active'
-                    const since = joinedDate
-                      ? ` · member since ${new Date(joinedDate).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })}`
-                      : ''
-                    return `${planText}${since}`
-                  })()}
-                </div>
+            <button type="button" className="acct-card acct-card--tap" onClick={() => router.push('/membership')}>
+              <div className="acct-row" style={{ borderBottom: 'none' }}>
+                <span>
+                  <span className="acct-row-title">Get Lucky Golf Club</span>
+                  <span className="acct-row-sub">{clubLine}</span>
+                </span>
+                <span className="acct-row-end"><MemberBadge size="sm" /><Chevron /></span>
               </div>
-              <span style={{ color: 'var(--gray-light)', fontSize: 'var(--text-sm)' }}>→</span>
             </button>
           ) : (
-            <button
-              onClick={() => router.push('/membership')}
-              style={{
-                width: '100%', textAlign: 'left', cursor: 'pointer',
-                background: 'linear-gradient(135deg, var(--green-deep) 0%, #2d6a3f 100%)',
-                borderRadius: 'var(--radius-lg)', border: 'none',
-                padding: 'var(--space-lg)', display: 'flex', alignItems: 'center', gap: 'var(--space-md)',
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 'var(--text-body)', fontWeight: 700, color: 'white', marginBottom: 4 }}>
-                  Become a Member
-                </div>
-                <div style={{ fontSize: 'var(--text-sm)', color: 'rgba(255,255,255,0.78)', lineHeight: 1.4 }}>
-                  Status, perks &amp; insured prizes from R{MEMBERSHIP_PLANS.monthly.priceZAR}/mo
-                </div>
-              </div>
-              <span style={{
-                flexShrink: 0, padding: '7px 14px', background: 'var(--gold)', color: '#3a2f12',
-                borderRadius: 'var(--radius-sm)', fontSize: 'var(--text-sm)', fontWeight: 700,
-              }}>
-                Join
+            <button type="button" className="acct-club" onClick={() => router.push('/membership')}>
+              <span className="acct-club-text">
+                <span className="acct-club-title">Join the club</span>
+                <span className="acct-club-sub">Status, perks &amp; insured prizes from R{MEMBERSHIP_PLANS.monthly.priceZAR}/month</span>
               </span>
+              <span className="acct-club-cta">Join</span>
             </button>
           )}
-        </div>
 
-        {/* ── Legal links ── */}
-        <div style={{ padding: '0 var(--page-px)', marginBottom: 'var(--space-md)' }}>
-          <div style={{ background: 'white', borderRadius: 'var(--radius-lg)', border: '1px solid #e8e4dc', overflow: 'hidden' }}>
+          {/* ── Legal ── */}
+          <section className="acct-card">
             {[
-              { label: 'Terms & Conditions', href: '/terms' },
-              { label: 'Privacy Policy', href: '/privacy' },
-              { label: 'Responsible Play', href: '/responsible-play' },
-            ].map((item, i, arr) => (
-              <button
-                key={item.label}
-                onClick={() => router.push(item.href)}
-                style={{
-                  width: '100%', padding: 'var(--space-md) var(--space-lg)',
-                  display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  borderBottom: i < arr.length - 1 ? '1px solid #f8f4ee' : 'none',
-                  fontSize: 'var(--text-body)', color: 'var(--green-deep)', fontWeight: 500,
-                  textAlign: 'left',
-                }}
-              >
-                {item.label}
-                <span style={{ color: 'var(--gray-light)', fontSize: 'var(--text-sm)' }}>→</span>
+              { label: 'Terms & conditions', href: '/terms' },
+              { label: 'Privacy policy',     href: '/privacy' },
+              { label: 'Responsible play',   href: '/responsible-play' },
+            ].map(item => (
+              <button key={item.href} type="button" className="acct-row acct-row--tap" onClick={() => router.push(item.href)}>
+                <span className="acct-row-title">{item.label}</span>
+                <span className="acct-row-end"><Chevron /></span>
               </button>
             ))}
-          </div>
-        </div>
+          </section>
 
-        {/* ── Sign out ── */}
-        <div style={{ padding: '0 var(--page-px)', paddingBottom: 'var(--tab-bar-pb)' }}>
           <button
+            type="button"
+            className="acct-signout"
             onClick={async () => {
               await signOut()
               router.push('/auth')
             }}
-            style={{
-              width: '100%', padding: 'var(--space-md)',
-              background: 'white', border: '1.5px solid #f0d0d0',
-              borderRadius: 'var(--radius-md)', fontSize: 'var(--text-body)', fontWeight: 600,
-              color: '#c0392b', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
           >
-            Sign Out
+            Sign out
           </button>
         </div>
+
+        <BottomTabBar active="account" />
       </div>
 
-      {/* ── Bottom tab bar ── */}
-      <BottomTabBar active="account" />
-
-      {/* ── Toast ── */}
       {toast && (
-        <div role="status" aria-live="polite" className="toast gold" style={{ bottom: 'calc(var(--tab-bar-h) + 10px)', zIndex: 200 }}>
+        <div role="status" aria-live="polite" className="toast" style={{ bottom: 'calc(var(--tab-bar-h) + 10px)', zIndex: 200 }}>
           {toast}
         </div>
       )}
-
     </PhoneFrame>
   )
 }
