@@ -7,8 +7,14 @@ import { assertOpen, claimErrorResponse } from '@/lib/claims/state-machine'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
+import { CaptureSchema, captureColumns } from '@/lib/claims/capture'
 
-const Body = z.object({ betId: uuid, mimeType: z.string().max(100).default('video/webm') })
+const Body = z.object({
+  betId: uuid,
+  mimeType: z.string().max(100).default('video/webm'),
+  /** What the recorder reported: timestamps, duration, position. Optional; stored for the reviewer. */
+  capture: CaptureSchema.optional(),
+})
 
 /**
  * POST /api/videos/upload-url
@@ -33,12 +39,12 @@ export async function POST(request: NextRequest) {
     if (limited) return limited
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
-    const { betId, mimeType } = body.data
+    const { betId, mimeType, capture } = body.data
 
     // Verify bet belongs to the current user (prevent IDOR)
     const { data: bet } = await supabase
       .from('bets')
-      .select('id, status, expires_at')
+      .select('id, status, expires_at, course_id, video_sha256')
       .eq('id', betId)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -60,9 +66,17 @@ export async function POST(request: NextRequest) {
       return apiError('claim.upload_url_failed', error, { path: 'claim', fields: { user_id: user.id, bet_id: betId }, message: 'Could not prepare the upload.' })
     }
 
+    // The capture report is recorded once, with the first upload slot, and
+    // never after the footage is sealed: the attestation belongs to the bytes
+    // that were hashed, not to a later retry.
+    const { data: course } = await supabase.from('courses').select('lat, lng').eq('id', bet.course_id).maybeSingle()
+    const attestation = bet.video_sha256
+      ? {}
+      : captureColumns(capture, { course: course ?? null, userAgent: request.headers.get('user-agent') })
+
     const { error: linkErr } = await createAdminClient()
       .from('bets')
-      .update({ video_url: storagePath, updated_by: user.id })
+      .update({ video_url: storagePath, updated_by: user.id, ...attestation })
       .eq('id', betId)
       .eq('user_id', user.id)
     if (linkErr) {

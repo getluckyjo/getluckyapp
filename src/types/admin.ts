@@ -53,10 +53,38 @@ export interface ClaimEvent {
   created_at: string
 }
 
+export interface CaptureAttestation {
+  startedAt: string | null
+  endedAt: string | null
+  durationMs: number | null
+  lat: number | null
+  lng: number | null
+  accuracyM: number | null
+  /** Metres from the reported position to the course; null when either is unknown. */
+  distanceM: number | null
+  userAgent: string | null
+  /** Seconds between recording end and the server sealing the footage; null when either is unknown. */
+  uploadLagS: number | null
+}
+
+export interface ClaimWitness {
+  id: string
+  role: 'witness' | 'club_official'
+  name: string
+  email: string
+  createdAt: string
+}
+
+export interface DocumentSealInfo { sha256: string | null; bytes: number | null }
+
 export interface VerificationDetail extends VerificationQueueItem {
   videoSignedUrl: string | null
   certificateSignedUrl: string | null
   affidavitSignedUrl: string | null
+  capture: CaptureAttestation
+  certificateSeal: DocumentSealInfo
+  affidavitSeal: DocumentSealInfo
+  witnesses: ClaimWitness[]
   userBetHistory: AdminBetRecord[]
   userTotalAttempts: number
   betStatus: BetStatus | null

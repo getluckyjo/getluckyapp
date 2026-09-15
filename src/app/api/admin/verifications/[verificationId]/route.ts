@@ -5,7 +5,8 @@ import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { BET_SELECT, namesForBets, toAdminBetRecord, toQueueItem, type BetRowLike, type VerificationRowLike } from '@/lib/admin/data'
 import { VERIFICATION_STATUSES, claimErrorResponse, reviewVerification } from '@/lib/claims/state-machine'
 import { log } from '@/lib/observability/log'
-import type { VerificationDetail } from '@/types/admin'
+import { witnessesForBet } from '@/lib/claims/witnesses'
+import type { CaptureAttestation, VerificationDetail } from '@/types/admin'
 
 type Params = { params: Promise<{ verificationId: string }> }
 
@@ -14,6 +15,32 @@ interface BetDetailRow extends BetRowLike {
   video_sha256: string | null
   video_bytes: number | null
   video_uploaded_at: string | null
+  capture_started_at: string | null
+  capture_ended_at: string | null
+  capture_duration_ms: number | null
+  capture_lat: number | null
+  capture_lng: number | null
+  capture_accuracy_m: number | null
+  capture_distance_m: number | null
+  capture_user_agent: string | null
+}
+
+const CAPTURE_COLUMNS = 'capture_started_at, capture_ended_at, capture_duration_ms, capture_lat, capture_lng, capture_accuracy_m, capture_distance_m, capture_user_agent'
+
+function captureOf(bet: BetDetailRow | undefined): CaptureAttestation {
+  const endedAt = bet?.capture_ended_at ?? null
+  const sealedAt = bet?.video_uploaded_at ?? null
+  return {
+    startedAt: bet?.capture_started_at ?? null,
+    endedAt,
+    durationMs: bet?.capture_duration_ms ?? null,
+    lat: bet?.capture_lat ?? null,
+    lng: bet?.capture_lng ?? null,
+    accuracyM: bet?.capture_accuracy_m ?? null,
+    distanceM: bet?.capture_distance_m ?? null,
+    userAgent: bet?.capture_user_agent ?? null,
+    uploadLagS: endedAt && sealedAt ? Math.round((Date.parse(sealedAt) - Date.parse(endedAt)) / 1000) : null,
+  }
 }
 
 export async function GET(_request: Request, { params }: Params) {
@@ -31,15 +58,16 @@ export async function GET(_request: Request, { params }: Params) {
 
     const { data: betRaw } = await admin
       .from('bets')
-      .select(`${BET_SELECT}, expires_at, video_sha256, video_bytes, video_uploaded_at`)
+      .select(`${BET_SELECT}, expires_at, video_sha256, video_bytes, video_uploaded_at, ${CAPTURE_COLUMNS}`)
       .eq('id', row.bet_id)
       .maybeSingle()
     const bet = (betRaw ?? undefined) as BetDetailRow | undefined
 
-    const [historyRes, profileRes, eventsRes] = await Promise.all([
+    const [historyRes, profileRes, eventsRes, witnesses] = await Promise.all([
       bet ? admin.from('bets').select(BET_SELECT).eq('user_id', bet.user_id).order('created_at', { ascending: false }).limit(5) : Promise.resolve({ data: [] as BetRowLike[] }),
       bet ? admin.from('profiles').select('total_attempts').eq('id', bet.user_id).maybeSingle() : Promise.resolve({ data: null }),
       admin.from('claim_events').select('id, table_name, action, actor_id, actor_role, changed, created_at').eq('bet_id', row.bet_id).order('created_at', { ascending: true }).limit(200),
+      witnessesForBet(admin, row.bet_id),
     ])
     const history = (historyRes.data ?? []) as BetRowLike[]
     const names = await namesForBets(admin, bet ? [bet, ...history] : history)
@@ -60,6 +88,10 @@ export async function GET(_request: Request, { params }: Params) {
       videoSignedUrl,
       certificateSignedUrl,
       affidavitSignedUrl,
+      capture: captureOf(bet),
+      certificateSeal: { sha256: row.certificate_sha256 ?? null, bytes: row.certificate_bytes ?? null },
+      affidavitSeal: { sha256: row.affidavit_sha256 ?? null, bytes: row.affidavit_bytes ?? null },
+      witnesses: witnesses.map(w => ({ id: w.id, role: w.role, name: w.name, email: w.email, createdAt: w.created_at })),
       userBetHistory: history.map(b => toAdminBetRecord(b, names)),
       userTotalAttempts: profileRes.data?.total_attempts ?? 0,
       betStatus: bet?.status ?? null,

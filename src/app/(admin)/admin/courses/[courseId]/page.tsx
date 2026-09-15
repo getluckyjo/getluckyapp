@@ -20,12 +20,15 @@ export default function AdminEditCoursePage() {
   const [saved, setSaved] = useState(false)
   const [newHole, setNewHole] = useState({ hole_number: '', par: '3', distance_metres: '' })
   const [addingHole, setAddingHole] = useState(false)
+  // Coordinates are edited as text so a half-typed "-33." is not a NaN in state.
+  const [coords, setCoords] = useState({ lat: '', lng: '' })
 
   useEffect(() => {
     fetch(`/api/admin/courses/${courseId}`)
       .then(r => r.json())
       .then(data => {
         setCourse(data.course)
+        setCoords({ lat: data.course?.lat != null ? String(data.course.lat) : '', lng: data.course?.lng != null ? String(data.course.lng) : '' })
         setHoles(data.holes || [])
       })
       .catch(() => {})
@@ -36,6 +39,14 @@ export default function AdminEditCoursePage() {
     if (!course) return
     setSaving(true)
     setError('')
+    const parseCoord = (v: string) => (v.trim() === '' ? null : Number(v))
+    const lat = parseCoord(coords.lat)
+    const lng = parseCoord(coords.lng)
+    if ((lat !== null && !Number.isFinite(lat)) || (lng !== null && !Number.isFinite(lng)) || (lat === null) !== (lng === null)) {
+      setError('Latitude and longitude must both be numbers, or both be empty')
+      setSaving(false)
+      return
+    }
     try {
       const res = await fetch(`/api/admin/courses/${courseId}`, {
         method: 'PATCH',
@@ -45,8 +56,8 @@ export default function AdminEditCoursePage() {
           location_text: course.location_text,
           region: course.region,
           is_partner: course.is_partner,
-          lat: course.lat,
-          lng: course.lng,
+          lat,
+          lng,
         }),
       })
       const data = await res.json()
@@ -158,6 +169,17 @@ export default function AdminEditCoursePage() {
               </select>
             </div>
           </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Latitude</label>
+              <input type="text" inputMode="decimal" value={coords.lat} onChange={(e) => setCoords({ ...coords, lat: e.target.value })} placeholder="-33.96" style={inputStyle} />
+            </div>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Longitude</label>
+              <input type="text" inputMode="decimal" value={coords.lng} onChange={(e) => setCoords({ ...coords, lng: e.target.value })} placeholder="22.38" style={inputStyle} />
+            </div>
+          </div>
+          <p style={{ fontSize: 12, color: '#999', margin: '-6px 0 0' }}>Used to measure how far from the course a claim&apos;s footage was recorded. Google Maps → right-click the clubhouse → the first line is “lat, lng”.</p>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#333', cursor: 'pointer' }}>
             <input type="checkbox" checked={course.is_partner} onChange={(e) => setCourse({ ...course, is_partner: e.target.checked })} style={{ width: 18, height: 18 }} />
             Partner course

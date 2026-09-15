@@ -92,6 +92,10 @@ export async function runRetention(admin: Admin, opts: RetentionOptions = {}): P
       if (error) throw error
       result.objectsRemoved += docs.length
 
+      // The people named on a refused claim have no further part to play.
+      const { error: wErr } = await admin.from('claim_witnesses').delete().eq('bet_id', v.bet_id)
+      if (wErr) throw wErr
+
       const { data: bet } = await admin
         .from('bets')
         .select('id, video_url, footage_purged_at')

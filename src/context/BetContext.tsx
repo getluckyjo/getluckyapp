@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode } from 'react'
+import type { CaptureInput } from '@/lib/claims/capture'
 
 // Re-export shared tier definitions so existing client imports keep working
 export { BET_TIERS } from '@/lib/tiers'
@@ -45,7 +46,7 @@ interface BetContextType extends BetSession {
   setVideoBlob: (blob: Blob) => void
   declareResult: (result: 'hole_in_one' | 'miss') => void
   resetSession: () => void
-  startBackgroundUpload: (blob: Blob, mimeType: string, betId: string) => void
+  startBackgroundUpload: (blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) => void
 }
 
 const defaultSession: BetSession = {
@@ -87,7 +88,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
     setSession(defaultSession)
   }
 
-  function startBackgroundUpload(blob: Blob, mimeType: string, betId: string) {
+  function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) {
     setSession(s => ({ ...s, uploadStatus: 'uploading', uploadProgress: 0 }))
 
     // Fire-and-forget — upload runs in the background
@@ -96,7 +97,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
         const urlRes = await fetch('/api/videos/upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ betId, mimeType }),
+          body: JSON.stringify({ betId, mimeType, ...(capture ? { capture } : {}) }),
         })
         const { signedUrl } = await urlRes.json()
 

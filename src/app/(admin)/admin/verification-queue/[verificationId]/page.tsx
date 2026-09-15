@@ -238,7 +238,60 @@ export default function VerificationDetailPage() {
               </div>
               <div>Footage size: <strong style={{ color: '#111' }}>{detail.videoBytes ? `${(detail.videoBytes / 1_000_000).toFixed(1)} MB` : '—'}</strong></div>
               <div style={{ wordBreak: 'break-all' }}>SHA-256: <code style={{ fontSize: 11, color: '#111' }}>{detail.videoSha256 ?? '—'}</code></div>
+
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 4, fontWeight: 600, color: '#111' }}>Recorder report</div>
+              {detail.capture.startedAt ? (
+                <>
+                  <div>Recording: <strong style={{ color: '#111' }}>{new Date(detail.capture.startedAt).toLocaleString('en-ZA')}</strong>{detail.capture.durationMs != null && <> for <strong style={{ color: '#111' }}>{Math.round(detail.capture.durationMs / 1000)} s</strong></>}</div>
+                  <div>
+                    Sealed after: {detail.capture.uploadLagS != null
+                      ? <strong style={{ color: detail.capture.uploadLagS > 15 * 60 ? '#c0392b' : '#111' }}>{detail.capture.uploadLagS < 120 ? `${detail.capture.uploadLagS} s` : `${Math.round(detail.capture.uploadLagS / 60)} min`}{detail.capture.uploadLagS > 15 * 60 ? ' (long gap between recording and upload)' : ''}</strong>
+                      : <strong style={{ color: '#111' }}>—</strong>}
+                  </div>
+                </>
+              ) : (
+                <div><strong style={{ color: '#c0392b' }}>No recorder timestamps</strong> (older app, or the report failed its sanity checks)</div>
+              )}
+              <div>
+                Location: {detail.capture.lat != null && detail.capture.lng != null ? (
+                  <strong style={{ color: detail.capture.distanceM != null && detail.capture.distanceM > 2000 ? '#c0392b' : '#111' }}>
+                    {detail.capture.distanceM != null
+                      ? `${detail.capture.distanceM < 1000 ? `${detail.capture.distanceM} m` : `${(detail.capture.distanceM / 1000).toFixed(1)} km`} from the course`
+                      : 'recorded; course has no coordinates'}
+                    {detail.capture.accuracyM != null ? ` (±${detail.capture.accuracyM} m)` : ''}
+                    {' '}<a href={`https://www.google.com/maps?q=${detail.capture.lat},${detail.capture.lng}`} target="_blank" rel="noreferrer" style={{ color: '#335231' }}>map</a>
+                  </strong>
+                ) : <strong style={{ color: '#c0392b' }}>not shared</strong>}
+              </div>
+              <div style={{ wordBreak: 'break-all' }}>Device: <span style={{ color: '#111' }}>{detail.capture.userAgent ?? '—'}</span></div>
+
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 4, fontWeight: 600, color: '#111' }}>Documents as submitted</div>
+              {([['Certificate', detail.certificateSeal], ['Affidavit', detail.affidavitSeal]] as const).map(([label, seal]) => (
+                <div key={label} style={{ wordBreak: 'break-all' }}>
+                  {label}: {seal.sha256
+                    ? <><strong style={{ color: '#111' }}>{seal.bytes ? `${(seal.bytes / 1000).toFixed(0)} KB` : ''}</strong> <code style={{ fontSize: 11, color: '#111' }}>{seal.sha256}</code></>
+                    : <strong style={{ color: '#999' }}>not hashed (submitted before Batch 9)</strong>}
+                </div>
+              ))}
             </div>
+          </div>
+
+          {/* Witnesses */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Named by the claimant</h3>
+            {detail.witnesses.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#999' }}>No witnesses named (claim predates Batch 9)</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+                {detail.witnesses.map(w => (
+                  <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                    <span><strong style={{ color: '#111' }}>{w.name}</strong> <span style={{ color: '#666' }}>· {w.email}</span></span>
+                    <span style={{ color: '#999', whiteSpace: 'nowrap' }}>{w.role === 'club_official' ? 'Club official' : 'Playing partner'}</span>
+                  </div>
+                ))}
+                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>Confirmation requests to these people arrive with Batch 11. Until then, phone the club.</div>
+              </div>
+            )}
           </div>
 
           {/* Audit trail */}

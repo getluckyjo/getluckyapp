@@ -10,10 +10,14 @@ import {
 } from '@/lib/claims/state-machine'
 import { z } from 'zod'
 import { apiError, parseBody } from '@/lib/api/http'
+import { DocumentMissingError, sealDocument } from '@/lib/claims/documents'
+import { WitnessesSchema, hasPlayingPartner, replaceWitnesses, witnessesForBet } from '@/lib/claims/witnesses'
 
 const Body = z.object({
   certificatePath: z.string().max(500).nullable().optional(),
   affidavitPath: z.string().max(500).nullable().optional(),
+  /** Playing partners and the club official. Replaces the set on each submission while the claim is open. */
+  witnesses: WitnessesSchema.optional(),
 })
 
 // GET — poll verification status
@@ -61,12 +65,17 @@ export async function GET(
 
 /**
  * POST — submit a hole-in-one claim.
- * Body: { certificatePath?: string, affidavitPath?: string }
+ * Body: { certificatePath?, affidavitPath?, witnesses? }
  *
  * An active, in-window bet becomes `claimed` (declared win, server
  * timestamp) and a `documents_received` verification is opened. A bet that
  * is already `claimed` with an unreviewed verification may resubmit
  * documents; the same row is updated. A reviewed claim is locked (409).
+ *
+ * Each document is read back from storage and its hash and size recorded
+ * (400 DOCUMENT_MISSING if it is not there). At least one playing partner
+ * must be named, in this submission or an earlier one (400 WITNESS_REQUIRED).
+ * Both checks run before the bet changes state.
  */
 export async function POST(
   request: NextRequest,
@@ -84,7 +93,7 @@ export async function POST(
     if (limited) return limited
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
-    const { certificatePath, affidavitPath } = body.data
+    const { certificatePath, affidavitPath, witnesses } = body.data
 
     // Ownership: RLS only shows the caller their own bets.
     const { data: bet } = await supabase
@@ -120,6 +129,31 @@ export async function POST(
       throw new ClaimError('CLAIM_LOCKED', 'This claim has already been reviewed', 409)
     }
 
+    // A resolved bet answers with its own reason before the evidence is looked at.
+    if (bet.status !== 'active' && bet.status !== 'claimed') {
+      throw new ClaimError('INVALID_TRANSITION', `This bet is already ${bet.status}.`, 409)
+    }
+
+    // Evidence checks, before anything changes state.
+    const namedNow = witnesses ?? []
+    const namedBefore = existing ? await witnessesForBet(admin, betId) : []
+    if (!hasPlayingPartner(namedNow.length > 0 ? namedNow : namedBefore)) {
+      return NextResponse.json({ error: 'Name at least one playing partner who saw the shot.', code: 'WITNESS_REQUIRED' }, { status: 400 })
+    }
+    let seals: { certificate?: { sha256: string; bytes: number }; affidavit?: { sha256: string; bytes: number } } = {}
+    try {
+      seals = {
+        certificate: certificatePath ? await sealDocument(admin, certificatePath) : undefined,
+        affidavit: affidavitPath ? await sealDocument(admin, affidavitPath) : undefined,
+      }
+    } catch (err) {
+      if (err instanceof DocumentMissingError) {
+        log.warn('claim.document_missing', { user_id: user.id, bet_id: betId, path: err.path })
+        return NextResponse.json({ error: 'A document did not finish uploading. Please upload it again.', code: 'DOCUMENT_MISSING' }, { status: 400 })
+      }
+      throw err
+    }
+
     const now = new Date().toISOString()
 
     if (bet.status === 'active') {
@@ -137,19 +171,32 @@ export async function POST(
       footage_received_at: now,
       documents_received_at: now,
       updated_by: user.id,
-      ...(certificatePath ? { certificate_path: certificatePath } : {}),
-      ...(affidavitPath ? { affidavit_path: affidavitPath } : {}),
+      ...(certificatePath && seals.certificate
+        ? { certificate_path: certificatePath, certificate_sha256: seals.certificate.sha256, certificate_bytes: seals.certificate.bytes }
+        : {}),
+      ...(affidavitPath && seals.affidavit
+        ? { affidavit_path: affidavitPath, affidavit_sha256: seals.affidavit.sha256, affidavit_bytes: seals.affidavit.bytes }
+        : {}),
     }
-    const { error } = existing
-      ? await admin.from('verifications').update(record).eq('id', existing.id)
-      : await admin.from('verifications').insert({ bet_id: betId, ...record })
+    const { data: saved, error } = existing
+      ? await admin.from('verifications').update(record).eq('id', existing.id).select('id').single()
+      : await admin.from('verifications').insert({ bet_id: betId, ...record }).select('id').single()
 
-    if (error) {
+    if (error || !saved) {
       await alertOps({ event: 'claim.submit_failed', path: 'claim', summary: 'A hole-in-one claim could not be recorded.', details: { user_id: user.id, bet_id: betId }, err: error })
       return NextResponse.json({ error: 'Could not record claim' }, { status: 500 })
     }
 
-    log.info('claim.submitted', { user_id: user.id, bet_id: betId, has_certificate: !!certificatePath, has_affidavit: !!affidavitPath, resubmission: !!existing })
+    if (namedNow.length > 0) {
+      try {
+        await replaceWitnesses(admin, betId, saved.id, namedNow)
+      } catch (err) {
+        // The claim is recorded; the witness list is retried on the next submission.
+        log.error('claim.witnesses_write_failed', err, { path: 'claim', user_id: user.id, bet_id: betId })
+      }
+    }
+
+    log.info('claim.submitted', { user_id: user.id, bet_id: betId, has_certificate: !!certificatePath, has_affidavit: !!affidavitPath, witnesses: namedNow.length, resubmission: !!existing })
     return NextResponse.json({ success: true, source: 'database' })
   } catch (err) {
     const known = claimErrorResponse(err)

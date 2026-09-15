@@ -37,6 +37,10 @@ export interface VerificationRowLike {
   reviewed_by: string | null
   verified_at: string | null
   payout_initiated_at: string | null
+  certificate_sha256?: string | null
+  certificate_bytes?: number | null
+  affidavit_sha256?: string | null
+  affidavit_bytes?: number | null
 }
 
 export interface Names {

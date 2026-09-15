@@ -8,6 +8,14 @@ import { useBet, BET_TIERS } from '@/context/BetContext'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { useShareVideo } from '@/hooks/useShareVideo'
+import { WitnessSchema, type WitnessInput } from '@/lib/claims/witnesses'
+
+type WitnessDraft = { role: WitnessInput['role']; name: string; email: string }
+const EMPTY_WITNESSES: WitnessDraft[] = [
+  { role: 'witness', name: '', email: '' },
+  { role: 'witness', name: '', email: '' },
+  { role: 'club_official', name: '', email: '' },
+]
 
 interface UploadStep {
   id: string
@@ -144,21 +152,53 @@ export default function ClaimPage() {
   const allDone = steps.every(s => s.done)
   const doneCount = steps.filter(s => s.done).length
 
+  // Who saw it. A row counts once both fields parse; the first playing
+  // partner is required, the rest are optional. Same schema as the server.
+  const [witnesses, setWitnesses] = useState<WitnessDraft[]>(EMPTY_WITNESSES)
+  const [witnessError, setWitnessError] = useState<string | null>(null)
+  const filledWitnesses = witnesses.filter(w => w.name.trim() || w.email.trim())
+  const parsedWitnesses = filledWitnesses.map(w => WitnessSchema.safeParse(w))
+  const witnessesValid = parsedWitnesses.every(r => r.success)
+  const hasPartner = parsedWitnesses.some(r => r.success && r.data.role === 'witness')
+  const canSubmit = allDone && witnessesValid && hasPartner && !loading
+
+  function updateWitness(i: number, field: 'name' | 'email', value: string) {
+    setWitnessError(null)
+    setWitnesses(prev => prev.map((w, idx) => (idx === i ? { ...w, [field]: value } : w)))
+  }
+
   async function handleSubmit() {
-    if (!allDone) return
+    if (!canSubmit) return
     setLoading(true)
 
     const certificateStep = steps.find(s => s.id === 'certificate')
     const affidavitStep = steps.find(s => s.id === 'affidavit')
 
-    await fetch(`/api/verifications/${betId ?? 'mock'}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        certificatePath: certificateStep?.storagePath ?? null,
-        affidavitPath: affidavitStep?.storagePath ?? null,
-      }),
-    }).catch(() => {})
+    try {
+      const res = await fetch(`/api/verifications/${betId ?? 'mock'}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          certificatePath: certificateStep?.storagePath ?? null,
+          affidavitPath: affidavitStep?.storagePath ?? null,
+          witnesses: parsedWitnesses.flatMap(r => (r.success ? [r.data] : [])),
+        }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string; code?: string }
+        if (body.code === 'DOCUMENT_MISSING') {
+          // The browser-side upload did not land. Let them upload again.
+          setSteps(prev => prev.map(s => (s.id === 'video' ? s : { ...s, done: false, storagePath: undefined, fileName: undefined })))
+        }
+        setWitnessError(body.error ?? 'Your claim could not be submitted. Please try again.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      setWitnessError('Your claim could not be submitted. Please check your connection and try again.')
+      setLoading(false)
+      return
+    }
 
     setLoading(false)
     router.push('/verify')
@@ -227,12 +267,34 @@ export default function ClaimPage() {
           </ul>
           <p className="cl-hint">Photo, scan or PDF. Up to 10 MB each.</p>
 
+          <section className="acct-card" style={{ marginTop: 16 }}>
+            <header className="acct-card-head"><h2>Who saw it</h2></header>
+            <p className="acct-row-sub" style={{ display: 'block', margin: '0 0 12px' }}>
+              We will ask them to confirm. At least one playing partner is needed; the club official who signed your certificate helps your claim move faster.
+            </p>
+            <div className="acct-form">
+              {witnesses.map((w, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <label className="acct-field" style={{ gridColumn: '1 / -1', marginBottom: 0 }}>
+                    <span>{w.role === 'club_official' ? 'Club official (optional)' : i === 0 ? 'Playing partner' : 'Playing partner (optional)'}</span>
+                    <input className="acct-input" value={w.name} onChange={e => updateWitness(i, 'name', e.target.value)} placeholder="Full name" autoComplete="off" />
+                  </label>
+                  <div className="acct-field" style={{ gridColumn: '1 / -1' }}>
+                    <input className="acct-input" type="email" inputMode="email" aria-label="Email address" value={w.email} onChange={e => updateWitness(i, 'email', e.target.value)} placeholder="Email address" autoComplete="off" />
+                  </div>
+                </div>
+              ))}
+            </div>
+            {!witnessesValid && <p className="acct-row-sub" style={{ display: 'block', color: '#c0392b' }}>Each person needs a full name and a valid email address.</p>}
+            {witnessError && <p className="acct-row-sub" style={{ display: 'block', color: '#c0392b' }} role="alert">{witnessError}</p>}
+          </section>
+
           <div className="cf-actions">
             <button
               type="button"
               className="btn-lime btn-lime--block"
               onClick={handleSubmit}
-              disabled={!allDone || loading}
+              disabled={!canSubmit}
             >
               {loading ? 'Submitting…' : 'Submit claim'}
             </button>

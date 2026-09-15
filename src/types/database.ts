@@ -20,6 +20,7 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type WitnessRole = 'witness' | 'club_official'
 export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
 export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
@@ -177,6 +178,14 @@ export interface Database {
           video_bytes: number | null
           video_uploaded_at: string | null
           footage_purged_at: string | null
+          capture_started_at: string | null
+          capture_ended_at: string | null
+          capture_duration_ms: number | null
+          capture_lat: number | null
+          capture_lng: number | null
+          capture_accuracy_m: number | null
+          capture_distance_m: number | null
+          capture_user_agent: string | null
           declared_result: 'miss' | 'win' | null
           declared_at: string | null
           expires_at: string
@@ -200,6 +209,14 @@ export interface Database {
           video_bytes?: number | null
           video_uploaded_at?: string | null
           footage_purged_at?: string | null
+          capture_started_at?: string | null
+          capture_ended_at?: string | null
+          capture_duration_ms?: number | null
+          capture_lat?: number | null
+          capture_lng?: number | null
+          capture_accuracy_m?: number | null
+          capture_distance_m?: number | null
+          capture_user_agent?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -223,6 +240,14 @@ export interface Database {
           video_bytes?: number | null
           video_uploaded_at?: string | null
           footage_purged_at?: string | null
+          capture_started_at?: string | null
+          capture_ended_at?: string | null
+          capture_duration_ms?: number | null
+          capture_lat?: number | null
+          capture_lng?: number | null
+          capture_accuracy_m?: number | null
+          capture_distance_m?: number | null
+          capture_user_agent?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -244,6 +269,10 @@ export interface Database {
           verified_at: string | null
           payout_initiated_at: string | null
           documents_purged_at: string | null
+          certificate_sha256: string | null
+          certificate_bytes: number | null
+          affidavit_sha256: string | null
+          affidavit_bytes: number | null
           reviewer_notes: string | null
           reviewed_by: string | null
           updated_at: string | null
@@ -261,6 +290,10 @@ export interface Database {
           verified_at?: string | null
           payout_initiated_at?: string | null
           documents_purged_at?: string | null
+          certificate_sha256?: string | null
+          certificate_bytes?: number | null
+          affidavit_sha256?: string | null
+          affidavit_bytes?: number | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
           updated_at?: string | null
@@ -278,6 +311,10 @@ export interface Database {
           verified_at?: string | null
           payout_initiated_at?: string | null
           documents_purged_at?: string | null
+          certificate_sha256?: string | null
+          certificate_bytes?: number | null
+          affidavit_sha256?: string | null
+          affidavit_bytes?: number | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
           updated_at?: string | null
@@ -347,6 +384,33 @@ export interface Database {
         }
         Insert: never
         Update: never
+        Relationships: []
+      }
+      claim_witnesses: {
+        Row: {
+          id: string
+          bet_id: string
+          verification_id: string | null
+          role: WitnessRole
+          name: string
+          email: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          bet_id: string
+          verification_id?: string | null
+          role: WitnessRole
+          name: string
+          email: string
+          created_at?: string
+        }
+        Update: {
+          verification_id?: string | null
+          role?: WitnessRole
+          name?: string
+          email?: string
+        }
         Relationships: []
       }
       rate_limits: {
