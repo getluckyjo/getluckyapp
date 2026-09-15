@@ -2,33 +2,56 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import SponsorBanner from '@/components/layout/SponsorBanner'
+import { useAuth } from '@/context/AuthContext'
 
-export default function SplashPage() {
+/**
+ * Landing — "Landing Page.png".
+ * Course photo hazed to white at the top, WELCOME TO, the Hole-in-1 Challenge
+ * lockup, GET STARTED, and the Indwe sponsor band along the bottom.
+ */
+export default function LandingPage() {
   const router = useRouter()
+  const { user, loading } = useAuth()
 
+  // Someone who is already signed in has no business on the welcome mat.
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const onboardingSeen = localStorage.getItem('onboarding_seen')
-      if (onboardingSeen) {
-        router.push('/auth')
-      } else {
-        router.push('/onboarding')
-      }
-    }, 2500)
-    return () => clearTimeout(timer)
-  }, [router])
+    if (!loading && user) router.replace('/home')
+  }, [user, loading, router])
 
   return (
-    <PhoneFrame statusTheme="light">
-      <div className="screen-splash">
-        <img src="/logo.png" alt="Get Lucky Golf Club" className="splash-logo-img" />
-        <div className="splash-tagline">Where amateur golfers win like the pro's</div>
-        <div className="splash-dots">
-          <span />
-          <span />
-          <span />
+    <PhoneFrame statusTheme="dark">
+      <div className="landing">
+        <Image
+          src="/marketing/courses/st-francis-links.jpg"
+          alt=""
+          fill
+          priority
+          sizes="480px"
+          className="landing-photo"
+        />
+        <div className="landing-haze" aria-hidden />
+
+        <div className="landing-body">
+          <h1 className="landing-welcome">Welcome to</h1>
+          <img
+            src="/brand/logo-lockup.svg"
+            alt="Get Lucky Hole-in-1 Challenge"
+            className="landing-lockup"
+            draggable={false}
+          />
+          <button
+            type="button"
+            className="btn-lime landing-cta"
+            onClick={() => router.push('/auth')}
+          >
+            Get started
+          </button>
         </div>
+
+        <SponsorBanner />
       </div>
     </PhoneFrame>
   )

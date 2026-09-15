@@ -58,7 +58,7 @@ export default function PaymentSetupPage() {
           <button className="back-btn" onClick={() => router.back()}>←</button>
         </div>
         <div style={{ textAlign: 'center', padding: 'var(--space-sm) var(--page-px) 0' }}>
-          <img src="/logo.png" alt="Get Lucky Golf Club" className="logo-header-dark" style={{ width: 'clamp(100px, 30vw, 120px)' }} />
+          <img src="/brand/logo-lockup.svg" alt="Get Lucky Hole-in-1 Challenge" className="logo-header-dark" style={{ width: "clamp(96px, 28vw, 116px)" }} />
         </div>
         <div className="signup-title-area" style={{ padding: 'var(--space-sm) var(--page-px) var(--space-sm)' }}>
           <h3 className="signup-title">Payment Setup</h3>

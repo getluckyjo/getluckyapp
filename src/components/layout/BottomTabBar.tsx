@@ -1,79 +1,66 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import SponsorBanner from './SponsorBanner'
+import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon } from '@/components/icons'
 
-type ActiveTab = 'home' | 'history' | 'leaderboard' | 'membership' | 'account'
+export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'membership' | 'account' | 'play'
 
-// SVG icons for cross-platform consistency (no emoji rendering differences)
-const Icons = {
-  home: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-      <polyline points="9 22 9 12 15 12 15 22" />
-    </svg>
-  ),
-  history: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-      <line x1="8" y1="9" x2="16" y2="9" />
-      <line x1="8" y1="13" x2="14" y2="13" />
-      <line x1="8" y1="17" x2="12" y2="17" />
-    </svg>
-  ),
-  leaderboard: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-      <path d="M4 22h16" />
-      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
-      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
-      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
-    </svg>
-  ),
-  play: (
-    <span style={{ fontSize: 22, lineHeight: 1 }}>🏌️</span>
-  ),
-  membership: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2l2.6 6.5L21 9l-5 4.3L17.5 20 12 16.5 6.5 20 8 13.3 3 9l6.4-.5z" />
-    </svg>
-  ),
-  account: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  ),
-}
-
+/**
+ * V2 tab bar — "Menu Bar Complete.svg".
+ *
+ * A soft grey pill holds five icons; the Play slot is a lime disc carrying the
+ * golf ball, and it overhangs the pill top and bottom. Labels sit underneath
+ * on a white band. The pill floats over whatever the screen has behind it
+ * (a photo on Home, the grey surface elsewhere) — only the label band is
+ * opaque, which is how the mockups draw it.
+ */
 const TABS = [
-  { key: 'home',        icon: Icons.home,         label: 'Home',    path: '/home' },
-  { key: 'leaderboard', icon: Icons.leaderboard,  label: 'Winners', path: '/leaderboard' },
-  { key: 'play',        icon: Icons.play,         label: 'Play',    path: '/select-course' },
-  { key: 'membership',  icon: Icons.membership,   label: 'Club',    path: '/membership' },
-  { key: 'account',     icon: Icons.account,      label: 'Account', path: '/account' },
+  { key: 'home',        label: 'Home',    path: '/home',          Icon: HomeIcon    },
+  { key: 'leaderboard', label: 'Winners', path: '/leaderboard',   Icon: WinnersIcon },
+  { key: 'play',        label: 'Play',    path: '/select-course', Icon: null        },
+  { key: 'membership',  label: 'Club',    path: '/membership',    Icon: ClubIcon    },
+  { key: 'account',     label: 'Account', path: '/account',       Icon: AccountIcon },
 ] as const
 
 export default function BottomTabBar({ active }: { active: ActiveTab }) {
   const router = useRouter()
 
   return (
-    <nav className="bottom-tab-bar" aria-label="Main navigation">
-      <SponsorBanner />
-      <div role="tablist" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', width: '100%', padding: '0 8px 6px' }}>
+    <nav className="tabbar" aria-label="Main navigation">
+      <div className="tabbar-pill" role="tablist">
+        {TABS.map(tab => {
+          const isActive = active === tab.key
+          const isPlay = tab.key === 'play'
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              aria-current={isActive ? 'page' : undefined}
+              aria-label={tab.label}
+              className={`tabbar-slot${isPlay ? ' tabbar-slot--play' : ''}${isActive ? ' is-active' : ''}`}
+              onClick={() => !isActive && router.push(tab.path)}
+            >
+              {isPlay ? (
+                <span className="tabbar-play" aria-hidden="true">
+                  <GolfBallIcon size={40} />
+                </span>
+              ) : (
+                tab.Icon && <tab.Icon size={tab.key === 'leaderboard' ? 27 : 24} />
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <div className="tabbar-labels" aria-hidden="true">
         {TABS.map(tab => (
-          <button
+          <span
             key={tab.key}
-            role="tab"
-            aria-selected={active === tab.key}
-            aria-current={active === tab.key ? 'page' : undefined}
-            className={`tab-item${active === tab.key ? ' active' : ''}${tab.key === 'play' ? ' play-tab' : ''}`}
-            onClick={() => active !== tab.key && router.push(tab.path)}
+            className={`tabbar-label${active === tab.key ? ' is-active' : ''}`}
           >
-            <span className="tab-icon" aria-hidden="true">{tab.icon}</span>
-            <span className="tab-label">{tab.label}</span>
-          </button>
+            {tab.label}
+          </span>
         ))}
       </div>
     </nav>
