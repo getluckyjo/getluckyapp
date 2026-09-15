@@ -6,7 +6,6 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import StepBar from '@/components/layout/StepBar'
 import { useAuth } from '@/context/AuthContext'
-import { createClient } from '@/lib/supabase/client'
 
 // Whole years between a date of birth and today.
 function ageFromDob(dob: string): number {
@@ -65,19 +64,24 @@ export default function AgeCheckPage() {
     setLoading(true)
 
     if (user) {
-      const supabase = createClient()
-      const now = new Date().toISOString()
-      const { error: dbError } = await supabase.from('profiles').upsert({
-        id: user.id,
-        date_of_birth: dob,
-        age_verified_at: now,
-        terms_accepted_at: now,
-        onboarding_done: true,
+      // The server makes the decision and writes the columns the money path
+      // trusts; the browser can no longer set age_verified_at itself.
+      const res = await fetch('/api/profile/age-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dateOfBirth: dob, consent }),
       })
+      const result = await res.json().catch(() => ({})) as { error?: string; code?: string }
 
-      if (dbError) {
+      if (res.status === 403 && result.code === 'UNDER_18') {
         setLoading(false)
-        setError('Something went wrong. Please try again.')
+        setBlocked(true)
+        await signOut()
+        return
+      }
+      if (!res.ok) {
+        setLoading(false)
+        setError(result.error ?? 'Something went wrong. Please try again.')
         return
       }
 

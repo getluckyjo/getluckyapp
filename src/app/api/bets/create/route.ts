@@ -5,6 +5,7 @@ import { BET_TIERS } from '@/lib/tiers'
 import { verifyPaymentAmount } from '@/lib/payments'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,7 +114,11 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { data: bet, error } = await supabase
+    // Writes go through the service role: migration 006 removed the client
+    // insert policy on bets. Ownership is fixed above (the ledger row is the
+    // caller's) and user_id is taken from the session, never the body.
+    const admin = createAdminClient()
+    const { data: bet, error } = await admin
       .from('bets')
       .insert({
         user_id:             user.id,
@@ -146,7 +151,7 @@ export async function POST(request: NextRequest) {
 
     // Increment total_attempts on profile — best-effort, fire-and-forget.
     try {
-      await supabase.rpc('increment_attempts', { user_id: user.id })
+      await admin.rpc('increment_attempts', { user_id: user.id })
     } catch {
       // Safe to ignore if RPC fails
     }

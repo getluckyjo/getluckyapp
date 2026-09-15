@@ -7,17 +7,21 @@
  *   GET   /api/verifications/[betId]
  *   POST  /api/videos/upload-url
  *
- * Every write must be scoped to the caller's own bet. Known state-machine gaps
- * (AUDIT.md B.4) are pinned as `it.fails` so Batch 2 flips them.
+ * Every write must be scoped to the caller's own bet. Since migration 006 the
+ * writes themselves go through the service role after that check. Remaining
+ * state-machine gaps (AUDIT.md B.4) are pinned as `it.fails` for Batch 2.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, COURSE_ID, HOLE_ID } from '../helpers/fake-supabase'
 import { PATCH as patchBet, GET as getBet } from '@/app/api/bets/[betId]/route'
 import { POST as submitClaim, GET as getVerification } from '@/app/api/verifications/[betId]/route'
 import { POST as uploadUrl } from '@/app/api/videos/upload-url/route'
+import { POST as verifyVideo } from '@/app/api/videos/verify/route'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
+const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => serverClient)
+vi.mock('@/lib/supabase/admin', () => adminClient)
 
 let db: FakeDb
 const asUser = (user = USER_A) => serverClient.createClient.mockResolvedValue(createFakeClient(db, { user }))
@@ -28,7 +32,10 @@ const ownBet = (over: Record<string, unknown> = {}) =>
 beforeEach(() => {
   db = new FakeDb()
   serverClient.createClient.mockReset()
+  adminClient.createAdminClient.mockImplementation(() => createFakeClient(db))
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://staging.supabase.co')
+  vi.spyOn(console, 'log').mockImplementation(() => {})
+  vi.spyOn(console, 'error').mockImplementation(() => {})
 })
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
@@ -67,12 +74,20 @@ describe('PATCH /api/bets/[betId]', () => {
     expect(res.status).toBe(400)
   })
 
-  it('cannot touch another user\'s bet', async () => {
+  it('cannot touch another user\'s bet (404, nothing written)', async () => {
     asUser(USER_B)
     const bet = ownBet()
-    await patchBet(jsonRequest('http://x', { status: 'claimed', declared_result: 'win' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    const res = await patchBet(jsonRequest('http://x', { status: 'claimed', declared_result: 'win' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    expect(res.status).toBe(404)
     expect(bet.status).toBe('active')
     expect(bet.declared_result).toBeUndefined()
+  })
+
+  it('400 when the body carries nothing to update', async () => {
+    asUser()
+    const bet = ownBet()
+    const res = await patchBet(jsonRequest('http://x', {}, { method: 'PATCH' }) as never, params(bet.id as string))
+    expect(res.status).toBe(400)
   })
 
   it.fails('refuses to turn a declared miss into a claim (Batch 2 state machine)', async () => {
@@ -117,41 +132,65 @@ describe('POST /api/verifications/[betId]', () => {
   it('marks the bet claimed/win and opens a documents_received verification', async () => {
     asUser()
     const bet = ownBet()
-    const res = await submit(bet.id as string, { certificatePath: `${bet.id}/certificate/cert.pdf`, affidavitPath: `${bet.id}/affidavit/aff.pdf` })
+    const cert = `${USER_A.id}/${bet.id}/certificate/1-cert.pdf`
+    const aff = `${USER_A.id}/${bet.id}/affidavit/2-aff.pdf`
+    const res = await submit(bet.id as string, { certificatePath: cert, affidavitPath: aff })
     expect(res.status).toBe(200)
     expect(bet).toMatchObject({ status: 'claimed', declared_result: 'win' })
     expect(typeof bet.declared_at).toBe('string')
 
     const [v] = db.rows('verifications')
-    expect(v).toMatchObject({
-      bet_id: bet.id,
-      status: 'documents_received',
-      certificate_path: `${bet.id}/certificate/cert.pdf`,
-      affidavit_path: `${bet.id}/affidavit/aff.pdf`,
+    expect(v).toMatchObject({ bet_id: bet.id, status: 'documents_received', certificate_path: cert, affidavit_path: aff })
+  })
+
+  it('a second submit before review updates the same verification rather than adding one', async () => {
+    asUser()
+    const bet = ownBet()
+    await submit(bet.id as string, { certificatePath: `${USER_A.id}/${bet.id}/certificate/1-cert.pdf` })
+    await submit(bet.id as string, { affidavitPath: `${USER_A.id}/${bet.id}/affidavit/2-aff.pdf` })
+    expect(db.rows('verifications')).toHaveLength(1)
+    expect(db.rows('verifications')[0]).toMatchObject({
+      certificate_path: `${USER_A.id}/${bet.id}/certificate/1-cert.pdf`,
+      affidavit_path: `${USER_A.id}/${bet.id}/affidavit/2-aff.pdf`,
     })
   })
 
-  it('does not change another user\'s bet', async () => {
+  it('404 for another user\'s bet, nothing written', async () => {
     asUser(USER_B)
     const bet = ownBet()
-    await submit(bet.id as string)
+    const res = await submit(bet.id as string)
+    expect(res.status).toBe(404)
     expect(bet.status).toBe('active')
+    expect(db.rows('verifications')).toHaveLength(0)
   })
 
-  it.fails('refuses to reopen a rejected claim (Batch 2)', async () => {
+  it.each(['rejected', 'approved', 'under_review'])('409 CLAIM_LOCKED: cannot resubmit a claim that is %s', async (status) => {
     asUser()
-    const bet = ownBet({ status: 'claimed', declared_result: 'win' })
-    const [v] = db.seed('verifications', { bet_id: bet.id, status: 'rejected', reviewer_notes: 'Footage inconclusive' })
+    const bet = ownBet({ status: 'claimed', declared_result: 'win', declared_at: '2026-01-01T00:00:00Z' })
+    const [v] = db.seed('verifications', { bet_id: bet.id, status, reviewer_notes: 'Footage inconclusive' })
     const res = await submit(bet.id as string)
     expect(res.status).toBe(409)
-    expect(v.status).toBe('rejected')
+    expect((await res.json()).code).toBe('CLAIM_LOCKED')
+    expect(v.status).toBe(status)
+    expect(bet.declared_at).toBe('2026-01-01T00:00:00Z')
   })
 
-  it.fails('refuses evidence paths outside the caller\'s own folder (Batch 1/2)', async () => {
+  it('400 for evidence paths outside the caller\'s own folder for this bet', async () => {
     asUser()
     const bet = ownBet()
-    const res = await submit(bet.id as string, { certificatePath: 'someone-elses-bet/certificate/cert.pdf' })
-    expect(res.status).toBe(400)
+    const bad = [
+      'someone-elses-bet/certificate/cert.pdf',
+      `${USER_B.id}/${bet.id}/certificate/cert.pdf`,
+      `${USER_A.id}/other-bet/certificate/cert.pdf`,
+      `${USER_A.id}/${bet.id}/../${USER_B.id}/x.pdf`,
+      42,
+    ]
+    for (const certificatePath of bad) {
+      const res = await submit(bet.id as string, { certificatePath })
+      expect(res.status, String(certificatePath)).toBe(400)
+    }
+    expect(bet.status).toBe('active')
+    expect(db.rows('verifications')).toHaveLength(0)
   })
 })
 
@@ -195,3 +234,25 @@ describe('POST /api/videos/upload-url', () => {
     expect((await uploadUrl(jsonRequest('http://x', { betId: 'x' }) as never)).status).toBe(401)
   })
 })
+
+describe('POST /api/videos/verify (footage attach)', () => {
+  it('attaches a path inside the caller\'s own folder for their bet', async () => {
+    asUser()
+    const bet = ownBet()
+    const path = `${USER_A.id}/${bet.id}/shot.webm`
+    await verifyVideo(jsonRequest('http://x', { betId: bet.id, storagePath: path }) as never)
+    expect(bet.video_url).toBe(path)
+  })
+
+  it('ignores a path outside the caller\'s folder, or for someone else\'s bet', async () => {
+    const bet = ownBet()
+    asUser()
+    await verifyVideo(jsonRequest('http://x', { betId: bet.id, storagePath: `${USER_B.id}/${bet.id}/shot.webm` }) as never)
+    await verifyVideo(jsonRequest('http://x', { betId: bet.id, storagePath: `${USER_A.id}/other/shot.webm` }) as never)
+    expect(bet.video_url).toBeUndefined()
+
+    asUser(USER_B)
+    await verifyVideo(jsonRequest('http://x', { betId: bet.id, storagePath: `${USER_A.id}/${bet.id}/shot.webm` }) as never)
+    expect(bet.video_url).toBeUndefined()
+  })
+}, 10_000)

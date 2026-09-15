@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export async function PATCH(
   request: NextRequest,
@@ -39,7 +40,23 @@ export async function PATCH(
       updates.declared_at = new Date().toISOString()
     }
 
-    const { error } = await supabase
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'Nothing to update' }, { status: 400 })
+    }
+
+    // RLS lets the user see only their own bets, so this doubles as the
+    // ownership check before the service-role write below.
+    const { data: bet } = await supabase
+      .from('bets')
+      .select('id')
+      .eq('id', betId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!bet) {
+      return NextResponse.json({ error: 'Bet not found' }, { status: 404 })
+    }
+
+    const { error } = await createAdminClient()
       .from('bets')
       .update(updates)
       .eq('id', betId)

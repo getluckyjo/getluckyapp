@@ -10,7 +10,9 @@ import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, COURSE_ID, HOLE_
 import { POST } from '@/app/api/bets/create/route'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
+const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => serverClient)
+vi.mock('@/lib/supabase/admin', () => adminClient)
 
 let db: FakeDb
 
@@ -46,7 +48,9 @@ const post = (b: unknown) => POST(jsonRequest('http://x/api/bets/create', b) as 
 beforeEach(() => {
   db = new FakeDb()
   serverClient.createClient.mockReset()
+  adminClient.createAdminClient.mockImplementation(() => createFakeClient(db))
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 afterEach(() => vi.restoreAllMocks())
 

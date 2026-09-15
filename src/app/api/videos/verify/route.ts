@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // Mock AI verification — swap with real computer vision when ready
 export async function POST(request: NextRequest) {
@@ -29,11 +30,17 @@ export async function POST(request: NextRequest) {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (user && betId && !betId.startsWith('bet_mock') && !betId.startsWith('bet_fallback')) {
-        if (storagePath && !storagePath.startsWith('mock/')) {
-          await supabase.from('bets')
-            .update({ video_url: storagePath })
-            .eq('id', betId)
-            .eq('user_id', user.id)
+        // Only a path inside the caller's own folder for this bet may be
+        // attached, and only after RLS confirms the bet is theirs.
+        const ownPrefix = `${user.id}/${betId}/`
+        if (typeof storagePath === 'string' && storagePath.startsWith(ownPrefix) && !storagePath.includes('..')) {
+          const { data: bet } = await supabase.from('bets').select('id').eq('id', betId).eq('user_id', user.id).maybeSingle()
+          if (bet) {
+            await createAdminClient().from('bets')
+              .update({ video_url: storagePath })
+              .eq('id', betId)
+              .eq('user_id', user.id)
+          }
         }
       }
     } catch {

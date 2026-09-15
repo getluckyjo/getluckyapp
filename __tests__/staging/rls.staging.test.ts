@@ -11,10 +11,8 @@
  *   STAGING_SUPABASE_SERVICE_ROLE_KEY=... \
  *   npm run test:staging
  *
- * Tests marked `it.fails` describe holes documented in AUDIT.md B.1 that the
- * Batch 1 RLS migration closes. When that migration lands, flip them to `it`.
- * A `fails` test that starts passing is vitest's way of telling you the hole
- * is closed and the marker is stale.
+ * The second group asserts the holes documented in AUDIT.md B.1 are closed by
+ * migration 006. They fail against a project that has not applied it.
  *
  * The suite refuses to run against the production project.
  */
@@ -94,21 +92,21 @@ describe.skipIf(!configured)('RLS as a normal signed-in user (staging)', () => {
     expect(error).not.toBeNull()
   })
 
-  // ── Holes closed by the Batch 1 migration (AUDIT.md B.1) ────────────────
+  // ── Closed by migration 006 (AUDIT.md B.1, Batch 1) ─────────────────────
 
-  it.fails('cannot grant themselves is_admin', async () => {
+  it('cannot grant themselves is_admin', async () => {
     await mallory.from('profiles').update({ is_admin: true }).eq('id', malloryId)
     const { data } = await admin.from('profiles').select('is_admin').eq('id', malloryId).single()
     expect(data?.is_admin).not.toBe(true)
   })
 
-  it.fails('cannot set their own age_verified_at', async () => {
+  it('cannot set their own age_verified_at', async () => {
     await mallory.from('profiles').update({ age_verified_at: new Date().toISOString() }).eq('id', malloryId)
     const { data } = await admin.from('profiles').select('age_verified_at').eq('id', malloryId).single()
     expect(data?.age_verified_at).toBeNull()
   })
 
-  it.fails('cannot insert a bet directly (no free bets)', async () => {
+  it('cannot insert a bet directly (no free bets)', async () => {
     const { error } = await mallory.from('bets').insert({
       user_id: malloryId, course_id: await anyCourse(), hole_id: await anyHole(), tier: 'tier_5',
       stake_pence: 0, potential_win_pence: 100_000_000, status: 'active',
@@ -116,7 +114,7 @@ describe.skipIf(!configured)('RLS as a normal signed-in user (staging)', () => {
     expect(error).not.toBeNull()
   })
 
-  it.fails('cannot mark their own bet verified or paid', async () => {
+  it('cannot mark their own bet verified or paid', async () => {
     const { data: bet } = await admin.from('bets').insert({
       user_id: malloryId, course_id: await anyCourse(), hole_id: await anyHole(), tier: 'tier_1',
       stake_pence: 5000, potential_win_pence: 2_500_000, status: 'active',
@@ -126,7 +124,7 @@ describe.skipIf(!configured)('RLS as a normal signed-in user (staging)', () => {
     expect(data).toEqual({ status: 'active', potential_win_pence: 2_500_000 })
   })
 
-  it.fails('cannot approve their own verification', async () => {
+  it('cannot approve their own verification', async () => {
     const { data: bet } = await admin.from('bets').insert({
       user_id: malloryId, course_id: await anyCourse(), hole_id: await anyHole(), tier: 'tier_1',
       stake_pence: 5000, potential_win_pence: 2_500_000, status: 'claimed',
@@ -135,7 +133,7 @@ describe.skipIf(!configured)('RLS as a normal signed-in user (staging)', () => {
     expect(error).not.toBeNull()
   })
 
-  it.fails('cannot list or read other users\' verification documents', async () => {
+  it('cannot list or read other users\' verification documents', async () => {
     await admin.storage.from('verification-docs').upload(`${aliceId}/some-bet/certificate/cert.txt`, new Blob(['secret']), { upsert: true })
     const { data: listing } = await mallory.storage.from('verification-docs').list(aliceId)
     expect(listing ?? []).toEqual([])
@@ -143,7 +141,7 @@ describe.skipIf(!configured)('RLS as a normal signed-in user (staging)', () => {
     expect(file).toBeNull()
   })
 
-  it.fails('cannot call increment_attempts for another user', async () => {
+  it('cannot call increment_attempts for another user', async () => {
     const { data: before } = await admin.from('profiles').select('total_attempts').eq('id', aliceId).single()
     await mallory.rpc('increment_attempts', { user_id: aliceId })
     const { data: after } = await admin.from('profiles').select('total_attempts').eq('id', aliceId).single()

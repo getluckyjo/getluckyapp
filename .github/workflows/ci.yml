@@ -51,6 +51,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     if: ${{ github.event_name == 'pull_request' }}
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -58,11 +63,12 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Idempotent: applies any migration in supabase/migrations/ that staging
+      # has not recorded yet, so the RLS suite always tests this branch's schema.
+      - name: Apply this branch's migrations to staging
+        if: ${{ env.STAGING_DATABASE_URL != '' }}
+        run: npm run staging:bootstrap
       - name: RLS tests
-        env:
-          STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
-          STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
-          STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if [ -z "$STAGING_SUPABASE_URL" ]; then
             echo "::warning::STAGING_SUPABASE_* secrets not set; RLS suite skipped. Add them under Settings → Secrets → Actions."
