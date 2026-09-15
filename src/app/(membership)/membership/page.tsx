@@ -7,6 +7,7 @@ import AppHeader from '@/components/layout/AppHeader'
 import MemberBadge from '@/components/membership/MemberBadge'
 import { useMembership } from '@/hooks/useMembership'
 import { MEMBERSHIP_PLANS, MEMBERSHIP_PERKS, MEMBERSHIP_FUNNEL_URL } from '@/lib/membership'
+import { formatRand } from '@/lib/format'
 
 function formatDate(iso: string | null) {
   if (!iso) return '—'
@@ -19,10 +20,6 @@ function planLabel(plan: string | null) {
   const key = plan.toLowerCase()
   if (key === 'monthly' || key === 'annual') return MEMBERSHIP_PLANS[key].label
   return plan.charAt(0).toUpperCase() + plan.slice(1)
-}
-
-function formatRand(n: number) {
-  return `R${n.toLocaleString('en-ZA').replace(/,/g, ' ')}`
 }
 
 /**

@@ -133,7 +133,7 @@ export async function POST(
     }
 
     const record = {
-      status: 'documents_received',
+      status: 'documents_received' as const,
       footage_received_at: now,
       documents_received_at: now,
       updated_by: user.id,

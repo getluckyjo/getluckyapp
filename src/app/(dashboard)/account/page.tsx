@@ -10,12 +10,7 @@ import { useMembership } from '@/hooks/useMembership'
 import MemberBadge from '@/components/membership/MemberBadge'
 import { MEMBERSHIP_PLANS } from '@/lib/membership'
 import { createClient } from '@/lib/supabase/client'
-
-function getInitials(name: string | null | undefined, email: string | null | undefined) {
-  if (name) return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
-  if (email) return email[0].toUpperCase()
-  return 'GL'
-}
+import { getInitials } from '@/lib/format'
 
 const Chevron = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>

@@ -14,9 +14,9 @@
  */
 import * as Sentry from '@sentry/nextjs'
 import { log, errorMessage, type MoneyPath } from './log'
+import { FROM_ADDRESS } from '@/lib/email/from'
 
 const OPS_EMAIL = (process.env.OPS_ALERT_EMAIL ?? 'johannes@getluckygolfclub.com').trim()
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Get Lucky Golf <noreply@getluckygolf.co.za>'
 
 export interface OpsAlert {
   /** Stable event name, e.g. `payfast.itn.ledger_write_failed`. */

@@ -6,6 +6,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
 import { GolfBallIcon } from '@/components/icons'
+import { formatRandFromCents as formatRand } from '@/lib/format'
 
 interface BetRecord {
   id: string
@@ -48,10 +49,6 @@ function matchesFilter(bet: BetRecord, filter: Filter): boolean {
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-function formatRand(cents: number) {
-  return `R${(cents / 100).toLocaleString('en-ZA').replace(/,/g, ' ')}`
 }
 
 const PAGE_SIZE = 20

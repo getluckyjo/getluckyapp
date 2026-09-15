@@ -1,36 +1,89 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Get Lucky Hole-in-One Challenge
 
-## Getting Started
+The app behind [getluckyholeinone.com](https://www.getluckyholeinone.com):
+golfers pay to enter a hole-in-one challenge on a par 3 at a partner course,
+film the shot, and if it goes in, a prize underwritten by Indwe Risk
+Services is paid after review.
 
-First, run the development server:
+Next.js 16 (App Router) · TypeScript · Supabase (Auth, Postgres, Storage) ·
+PayFast · Resend · Sentry · Vercel.
+
+## Where to look
+
+| Question | Read |
+|---|---|
+| How does money move, what can go wrong, what did the audit find | [`AUDIT.md`](./AUDIT.md) |
+| The safety net: staging, tests, CI, alerts, backups | [`docs/stage-2-safety-net.md`](./docs/stage-2-safety-net.md), [`docs/restore-runbook.md`](./docs/restore-runbook.md) |
+| What each remediation batch changed and how to test it | `docs/batch-*.md` |
+| Going live with PayFast | [`docs/payfast-go-live.md`](./docs/payfast-go-live.md) |
+| Sign-in and the branded auth email | [`docs/auth-email-setup.md`](./docs/auth-email-setup.md) |
+| Design tokens and screen comps | [`design/`](./design/) |
+
+## Running it
 
 ```bash
+npm ci
+cp .env.example .env.local      # then fill in the values (see below)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Checks, the same ones CI runs on every pull request:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run typecheck     # tsc --noEmit
+npm run lint
+npm test              # vitest: route handlers against an in-memory Supabase fake
+npm run build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Against the staging Supabase project (needs the `STAGING_*` variables):
 
-## Learn More
+```bash
+npm run staging:bootstrap    # apply supabase/migrations/*.sql, idempotent
+npm run staging:seed         # fake users, bets, claims, documents
+npm run test:staging         # Row Level Security probed as a real user
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Environment variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+| Variable | Where | Notes |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | all | public by design |
+| `SUPABASE_SERVICE_ROLE_KEY` | server | every write to money tables goes through it, after an ownership check |
+| `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`, `PAYFAST_PASSPHRASE` | server | no built-in fallback; previews need a sandbox merchant of their own |
+| `PAYFAST_SANDBOX` | server | `false` in production, and production refuses to start otherwise |
+| `NEXT_PUBLIC_SITE_URL` | all | required in production |
+| `RESEND_API_KEY`, `RESEND_FROM_ADDRESS`, `SEND_EMAIL_HOOK_SECRET` | server | auth emails go through the Supabase Send Email hook |
+| `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | all | source maps upload when the token is set |
+| `OPS_ALERT_EMAIL` | server | where money-path alerts are emailed |
+| `BET_WINDOW_HOURS` | server | play window after purchase, default 24 |
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+A preview deployment refuses to start if it points at the production database
+or has PayFast in live mode (`src/instrumentation.ts`).
 
-## Deploy on Vercel
+## Layout
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+src/app/(play)/         the play flow: select course → stake → PayFast → record → declare → claim
+src/app/(admin)/        the admin panel (client-side gate; every /api/admin route re-checks)
+src/app/api/            route handlers; each validates with zod and fails through apiError()
+src/lib/claims/         the claim state machine: the only place a bet or claim changes status
+src/lib/payfast/        PayFast configuration and address list
+src/lib/rate-limit.ts   Postgres-backed limiter
+src/lib/observability/  structured log + ops alerts (Sentry + email)
+src/lib/api/http.ts     parseBody / parseQuery / apiError
+supabase/migrations/    numbered, idempotent; apply in order (see each batch doc for timing)
+__tests__/              vitest; helpers/fake-supabase.ts is the in-memory PostgREST look-alike
+scripts/staging/        bootstrap, seed, verify-restore, explain
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Database types
+
+`src/types/database.ts` types all three Supabase clients. After a migration:
+
+```bash
+npx supabase gen types typescript --project-id <ref> --schema public > src/types/database.ts
+```
+
+and keep the hand-maintained `members` block at the bottom (the membership
+funnel's table, not defined here).

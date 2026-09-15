@@ -1,10 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import type { Database } from '@/types/database'
 
 // ── Route config ──────────────────────────────────────────────────────────
 // Reachable signed out. Marketing, legal, and the sign-in flow itself.
-const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play', '/app']
+const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play']
 
 // Reachable signed out because the app still shows something useful, or because
 // bouncing would be worse than letting them through:
@@ -79,7 +80,7 @@ export async function proxy(request: NextRequest) {
 
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

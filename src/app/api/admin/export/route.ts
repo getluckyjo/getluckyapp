@@ -4,20 +4,9 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseBody } from '@/lib/api/http'
 import { BET_SELECT, betsForVerifications, namesForBets, type BetRowLike, type VerificationRowLike } from '@/lib/admin/data'
 import { log } from '@/lib/observability/log'
+import { toCSV } from '@/lib/admin/csv'
 
 const Body = z.object({ type: z.enum(['bets', 'users', 'verifications']) })
-
-function toCSV(headers: string[], rows: string[][]): string {
-  const escape = (v: string) => {
-    let safe = v.replace(/"/g, '""')
-    // Prevent CSV injection: prefix formula-triggering characters with a single quote
-    if (/^[=+\-@\t\r]/.test(safe)) safe = `'${safe}`
-    return `"${safe}"`
-  }
-  const lines = [headers.map(escape).join(',')]
-  rows.forEach(row => lines.push(row.map(v => escape(String(v ?? ''))).join(',')))
-  return lines.join('\n')
-}
 
 const LIMIT = 500
 

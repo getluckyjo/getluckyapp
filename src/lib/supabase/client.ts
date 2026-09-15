@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
+import type { Database } from '@/types/database'
 
 // Next inlines NEXT_PUBLIC_* at build time. A preview deployment without them
 // must still prerender: this module is only ever exercised in the browser, so a
@@ -14,7 +15,7 @@ export const isSupabaseConfigured = !!SUPABASE_URL && !!SUPABASE_ANON_KEY
 // this file was memoised — annotating with ReturnType<typeof createBrowserClient>
 // resolves the generic differently and breaks inference downstream.
 function build(url: string, key: string) {
-  return createBrowserClient(url, key)
+  return createBrowserClient<Database>(url, key)
 }
 
 let cached: ReturnType<typeof build> | null = null

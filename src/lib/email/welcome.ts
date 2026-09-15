@@ -7,8 +7,8 @@
  */
 import { resend } from '@/lib/resend'
 import { emailShell, headline, paragraph, ctaButton, divider, escapeHtml, siteUrl } from '@/lib/email/layout'
+import { FROM_ADDRESS } from '@/lib/email/from'
 
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Get Lucky Golf <noreply@getluckygolf.co.za>'
 
 const TIERS = [
   ['R50', 'R25 000'],

@@ -6,8 +6,8 @@ import { verifyStandardWebhook } from '@/lib/email/standard-webhooks'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { z } from 'zod'
+import { FROM_ADDRESS } from '@/lib/email/from'
 
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Get Lucky Golf <noreply@getluckygolf.co.za>'
 
 /**
  * Supabase "Send Email" auth hook.

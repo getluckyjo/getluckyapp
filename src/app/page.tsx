@@ -5,6 +5,12 @@ import { log } from '@/lib/observability/log'
 // A sign-in credential that lands here (Supabase's Site URL fallback) is
 // forwarded to /auth/callback or /auth/confirm by the proxy before this
 // page ever renders — see src/proxy.ts.
+
+// This page reads the session cookie on every request. Saying so stops the
+// build from attempting a static render, which would throw Next's
+// "dynamic server usage" bailout into the catch below and log it as an error.
+export const dynamic = 'force-dynamic'
+
 export default async function RootPage() {
   let session = null
 

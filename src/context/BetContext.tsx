@@ -32,7 +32,6 @@ interface BetSession {
   paymentIntentId: string | null
   betId: string | null
   videoBlob: Blob | null
-  videoUploadPath: string | null
   declaredResult: 'hole_in_one' | 'miss' | null
   uploadStatus: UploadStatus
   uploadProgress: number // 0–100
@@ -44,7 +43,6 @@ interface BetContextType extends BetSession {
   confirmPayment: (intentId: string) => void
   setBetId: (id: string) => void
   setVideoBlob: (blob: Blob) => void
-  setVideoUploadPath: (path: string) => void
   declareResult: (result: 'hole_in_one' | 'miss') => void
   resetSession: () => void
   startBackgroundUpload: (blob: Blob, mimeType: string, betId: string) => void
@@ -57,7 +55,6 @@ const defaultSession: BetSession = {
   paymentIntentId: null,
   betId: null,
   videoBlob: null,
-  videoUploadPath: null,
   declaredResult: null,
   uploadStatus: 'idle',
   uploadProgress: 0,
@@ -82,9 +79,6 @@ export function BetProvider({ children }: { children: ReactNode }) {
   }
   function setVideoBlob(blob: Blob) {
     setSession(s => ({ ...s, videoBlob: blob }))
-  }
-  function setVideoUploadPath(path: string) {
-    setSession(s => ({ ...s, videoUploadPath: path }))
   }
   function declareResult(result: 'hole_in_one' | 'miss') {
     setSession(s => ({ ...s, declaredResult: result }))
@@ -153,7 +147,6 @@ export function BetProvider({ children }: { children: ReactNode }) {
         confirmPayment,
         setBetId,
         setVideoBlob,
-        setVideoUploadPath,
         declareResult,
         resetSession,
         startBackgroundUpload,

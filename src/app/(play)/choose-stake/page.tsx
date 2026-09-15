@@ -7,12 +7,9 @@ import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
 import { useAuth } from '@/context/AuthContext'
+import { formatRand } from '@/lib/format'
 
 type LoadingStep = 'idle' | 'opening'
-
-function formatRand(n: number) {
-  return `R${n.toLocaleString('en-ZA').replace(/,/g, ' ')}`
-}
 
 /** Short prize label for the badge: R25K, R100K, R1M. */
 function prizeShort(win: number) {

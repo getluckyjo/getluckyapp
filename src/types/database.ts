@@ -1,3 +1,17 @@
+/**
+ * Database types for the Supabase clients.
+ *
+ * Written from supabase/migrations/001–010 so the three clients can be
+ * typed (`createClient<Database>`), which makes a misspelt column or a
+ * wrong enum value a compile error instead of a runtime 400.
+ *
+ * Regenerate from the live schema whenever a migration lands:
+ *
+ *   npx supabase gen types typescript --project-id <ref> --schema public > src/types/database.ts
+ *
+ * and keep the hand-maintained `members` block (the funnel's table, which
+ * lives in the same project but is not defined by this repo's migrations).
+ */
 export type Json =
   | string
   | number
@@ -6,6 +20,11 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
+export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
+export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
+export type LeadLane = 'partner' | 'investor'
+
 export interface Database {
   public: {
     Tables: {
@@ -13,6 +32,7 @@ export interface Database {
         Row: {
           id: string
           name: string | null
+          email: string | null
           handicap: number | null
           home_course_id: string | null
           payment_method: string | null
@@ -31,6 +51,7 @@ export interface Database {
         Insert: {
           id: string
           name?: string | null
+          email?: string | null
           handicap?: number | null
           home_course_id?: string | null
           payment_method?: string | null
@@ -49,6 +70,7 @@ export interface Database {
         Update: {
           id?: string
           name?: string | null
+          email?: string | null
           handicap?: number | null
           home_course_id?: string | null
           payment_method?: string | null
@@ -64,37 +86,7 @@ export interface Database {
           terms_accepted_at?: string | null
           created_at?: string
         }
-      }
-      // Owned & written by the external membership funnel
-      // (membership.getluckygolfclub.com). This app only READS it (by email)
-      // to surface member status — it never writes here.
-      members: {
-        Row: {
-          id: string
-          full_name: string
-          email: string
-          mobile: string
-          club_id: string | null
-          handicap: number | null
-          subscription_status: string | null
-          payfast_payment_id: string | null
-          payfast_token: string | null
-          joined_date: string | null
-          last_payment_date: string | null
-          cancelled_date: string | null
-          cancellation_reason: string | null
-          bag_tag_status: string | null
-          is_founding_member: boolean | null
-          referral_code: string | null
-          referred_by: string | null
-          plan_type: string
-          indwe_credit_applied_until: string | null
-          indwe_lead_id: string | null
-          created_at: string | null
-          updated_at: string | null
-        }
-        Insert: never
-        Update: never
+        Relationships: []
       }
       courses: {
         Row: {
@@ -133,6 +125,7 @@ export interface Database {
           is_partner?: boolean
           created_at?: string
         }
+        Relationships: []
       }
       holes: {
         Row: {
@@ -165,6 +158,7 @@ export interface Database {
           jackpot_amount?: number
           created_at?: string
         }
+        Relationships: []
       }
       bets: {
         Row: {
@@ -172,14 +166,21 @@ export interface Database {
           user_id: string
           course_id: string
           hole_id: string
-          tier: 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
+          tier: BetTier
           stake_pence: number
           potential_win_pence: number
-          status: 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
+          status: BetStatus
           payment_intent_id: string | null
+          pf_payment_id: string | null
           video_url: string | null
+          video_sha256: string | null
+          video_bytes: number | null
+          video_uploaded_at: string | null
           declared_result: 'miss' | 'win' | null
           declared_at: string | null
+          expires_at: string
+          updated_at: string | null
+          updated_by: string | null
           created_at: string
         }
         Insert: {
@@ -187,14 +188,21 @@ export interface Database {
           user_id: string
           course_id: string
           hole_id: string
-          tier: 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
+          tier: BetTier
           stake_pence: number
           potential_win_pence: number
-          status?: 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
+          status?: BetStatus
           payment_intent_id?: string | null
+          pf_payment_id?: string | null
           video_url?: string | null
+          video_sha256?: string | null
+          video_bytes?: number | null
+          video_uploaded_at?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
+          expires_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
           created_at?: string
         }
         Update: {
@@ -202,22 +210,30 @@ export interface Database {
           user_id?: string
           course_id?: string
           hole_id?: string
-          tier?: 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
+          tier?: BetTier
           stake_pence?: number
           potential_win_pence?: number
-          status?: 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
+          status?: BetStatus
           payment_intent_id?: string | null
+          pf_payment_id?: string | null
           video_url?: string | null
+          video_sha256?: string | null
+          video_bytes?: number | null
+          video_uploaded_at?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
+          expires_at?: string
+          updated_at?: string | null
+          updated_by?: string | null
           created_at?: string
         }
+        Relationships: []
       }
       verifications: {
         Row: {
           id: string
           bet_id: string
-          status: 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
+          status: VerificationStatus
           certificate_path: string | null
           affidavit_path: string | null
           footage_received_at: string | null
@@ -226,12 +242,14 @@ export interface Database {
           payout_initiated_at: string | null
           reviewer_notes: string | null
           reviewed_by: string | null
+          updated_at: string | null
+          updated_by: string | null
           created_at: string
         }
         Insert: {
           id?: string
           bet_id: string
-          status?: 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
+          status?: VerificationStatus
           certificate_path?: string | null
           affidavit_path?: string | null
           footage_received_at?: string | null
@@ -240,12 +258,14 @@ export interface Database {
           payout_initiated_at?: string | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
           created_at?: string
         }
         Update: {
           id?: string
           bet_id?: string
-          status?: 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
+          status?: VerificationStatus
           certificate_path?: string | null
           affidavit_path?: string | null
           footage_received_at?: string | null
@@ -254,12 +274,159 @@ export interface Database {
           payout_initiated_at?: string | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
           created_at?: string
         }
+        Relationships: []
+      }
+      payfast_payments: {
+        Row: {
+          id: string
+          m_payment_id: string
+          pf_payment_id: string | null
+          user_id: string | null
+          course_id: string | null
+          hole_id: string | null
+          tier: BetTier | null
+          amount_cents: number
+          status: 'complete' | 'amount_mismatch'
+          raw_payload: Json | null
+          bet_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          m_payment_id: string
+          pf_payment_id?: string | null
+          user_id?: string | null
+          course_id?: string | null
+          hole_id?: string | null
+          tier?: BetTier | null
+          amount_cents: number
+          status?: 'complete' | 'amount_mismatch'
+          raw_payload?: Json | null
+          bet_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          m_payment_id?: string
+          pf_payment_id?: string | null
+          user_id?: string | null
+          course_id?: string | null
+          hole_id?: string | null
+          tier?: BetTier | null
+          amount_cents?: number
+          status?: 'complete' | 'amount_mismatch'
+          raw_payload?: Json | null
+          bet_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      claim_events: {
+        Row: {
+          id: number
+          bet_id: string
+          verification_id: string | null
+          table_name: string
+          action: 'insert' | 'update'
+          actor_id: string | null
+          actor_role: string
+          changed: Json | null
+          before: Json | null
+          after: Json
+          created_at: string
+        }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      rate_limits: {
+        Row: { key: string; count: number; window_start: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          id: string
+          email: string
+          lane: LeadLane
+          name: string | null
+          company: string | null
+          note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          email: string
+          lane: LeadLane
+          name?: string | null
+          company?: string | null
+          note?: string | null
+          created_at?: string
+        }
+        Update: never
+        Relationships: []
+      }
+      // Owned and written by the external membership funnel
+      // (membership.getluckygolfclub.com). This app only READS it, by email,
+      // to show member status. Not defined by this repo's migrations.
+      members: {
+        Row: {
+          id: string
+          full_name: string
+          email: string
+          mobile: string
+          club_id: string | null
+          handicap: number | null
+          subscription_status: string | null
+          payfast_payment_id: string | null
+          payfast_token: string | null
+          joined_date: string | null
+          last_payment_date: string | null
+          cancelled_date: string | null
+          cancellation_reason: string | null
+          bag_tag_status: string | null
+          is_founding_member: boolean | null
+          referral_code: string | null
+          referred_by: string | null
+          plan_type: string
+          indwe_credit_applied_until: string | null
+          indwe_lead_id: string | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: never
+        Update: never
+        Relationships: []
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
-    Enums: Record<string, never>
+    Functions: {
+      increment_attempts: { Args: { user_id: string }; Returns: undefined }
+      rate_limit_hit: {
+        Args: { p_key: string; p_limit: number; p_window_seconds: number }
+        Returns: { allowed: boolean; remaining: number; reset_at: string }[]
+      }
+      admin_totals: { Args: Record<string, never>; Returns: Json }
+      admin_revenue_by_tier: {
+        Args: Record<string, never>
+        Returns: { tier: string; bet_count: number; revenue_cents: number; payout_cents: number }[]
+      }
+      admin_revenue_by_course: {
+        Args: Record<string, never>
+        Returns: { course_id: string; course_name: string; bet_count: number; revenue_cents: number }[]
+      }
+    }
+    Enums: {
+      bet_tier: BetTier
+      bet_status: BetStatus
+      verification_status: VerificationStatus
+      lead_lane: LeadLane
+    }
+    CompositeTypes: Record<string, never>
   }
 }
