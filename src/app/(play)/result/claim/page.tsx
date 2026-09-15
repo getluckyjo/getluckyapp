@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
 import { useBet } from '@/context/BetContext'
 import { createClient } from '@/lib/supabase/client'
 import { useShareVideo } from '@/hooks/useShareVideo'
@@ -16,6 +17,12 @@ interface UploadStep {
   storagePath?: string
 }
 
+/**
+ * Claim — "Incredible shot!" in the V2 system.
+ * Three proof cards (video is already in; certificate and affidavit are a
+ * tap to upload), then a lime SUBMIT CLAIM, a share tile, and the escape
+ * hatch to upload later. Upload and submission behaviour is unchanged.
+ */
 export default function ClaimPage() {
   const router = useRouter()
   const { betId, resetSession, videoBlob } = useBet()
@@ -64,9 +71,9 @@ export default function ClaimPage() {
   }
 
   const [steps, setSteps] = useState<UploadStep[]>([
-    { id: 'video', title: 'Shot Video', desc: 'Your recording has been uploaded', done: true },
-    { id: 'certificate', title: 'Course Certificate', desc: 'Official hole-in-one certificate from the club', done: false },
-    { id: 'affidavit', title: '4-Ball Affidavit', desc: 'Signed declaration from your playing partners', done: false },
+    { id: 'video',       title: 'Shot video',         desc: 'Your recording is in.',                          done: true },
+    { id: 'certificate', title: 'Course certificate', desc: 'The club’s official hole-in-one certificate.', done: false },
+    { id: 'affidavit',   title: '4-ball affidavit',   desc: 'Signed by the golfers you played with.',          done: false },
   ])
   const [loading, setLoading] = useState(false)
 
@@ -127,6 +134,7 @@ export default function ClaimPage() {
   }
 
   const allDone = steps.every(s => s.done)
+  const doneCount = steps.filter(s => s.done).length
 
   async function handleSubmit() {
     if (!allDone) return
@@ -152,96 +160,82 @@ export default function ClaimPage() {
 
   return (
     <PhoneFrame statusTheme="dark">
-      <div className="screen-upload">
-        <div className="signup-header" style={{ padding: 'var(--space-md) var(--page-px) 0' }}>
-          <button className="back-btn" onClick={() => router.back()}>←</button>
-        </div>
-        <div className="upload-celebration">
-          <div className="upload-trophy">🏆</div>
-          <div className="upload-congrats">Incredible Shot!</div>
-          <div className="upload-info">
-            Upload your verification documents to claim your prize. All documents are reviewed within 24 hours.
+      <div className="v2-screen">
+        <AppHeader tone="light" />
+
+        <div className="vf-scroll" style={{ paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
+          <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Incredible\nshot!'}</h1>
+          <p className="vf-sub">
+            Upload your proof and we&apos;ll get your prize moving. Documents are reviewed within 24 hours.
+          </p>
+
+          <div className="cl-progress" aria-label={`${doneCount} of ${steps.length} uploaded`}>
+            <span className="cl-progress-text">{doneCount} of {steps.length} in</span>
+            <span className="step-bar step-bar--light" aria-hidden>
+              {steps.map(s => <span key={s.id} className={s.done ? 'is-on' : undefined} />)}
+            </span>
           </div>
-        </div>
-        <div className="upload-steps">
-          {steps.map((step, i) => (
-            <div
-              key={step.id}
-              className={`upload-step${step.done ? ' done' : ''}`}
-              onClick={() => !step.done && !step.uploading && handleUpload(step.id)}
-              style={{ cursor: step.done || step.uploading ? 'default' : 'pointer', opacity: step.uploading ? 0.7 : 1 }}
+
+          <ul className="cl-steps">
+            {steps.map((step, i) => {
+              const actionable = !step.done && !step.uploading
+              return (
+                <li key={step.id}>
+                  <button
+                    type="button"
+                    className={`cl-step${step.done ? ' is-done' : ''}${step.uploading ? ' is-uploading' : ''}`}
+                    onClick={() => actionable && handleUpload(step.id)}
+                    disabled={!actionable}
+                    aria-label={step.done ? `${step.title}: uploaded` : `Upload ${step.title}`}
+                  >
+                    <span className="vf-step-dot" aria-hidden>
+                      {step.uploading ? (
+                        <span className="cf-spinner cf-spinner--green" />
+                      ) : step.done ? (
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5 9-10" /></svg>
+                      ) : (
+                        i + 1
+                      )}
+                    </span>
+                    <span className="cl-step-text">
+                      <span className="cl-step-title">{step.title}</span>
+                      <span className="cl-step-desc">{step.done ? step.desc : step.uploading ? 'Uploading…' : step.desc}</span>
+                    </span>
+                    {actionable && <span className="cl-step-cta">Upload</span>}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+          <p className="cl-hint">Photo, scan or PDF. Up to 10 MB each.</p>
+
+          <div className="cf-actions">
+            <button
+              type="button"
+              className="btn-lime btn-lime--block"
+              onClick={handleSubmit}
+              disabled={!allDone || loading}
             >
-              <div className="upload-step-num">
-                {step.uploading ? (
-                  <div style={{
-                    width: 16, height: 16, borderRadius: '50%',
-                    border: '2px solid rgba(255,255,255,0.3)',
-                    borderTopColor: '#d4af37',
-                    animation: 'spin 0.8s linear infinite',
-                  }} />
-                ) : step.done ? '✓' : i + 1}
-              </div>
-              <div className="upload-step-text">
-                <h5>{step.title}</h5>
-                <p>{step.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div
-          className="upload-dropzone"
-          onClick={() => {
-            const nextPending = steps.find(s => !s.done)
-            if (nextPending) handleUpload(nextPending.id)
-          }}
-        >
-          <div className="upload-dropzone-icon">📁</div>
-          <div className="upload-dropzone-text">
-            {allDone ? 'All documents uploaded ✓' : 'Tap to upload next document'}
+              {loading ? 'Submitting…' : 'Submit claim'}
+            </button>
+            <button type="button" className="btn-tile btn-tile--block" onClick={handleShare} disabled={isSharing}>
+              {isSharing ? 'Sharing…' : 'Share my hole-in-one'}
+            </button>
           </div>
-          <div className="upload-dropzone-sub">Photo, scan, or PDF — any format accepted</div>
-        </div>
-        <div className="upload-footer">
-          <button
-            className="btn-primary"
-            onClick={handleSubmit}
-            disabled={!allDone || loading}
-            style={{ opacity: !allDone || loading ? 0.5 : 1 }}
-          >
-            {loading ? 'Submitting...' : 'Submit Claim →'}
-          </button>
 
           <button
-            className="btn-share"
-            onClick={handleShare}
-            disabled={isSharing}
-            style={{ marginTop: 10 }}
-          >
-            {isSharing ? 'Sharing...' : '📤 Share My Hole-in-One!'}
-          </button>
-
-          {/* Escape hatch — user can return to home and submit docs later */}
-          <button
+            type="button"
+            className="cl-later"
             onClick={() => { resetSession(); router.push('/home') }}
-            style={{
-              background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)',
-              fontSize: 'var(--text-body)', marginTop: 'var(--space-sm)', cursor: 'pointer', padding: '8px 0',
-              textDecoration: 'underline', textUnderlineOffset: 3,
-            }}
           >
-            I&apos;ll upload documents later
+            I&apos;ll upload the documents later
           </button>
-          <div style={{
-            fontSize: 'var(--text-xs)', color: 'rgba(255,255,255,0.35)',
-            marginTop: 4, textAlign: 'center',
-          }}>
-            You have 7 days to submit from the date of your shot
-          </div>
+          <p className="cf-note">You have 7 days from the date of your shot to submit.</p>
         </div>
       </div>
 
       {toast && (
-        <div className="toast gold" style={{ bottom: 40, zIndex: 200 }}>
+        <div className="toast" role="status" aria-live="polite" style={{ bottom: 40, zIndex: 200 }}>
           {toast}
         </div>
       )}

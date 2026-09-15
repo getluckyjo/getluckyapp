@@ -2,11 +2,19 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
+import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS } from '@/context/BetContext'
 import { useAuth } from '@/context/AuthContext'
 import { useShareVideo } from '@/hooks/useShareVideo'
 
+/**
+ * Miss — "Great swing." The coming-back beat, so it takes the same photo
+ * treatment as the All Set screen: dark turf, display headline, one lime
+ * PLAY AGAIN, share, and the tab bar to move on.
+ */
 export default function TryAgainPage() {
   const router = useRouter()
   const { selectedTier, betId, resetSession, videoBlob } = useBet()
@@ -69,56 +77,56 @@ export default function TryAgainPage() {
     }
   }
 
-  function handleHome() {
-    resetSession()
-    router.push('/home')
-  }
-
   const tierData = BET_TIERS.find(t => t.tier === selectedTier) ?? BET_TIERS[1]
-  const stakeLabel = `R${tierData.stakeZAR.toLocaleString('en-ZA')}`
-
+  const stakeLabel = `R${tierData.stakeZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}`
   const totalAttempts = profile?.total_attempts ?? 0
 
   if (!betId) return null
 
   return (
-    <PhoneFrame statusTheme="dark">
-      <div className="screen-tryagain">
-        <div className="tryagain-illustration">🏌️‍♂️</div>
-        <h3 className="tryagain-title">Great Swing!</h3>
-        <p className="tryagain-text">
-          The ace is coming — it&apos;s just a matter of time. Keep backing yourself.
-        </p>
-        <div className="tryagain-stats">
-          <div className="tryagain-stat">
-            <div className="tryagain-stat-value">{totalAttempts || '—'}</div>
-            <div className="tryagain-stat-label">Total Attempts</div>
-          </div>
-          <div className="tryagain-stat">
-            <div className="tryagain-stat-value">⛳</div>
-            <div className="tryagain-stat-label">Keep Going</div>
-          </div>
-          <div className="tryagain-stat">
-            <div className="tryagain-stat-value">🎯</div>
-            <div className="tryagain-stat-label">Stay Focused</div>
+    <PhoneFrame statusTheme="light">
+      <div className="v2-screen v2-screen--photo">
+        <Image
+          src="/marketing/courses/zimbali.jpg"
+          alt=""
+          fill
+          priority
+          sizes="480px"
+          className="v2-photo"
+          style={{ objectPosition: '62% 100%' }}
+        />
+        <div
+          className="v2-photo-scrim"
+          aria-hidden
+          style={{ background: 'linear-gradient(180deg, rgba(20,38,25,0.6) 0%, rgba(20,38,25,0.4) 45%, rgba(20,38,25,0.7) 100%)' }}
+        />
+
+        <AppHeader tone="dark" />
+
+        <div className="v2-body">
+          <div className="v2-hero">
+            {totalAttempts > 0 && (
+              <span className="miss-attempt">Attempt {totalAttempts}</span>
+            )}
+            <h1 className="v2-title">{'Great\nswing.'}</h1>
+            <p className="v2-sub">The ace is coming.{'\n'}It&apos;s just a matter of time.</p>
+
+            <div className="miss-actions">
+              <button type="button" className="btn-lime" onClick={handlePlayAgain}>
+                Play again · {stakeLabel}
+              </button>
+              <button type="button" className="btn-tile" onClick={handleShareShot} disabled={isSharing}>
+                {isSharing ? 'Sharing…' : hasVideo ? 'Share my shot' : 'Share my attempt'}
+              </button>
+            </div>
           </div>
         </div>
-        <div className="tryagain-actions">
-          <button className="btn-primary" onClick={handlePlayAgain}>
-            Play Again — {stakeLabel} →
-          </button>
-          <button className="btn-share" onClick={handleShareShot} disabled={isSharing}>
-            {isSharing ? 'Sharing...' : hasVideo ? '📤 Share My Shot' : '📤 Share My Attempt'}
-          </button>
-          <button className="btn-share" onClick={handleHome}>
-            🏠 Back to Home
-          </button>
-        </div>
+
+        <BottomTabBar active="play" />
       </div>
 
-      {/* Toast (replaces alert) */}
       {toast && (
-        <div className="toast gold" style={{ bottom: 40, zIndex: 200 }}>
+        <div className="toast" role="status" aria-live="polite" style={{ bottom: 'calc(var(--tab-bar-h) + 10px)', zIndex: 200 }}>
           {toast}
         </div>
       )}
