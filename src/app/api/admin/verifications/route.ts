@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     // Step 2: Fetch related bets
     const betIds = [...new Set(verifRows.map((v: { bet_id: string }) => v.bet_id).filter(Boolean))]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let betsMap: Record<string, any> = {}
+    const betsMap: Record<string, any> = {}
     if (betIds.length > 0) {
       const { data: betsData } = await adminClient
         .from('bets')
@@ -81,11 +81,11 @@ export async function GET(request: Request) {
     const userIds = [...new Set(Object.values(betsMap).map((b) => b.user_id).filter(Boolean))]
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let coursesMap: Record<string, any> = {}
+    const coursesMap: Record<string, any> = {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let holesMap: Record<string, any> = {}
+    const holesMap: Record<string, any> = {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let profilesMap: Record<string, any> = {}
+    const profilesMap: Record<string, any> = {}
 
     const [coursesRes, holesRes, profilesRes] = await Promise.all([
       courseIds.length > 0

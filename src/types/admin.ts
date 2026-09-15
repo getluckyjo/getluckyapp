@@ -43,12 +43,29 @@ export interface VerificationQueueItem {
   payoutInitiatedAt: string | null
 }
 
+export interface ClaimEvent {
+  id: number
+  table_name: 'bets' | 'verifications'
+  action: 'insert' | 'update'
+  actor_id: string | null
+  actor_role: string
+  changed: Record<string, { from: unknown; to: unknown }> | null
+  created_at: string
+}
+
 export interface VerificationDetail extends VerificationQueueItem {
   videoSignedUrl: string | null
   certificateSignedUrl: string | null
   affidavitSignedUrl: string | null
   userBetHistory: AdminBetRecord[]
   userTotalAttempts: number
+  betStatus: BetStatus | null
+  betCreatedAt: string | null
+  betExpiresAt: string | null
+  videoSha256: string | null
+  videoBytes: number | null
+  videoUploadedAt: string | null
+  events: ClaimEvent[]
 }
 
 export interface AdminBetRecord {

@@ -1,0 +1,304 @@
+/**
+ * In-memory stand-in for the Supabase JS client, just deep enough to run the
+ * real route handlers against it.
+ *
+ * It models what the money-path routes actually use of PostgREST: a chainable
+ * query builder (`from().select().eq().maybeSingle()` and friends), `rpc()`,
+ * `auth.getUser()`, and `storage.from().createSignedUploadUrl()`. Rows live in
+ * a plain Map so a test can seed state, run a handler, and read back exactly
+ * what was written.
+ *
+ * It deliberately does NOT model Row Level Security: these tests exercise the
+ * handlers' own checks. RLS is covered separately by `rls.staging.test.ts`
+ * against a real project.
+ *
+ * Two constraints from the schema are modelled because the handlers branch on
+ * them: the partial unique index on `bets.payment_intent_id` (error 23505) and
+ * the unique `payfast_payments.m_payment_id` that `upsert(onConflict)` targets.
+ */
+import { randomUUID } from 'node:crypto'
+
+type Row = Record<string, unknown>
+type Filter = (row: Row) => boolean
+
+export interface FakeUser {
+  id: string
+  email?: string
+  user_metadata?: Record<string, unknown>
+}
+
+interface PostgrestError {
+  code: string
+  message: string
+  details?: string
+}
+
+interface Result<T = unknown> {
+  data: T
+  error: PostgrestError | null
+  count?: number | null
+}
+
+const UNIQUE: Record<string, string[]> = {
+  bets: ['payment_intent_id'],
+  payfast_payments: ['m_payment_id'],
+  verifications: ['bet_id'],
+}
+
+export class FakeDb {
+  tables = new Map<string, Row[]>()
+
+  rows(table: string): Row[] {
+    if (!this.tables.has(table)) this.tables.set(table, [])
+    return this.tables.get(table)!
+  }
+
+  seed(table: string, ...rows: Row[]): Row[] {
+    const stored = rows.map(r => ({ id: randomUUID(), created_at: new Date().toISOString(), ...r }))
+    this.rows(table).push(...stored)
+    return stored
+  }
+
+  find(table: string, pred: (r: Row) => boolean): Row | undefined {
+    return this.rows(table).find(pred)
+  }
+}
+
+export class Builder implements PromiseLike<Result> {
+  private filters: Filter[] = []
+  private op: 'select' | 'insert' | 'update' | 'upsert' | 'delete' = 'select'
+  private payload: Row | Row[] | null = null
+  private onConflict: string | null = null
+  private wantCount = false
+  private singleMode: 'one' | 'maybe' | null = null
+  private limitN: number | null = null
+  private rangeN: [number, number] | null = null
+  private orderBy: { col: string; asc: boolean } | null = null
+  private returning = false
+
+  constructor(private db: FakeDb, private table: string) {}
+
+  select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+    if (this.op !== 'select') this.returning = true
+    if (opts?.count) this.wantCount = true
+    return this
+  }
+  insert(payload: Row | Row[]) { this.op = 'insert'; this.payload = payload; return this }
+  update(payload: Row) { this.op = 'update'; this.payload = payload; return this }
+  upsert(payload: Row, opts?: { onConflict?: string }) {
+    this.op = 'upsert'; this.payload = payload; this.onConflict = opts?.onConflict ?? 'id'; return this
+  }
+  delete() { this.op = 'delete'; return this }
+
+  eq(col: string, val: unknown) { this.filters.push(r => r[col] === val); return this }
+  neq(col: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
+  in(col: string, vals: unknown[]) { this.filters.push(r => vals.includes(r[col])); return this }
+  is(col: string, val: unknown) { this.filters.push(r => r[col] === val); return this }
+  not(col: string, _op: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
+  gte(col: string, val: string) { this.filters.push(r => String(r[col]) >= val); return this }
+  lte(col: string, val: string) { this.filters.push(r => String(r[col]) <= val); return this }
+  ilike(col: string, val: string) {
+    const needle = val.replace(/%/g, '').toLowerCase()
+    this.filters.push(r => String(r[col] ?? '').toLowerCase().includes(needle)); return this
+  }
+  order(col: string, opts?: { ascending?: boolean }) { this.orderBy = { col, asc: opts?.ascending !== false }; return this }
+  limit(n: number) { this.limitN = n; return this }
+  range(a: number, b: number) { this.rangeN = [a, b]; return this }
+  maybeSingle() { this.singleMode = 'maybe'; return this }
+  single() { this.singleMode = 'one'; return this }
+
+  private matching(): Row[] {
+    let rows = this.db.rows(this.table).filter(r => this.filters.every(f => f(r)))
+    if (this.orderBy) {
+      const { col, asc } = this.orderBy
+      rows = [...rows].sort((a, b) => (String(a[col]) < String(b[col]) ? -1 : 1) * (asc ? 1 : -1))
+    }
+    if (this.rangeN) rows = rows.slice(this.rangeN[0], this.rangeN[1] + 1)
+    if (this.limitN != null) rows = rows.slice(0, this.limitN)
+    return rows
+  }
+
+  private uniqueViolation(row: Row, ignoreId?: unknown): PostgrestError | null {
+    for (const col of UNIQUE[this.table] ?? []) {
+      if (row[col] == null) continue
+      const clash = this.db.rows(this.table).find(r => r[col] === row[col] && r.id !== ignoreId)
+      if (clash) {
+        return {
+          code: '23505',
+          message: `duplicate key value violates unique constraint "${this.table}_${col}_key"`,
+          details: `Key (${col})=(${String(row[col])}) already exists.`,
+        }
+      }
+    }
+    return null
+  }
+
+  private shape(rows: Row[]): Result {
+    if (this.singleMode === 'one') {
+      if (rows.length !== 1) {
+        return { data: null, error: { code: 'PGRST116', message: `JSON object requested, multiple (or no) rows returned` } }
+      }
+      return { data: rows[0], error: null }
+    }
+    if (this.singleMode === 'maybe') return { data: rows[0] ?? null, error: null }
+    return { data: rows, error: null, count: this.wantCount ? rows.length : null }
+  }
+
+  execute(): Result {
+    switch (this.op) {
+      case 'select':
+        return this.shape(this.matching())
+
+      case 'insert': {
+        const incoming = Array.isArray(this.payload) ? this.payload : [this.payload as Row]
+        const stored: Row[] = []
+        for (const p of incoming) {
+          const row = { id: randomUUID(), created_at: new Date().toISOString(), ...p }
+          const err = this.uniqueViolation(row)
+          if (err) return { data: null, error: err }
+          this.db.rows(this.table).push(row)
+          stored.push(row)
+        }
+        return this.returning ? this.shape(stored) : { data: null, error: null }
+      }
+
+      case 'update': {
+        const rows = this.matching()
+        for (const r of rows) {
+          const next = { ...r, ...(this.payload as Row) }
+          const err = this.uniqueViolation(next, r.id)
+          if (err) return { data: null, error: err }
+          Object.assign(r, this.payload)
+        }
+        return this.returning ? this.shape(rows) : { data: null, error: null }
+      }
+
+      case 'upsert': {
+        const p = this.payload as Row
+        const key = this.onConflict!
+        const existing = p[key] != null ? this.db.rows(this.table).find(r => r[key] === p[key]) : undefined
+        if (existing) {
+          Object.assign(existing, p)
+          return this.returning ? this.shape([existing]) : { data: null, error: null }
+        }
+        const row = { id: randomUUID(), created_at: new Date().toISOString(), ...p }
+        const err = this.uniqueViolation(row)
+        if (err) return { data: null, error: err }
+        this.db.rows(this.table).push(row)
+        return this.returning ? this.shape([row]) : { data: null, error: null }
+      }
+
+      case 'delete': {
+        const rows = this.matching()
+        const all = this.db.rows(this.table)
+        for (const r of rows) all.splice(all.indexOf(r), 1)
+        return { data: null, error: null }
+      }
+    }
+  }
+
+  then<R1 = Result, R2 = never>(
+    onfulfilled?: ((value: Result) => R1 | PromiseLike<R1>) | null,
+    onrejected?: ((reason: unknown) => R2 | PromiseLike<R2>) | null,
+  ): PromiseLike<R1 | R2> {
+    return Promise.resolve(this.execute()).then(onfulfilled, onrejected)
+  }
+}
+
+export interface FakeClientOptions {
+  user?: FakeUser | null
+  /** Force `.from(table)` to fail for a table, to simulate an outage or a missing migration. */
+  failTable?: Record<string, PostgrestError>
+  signedUploadUrl?: string | null
+  /** Objects `storage.from(bucket).download(path)` can return, keyed by path. */
+  storageObjects?: Record<string, string>
+}
+
+export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
+  const rpcCalls: { fn: string; args: unknown }[] = []
+  const client = {
+    rpcCalls,
+    from(table: string) {
+      const fail = opts.failTable?.[table]
+      if (fail) {
+        const failing = {
+          then: (res: (v: Result) => unknown) => Promise.resolve({ data: null, error: fail }).then(res),
+        }
+        const proxy: Record<string, unknown> = {}
+        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'is', 'not', 'gte', 'lte', 'ilike', 'order', 'limit', 'range', 'maybeSingle', 'single']) {
+          proxy[m] = () => proxy
+        }
+        proxy.then = failing.then
+        return proxy as unknown as Builder
+      }
+      return new Builder(db, table)
+    },
+    async rpc(fn: string, args: unknown) {
+      rpcCalls.push({ fn, args })
+      if (fn === 'increment_attempts') {
+        const { user_id } = args as { user_id: string }
+        const p = db.find('profiles', r => r.id === user_id)
+        if (p) p.total_attempts = Number(p.total_attempts ?? 0) + 1
+      }
+      return { data: null, error: null }
+    },
+    auth: {
+      async getUser() {
+        return { data: { user: opts.user ?? null }, error: opts.user ? null : { message: 'no session' } }
+      },
+      async getSession() {
+        return { data: { session: opts.user ? { user: opts.user } : null }, error: null }
+      },
+      async exchangeCodeForSession(code: string) {
+        return code === 'good-code' ? { data: {}, error: null } : { data: null, error: { message: 'invalid code' } }
+      },
+      async verifyOtp({ token_hash }: { token_hash: string }) {
+        return token_hash === 'good-hash' ? { data: {}, error: null } : { data: null, error: { message: 'expired' } }
+      },
+    },
+    storage: {
+      from() {
+        return {
+          async createSignedUploadUrl(path: string) {
+            if (opts.signedUploadUrl === null) return { data: null, error: { message: 'storage down' } }
+            return { data: { signedUrl: opts.signedUploadUrl ?? `https://storage.example/upload/${path}`, path }, error: null }
+          },
+          async createSignedUrl(path: string) {
+            return { data: { signedUrl: `https://storage.example/signed/${path}` }, error: null }
+          },
+          async download(path: string) {
+            const obj = opts.storageObjects?.[path]
+            if (obj === undefined) return { data: null, error: { message: 'Object not found' } }
+            return { data: new Blob([obj]), error: null }
+          },
+        }
+      },
+    },
+  }
+  return client
+}
+
+export type FakeClient = ReturnType<typeof createFakeClient>
+
+/** Build a `Request` the way Next hands one to a route handler. */
+export function jsonRequest(url: string, body: unknown, init: RequestInit = {}): Request {
+  return new Request(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(init.headers ?? {}) },
+    body: JSON.stringify(body),
+    ...init,
+  })
+}
+
+export function formRequest(url: string, fields: Record<string, string>, headers: Record<string, string> = {}): Request {
+  return new Request(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', ...headers },
+    body: new URLSearchParams(fields).toString(),
+  })
+}
+
+export const USER_A: FakeUser = { id: '11111111-1111-4111-8111-111111111111', email: 'a@example.com', user_metadata: { full_name: 'Alice Ace' } }
+export const USER_B: FakeUser = { id: '22222222-2222-4222-8222-222222222222', email: 'b@example.com' }
+export const COURSE_ID = '33333333-3333-4333-8333-333333333333'
+export const HOLE_ID = '44444444-4444-4444-8444-444444444444'

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
@@ -16,7 +16,6 @@ export default function ConfirmPage() {
   const router = useRouter()
   const { videoBlob, betId, selectedCourse, selectedHole, declareResult, uploadStatus, uploadProgress, startBackgroundUpload } = useBet()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [analysing, setAnalysing] = useState(true)
 
   const hasVideo = !!(videoBlob && videoBlob.size > 0)
 
@@ -30,23 +29,6 @@ export default function ConfirmPage() {
       router.replace('/home')
     }
   }, [hasVideo, router])
-
-  // Footage check (server-side, non-blocking for the golfer's declaration)
-  useEffect(() => {
-    async function runVerification() {
-      try {
-        await fetch('/api/videos/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ betId: betId ?? 'mock', storagePath: null }),
-        })
-      } catch {
-        // Non-critical
-      }
-      setAnalysing(false)
-    }
-    runVerification()
-  }, [betId])
 
   function handleHoleInOne() {
     declareResult('hole_in_one')
@@ -109,9 +91,9 @@ export default function ConfirmPage() {
                   {saveChip.label}
                 </button>
               ) : <span />}
-              <span className={`cf-chip${analysing ? ' cf-chip--busy' : ' cf-chip--ok'}`}>
-                {analysing && <span className="cf-spinner" aria-hidden />}
-                {analysing ? 'Checking footage' : 'Footage received'}
+              <span className={`cf-chip${uploadStatus === 'done' ? ' cf-chip--ok' : ' cf-chip--busy'}`}>
+                {uploadStatus !== 'done' && <span className="cf-spinner" aria-hidden />}
+                {uploadStatus === 'done' ? 'Footage received' : 'Securing footage'}
               </span>
             </div>
           </div>
@@ -121,7 +103,7 @@ export default function ConfirmPage() {
               type="button"
               className="btn-lime btn-lime--block"
               onClick={handleHoleInOne}
-              disabled={analysing}
+              disabled={uploadStatus !== 'done'}
             >
               Yes, it went in!
             </button>

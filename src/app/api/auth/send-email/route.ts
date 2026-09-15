@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server'
 import { resend } from '@/lib/resend'
 import { renderAuthEmail } from '@/lib/email/auth-emails'
 import { verifyStandardWebhook } from '@/lib/email/standard-webhooks'
+import { log } from '@/lib/observability/log'
+import { alertOps } from '@/lib/observability/alerts'
 
 const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Get Lucky Golf <noreply@getluckygolf.co.za>'
 
@@ -36,7 +38,7 @@ export async function POST(request: NextRequest) {
   })
 
   if (!verdict.ok) {
-    console.error('[send-email-hook] rejected:', verdict.reason)
+    log.warn('auth.email_hook.rejected', { reason: verdict.reason })
     return hookError(401, `Unauthorised: ${verdict.reason}`)
   }
 
@@ -74,11 +76,11 @@ export async function POST(request: NextRequest) {
   })
 
   if (error) {
-    console.error('[send-email-hook] Resend error:', error)
+    await alertOps({ event: 'auth.email_hook.send_failed', path: 'auth', summary: 'Resend refused an auth email; sign-ins are failing.', details: { action: data.email_action_type }, err: error })
     return hookError(500, 'Email provider refused the message')
   }
 
-  console.log('[send-email-hook] sent', data.email_action_type, 'to', to, 'id:', sent?.id)
+  log.info('auth.email_hook.sent', { action: data.email_action_type, resend_id: sent?.id ?? null })
   return NextResponse.json({})
 }
 

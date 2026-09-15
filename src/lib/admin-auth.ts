@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { log } from '@/lib/observability/log'
 
 const MOCK_ADMIN = {
   user: { id: 'mock-admin-user', email: 'admin@getlucky.golf' },
@@ -62,11 +63,12 @@ export async function requireAdmin() {
       isMock: false,
       error: null,
     }
-  } catch {
+  } catch (err) {
     // Dev bypass removed for security — require explicit ENABLE_MOCK_ADMIN=true
     if (process.env.NODE_ENV === 'development' && process.env.ENABLE_MOCK_ADMIN === 'true') {
       return MOCK_ADMIN
     }
+    log.error('admin.auth_check_failed', err, { path: 'admin_review' })
     return {
       user: null,
       adminClient: null,

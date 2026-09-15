@@ -37,7 +37,6 @@ export async function POST(request: Request) {
           .order('created_at', { ascending: false })
           .limit(500)
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         csv = toCSV(
           ['ID', 'User', 'Course', 'Hole', 'Tier', 'Stake (cents)', 'Potential Win (cents)', 'Status', 'Declared Result', 'Created'],
           // eslint-disable-next-line @typescript-eslint/no-explicit-any

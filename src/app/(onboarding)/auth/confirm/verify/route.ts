@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { finishSignIn, safeNext } from '@/lib/auth/finish-sign-in'
+import { log } from '@/lib/observability/log'
 
 const OTP_TYPES: EmailOtpType[] = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email']
 
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     const supabase = await createClient()
     const { error } = await supabase.auth.verifyOtp({ type, token_hash: tokenHash })
     if (error) {
-      console.error('[auth-confirm] verifyOtp failed:', error.message)
+      log.warn('auth.confirm.verify_failed', { type, error: error.message })
       return NextResponse.redirect(`${origin}/auth?error=link_expired`, 303)
     }
 
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
     // switch to GET or it will re-POST the form to the destination.
     return NextResponse.redirect(response.headers.get('location') ?? `${origin}${next}`, 303)
   } catch (err) {
-    console.error('[auth-confirm] unexpected failure:', err)
+    log.error('auth.confirm.unhandled', err, { path: 'auth' })
     return NextResponse.redirect(`${origin}/auth?error=oauth_error`, 303)
   }
 }

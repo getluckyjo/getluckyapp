@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import { useBet, BET_TIERS } from '@/context/BetContext'
+import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { useShareVideo } from '@/hooks/useShareVideo'
 
@@ -27,6 +28,7 @@ interface UploadStep {
 export default function ClaimPage() {
   const router = useRouter()
   const { betId, resetSession, videoBlob, selectedTier, selectedCourse, selectedHole } = useBet()
+  const { user } = useAuth()
   const tierData = BET_TIERS.find(t => t.tier === selectedTier) ?? BET_TIERS[1]
   const [toast, setToast] = useState<string | null>(null)
 
@@ -105,10 +107,14 @@ export default function ClaimPage() {
         // Attempt Supabase Storage upload
         try {
           const supabase = createClient()
-          const path = `${betId ?? 'mock'}/${stepId}/${file.name}`
-          const { data } = await supabase.storage
+          // Storage policy: a user may only write under their own folder, and
+          // never overwrite. A fresh name per attempt keeps retries working.
+          const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(-80) || 'document'
+          const path = `${user?.id ?? 'anonymous'}/${betId ?? 'mock'}/${stepId}/${Date.now()}-${safeName}`
+          const { data, error } = await supabase.storage
             .from('verification-docs')
-            .upload(path, file, { upsert: true })
+            .upload(path, file, { upsert: false })
+          if (error) console.error('[claim] Upload rejected:', error.message)
           storagePath = data?.path
         } catch (err) {
           console.error('[claim] Upload failed:', err)

@@ -197,6 +197,48 @@ export default function VerificationDetailPage() {
             </div>
           </div>
 
+          {/* Evidence integrity */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Evidence Integrity</h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 12, color: '#666' }}>
+              <div>Bet opened: <strong style={{ color: '#111' }}>{detail.betCreatedAt ? new Date(detail.betCreatedAt).toLocaleString('en-ZA') : '—'}</strong></div>
+              <div>Play window closed: <strong style={{ color: '#111' }}>{detail.betExpiresAt ? new Date(detail.betExpiresAt).toLocaleString('en-ZA') : '—'}</strong></div>
+              <div>
+                Footage sealed: {detail.videoUploadedAt
+                  ? <strong style={{ color: '#111' }}>{new Date(detail.videoUploadedAt).toLocaleString('en-ZA')}{detail.betExpiresAt && detail.videoUploadedAt > detail.betExpiresAt ? ' (after window!)' : ''}</strong>
+                  : <strong style={{ color: '#c0392b' }}>not recorded — footage was never sealed by the server</strong>}
+              </div>
+              <div>Footage size: <strong style={{ color: '#111' }}>{detail.videoBytes ? `${(detail.videoBytes / 1_000_000).toFixed(1)} MB` : '—'}</strong></div>
+              <div style={{ wordBreak: 'break-all' }}>SHA-256: <code style={{ fontSize: 11, color: '#111' }}>{detail.videoSha256 ?? '—'}</code></div>
+            </div>
+          </div>
+
+          {/* Audit trail */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Audit Trail</h3>
+            {detail.events.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#999' }}>No events recorded (bet predates the audit log)</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {detail.events.map(ev => (
+                  <div key={ev.id} style={{ padding: '8px 10px', background: '#fafafa', borderRadius: 6, fontSize: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#666' }}>
+                      <span>{new Date(ev.created_at).toLocaleString('en-ZA')}</span>
+                      <span>{ev.table_name} · {ev.action} · {ev.actor_role}{ev.actor_id ? ` · ${ev.actor_id.slice(0, 8)}…` : ''}</span>
+                    </div>
+                    {ev.changed && (
+                      <div style={{ color: '#111', marginTop: 4 }}>
+                        {Object.entries(ev.changed).map(([k, v]) => (
+                          <div key={k}><code>{k}</code>: {String(v.from ?? '∅')} → {String(v.to ?? '∅')}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* User history */}
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
             <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>User History</h3>

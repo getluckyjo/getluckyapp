@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: typecheck · lint · test · build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+
+      - name: Unit and route tests
+        run: npm test
+
+      # Catches things tsc cannot: server/client component boundaries, route
+      # segment config, missing exports. Placeholder env so the build never
+      # needs (or could reach) a real project.
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          NEXT_PUBLIC_SITE_URL: https://ci.invalid
+          SENTRY_SUPPRESS_TURBOPACK_WARNING: "1"
+
+  # Runs the RLS suite against the staging project when the secrets exist.
+  # It is a separate job so a missing secret never masks a red main job.
+  rls-staging:
+    name: RLS against staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    if: ${{ github.event_name == 'pull_request' }}
+    env:
+      STAGING_DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+      STAGING_SUPABASE_URL: ${{ secrets.STAGING_SUPABASE_URL }}
+      STAGING_SUPABASE_ANON_KEY: ${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+      STAGING_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # Idempotent: applies any migration in supabase/migrations/ that staging
+      # has not recorded yet, so the RLS suite always tests this branch's schema.
+      - name: Apply this branch's migrations to staging
+        if: ${{ env.STAGING_DATABASE_URL != '' }}
+        run: npm run staging:bootstrap
+      - name: RLS tests
+        run: |
+          if [ -z "$STAGING_SUPABASE_URL" ]; then
+            echo "::warning::STAGING_SUPABASE_* secrets not set; RLS suite skipped. Add them under Settings → Secrets → Actions."
+          fi
+          npm run test:staging

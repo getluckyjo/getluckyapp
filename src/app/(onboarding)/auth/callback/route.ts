@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { finishSignIn, safeNext } from '@/lib/auth/finish-sign-in'
+import { log } from '@/lib/observability/log'
 
 /**
  * Where Supabase sends the browser back after Google (PKCE `code`),
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
         // Logged so the production trail says *why* — the two usual causes are
         // a code verifier that lives on a different host (www vs bare domain)
         // and a link that a mail scanner already consumed.
-        console.error('[auth-callback] exchangeCodeForSession failed:', error.message)
+        log.error('auth.callback.exchange_failed', error, { path: 'auth' })
         return NextResponse.redirect(`${origin}/auth?error=oauth_error`)
       }
     }
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     // Supabase unreachable or misconfigured. A sign-in screen with a message
     // beats a bare 500 in the golfer's face.
-    console.error('[auth-callback] unexpected failure:', err)
+    log.error('auth.callback.unhandled', err, { path: 'auth' })
     return NextResponse.redirect(`${origin}/auth?error=oauth_error`)
   }
 }

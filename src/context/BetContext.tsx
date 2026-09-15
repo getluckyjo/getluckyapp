@@ -122,6 +122,18 @@ export function BetProvider({ children }: { children: ReactNode }) {
             xhr.onerror = () => reject(new Error('Network error'))
             xhr.send(blob)
           })
+
+          // The server reads the object back and records its hash, size and
+          // its own timestamp on the bet. Without this the footage is
+          // uploaded but not sealed, so treat a failure as an upload failure.
+          const sealRes = await fetch('/api/videos/uploaded', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ betId }),
+          })
+          if (!sealRes.ok) throw new Error(`Seal ${sealRes.status}`)
+        } else {
+          throw new Error('No upload slot')
         }
 
         setSession(s => ({ ...s, uploadStatus: 'done', uploadProgress: 100 }))
