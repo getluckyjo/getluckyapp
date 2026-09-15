@@ -1184,13 +1184,25 @@ body {
 
 /* ── SCREEN: CHOOSE STAKE (V2) ── */
 .stake-course {
-  font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.4;
-  color: var(--green); margin: 0 0 12px;
+  display: flex; align-items: center; gap: 12px;
+  margin: 0 0 4px; padding: 10px 10px 10px 14px;
+  background: var(--white); border-radius: 10px;
+  font-family: 'Inter', sans-serif; color: var(--green);
+  box-shadow: 0 2px 10px rgba(52,82,49,0.06);
 }
-.stake-course i { font-style: normal; opacity: 0.5; margin: 0 4px; }
+.stake-course-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.stake-course-name { font-size: var(--text-md); font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.stake-course-meta { font-size: var(--text-sm); opacity: 0.75; margin-top: 2px; }
 .stake-change {
-  margin-left: 8px; padding: 0; background: none; border: none; cursor: pointer;
-  font: inherit; font-weight: 700; color: var(--green); text-decoration: underline; text-underline-offset: 3px;
+  flex-shrink: 0; min-height: 34px; padding: 0 14px; border-radius: 999px; border: none; cursor: pointer;
+  background: var(--surface); color: var(--green);
+  font-family: 'Inter', sans-serif; font-size: var(--text-sm); font-weight: 700;
+}
+.stake-flag {
+  position: absolute; top: -11px; left: 14px;
+  padding: 4px 9px; border-radius: 999px;
+  background: var(--green); color: var(--lime);
+  font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; line-height: 1;
 }
 .stake-list { padding-top: 10px; gap: 12px; }
 .stake-card {
@@ -1292,11 +1304,20 @@ body {
 }
 .rec-hint--live { background: rgba(214,251,75,0.18); color: var(--lime); }
 .rec-button {
-  width: 92px; height: 92px; border-radius: 50%; padding: 0; cursor: pointer;
+  position: relative; width: 92px; height: 92px; border-radius: 50%; padding: 0; cursor: pointer;
   background: rgba(255,255,255,0.18); border: 3px solid rgba(255,255,255,0.9);
   display: flex; align-items: center; justify-content: center;
   transition: transform 0.15s, border-color 0.2s;
 }
+/* Time-used ring: fills clockwise toward the two-minute cap while recording. */
+.rec-ring {
+  position: absolute; inset: -8px; border-radius: 50%; pointer-events: none; opacity: 0;
+  background: conic-gradient(var(--lime) var(--rec-progress, 0%), rgba(255,255,255,0.18) 0);
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 5px), #000 calc(100% - 4px));
+  transition: opacity 0.2s;
+}
+.rec-button.is-recording .rec-ring { opacity: 1; }
 .rec-button:active { transform: scale(0.95); }
 .rec-button:disabled { opacity: 0.35; cursor: default; }
 .rec-button-disc {

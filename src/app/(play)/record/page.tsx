@@ -247,16 +247,18 @@ export default function RecordPage() {
             <div className="rec-hint">Tap the ball to start recording</div>
           )}
           {isRecording && (
-            <div className="rec-hint rec-hint--live">Recording. Tap to stop when the ball lands.</div>
+            <div className="rec-hint rec-hint--live">Recording · tap to stop when the ball lands · max 2:00</div>
           )}
 
           <button
             type="button"
             className={`rec-button${isRecording ? ' is-recording' : ''}`}
+            style={{ '--rec-progress': `${(seconds / MAX_SECONDS) * 100}%` } as React.CSSProperties}
             onClick={isRecording ? stopRecording : startRecording}
             disabled={!cameraReady || cameraError}
             aria-label={isRecording ? 'Stop recording' : 'Start recording'}
           >
+            <span className="rec-ring" aria-hidden />
             <span className="rec-button-disc">
               {isRecording ? <span className="rec-button-stop" /> : <GolfBallIcon size={44} />}
             </span>

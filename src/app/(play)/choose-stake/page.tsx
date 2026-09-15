@@ -127,10 +127,13 @@ export default function ChooseStakePage() {
         <div className="cs-head">
           <h1 className="v2-title cs-title" style={{ marginBottom: 8 }}>{'Choose\nyour stake'}</h1>
           {selectedCourse && selectedHole && (
-            <p className="stake-course">
-              {selectedCourse.name} <i>|</i> Hole {selectedHole.holeNumber} <i>|</i> Par {selectedHole.par} <i>|</i> {selectedHole.distanceMetres}m
+            <div className="stake-course">
+              <span className="stake-course-text">
+                <span className="stake-course-name">{selectedCourse.name}</span>
+                <span className="stake-course-meta">Hole {selectedHole.holeNumber} · Par {selectedHole.par} · {selectedHole.distanceMetres}m</span>
+              </span>
               <button type="button" className="stake-change" onClick={() => router.push('/select-course')}>Change</button>
-            </p>
+            </div>
           )}
         </div>
 
@@ -147,6 +150,7 @@ export default function ChooseStakePage() {
                 aria-pressed={isSelected}
                 disabled={loading}
               >
+                {tier.winZAR >= 1_000_000 && <span className="stake-flag">Top prize</span>}
                 <span className="stake-amount">
                   {formatRand(tier.stakeZAR)}
                   <small>stake</small>
