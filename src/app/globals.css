@@ -1923,3 +1923,55 @@ button, [role="button"], [role="tab"] {
   .phone-notch { display: none; }
   .phone-screen { border-radius: 0 !important; }
 }
+
+/* ── INSTALL PROMPTS ── */
+.install-card {
+  position: fixed; left: 12px; right: 12px; z-index: 190;
+  bottom: calc(var(--tab-bar-h) + 10px);
+  display: grid; grid-template-columns: 48px 1fr; gap: 12px 14px; align-items: center;
+  padding: 14px 16px;
+  background: var(--white); color: var(--green);
+  border-radius: 16px; box-shadow: 0 14px 40px rgba(0,0,0,0.22);
+  font-family: 'Inter', sans-serif;
+  animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+  max-width: 440px; margin: 0 auto;
+}
+.install-card-icon { width: 48px; height: 48px; border-radius: 12px; }
+.install-card-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.install-card-text strong { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.install-card-text span { font-size: 13px; opacity: 0.8; line-height: 1.35; }
+.install-card-actions { grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; }
+.install-btn, .install-btn-ghost {
+  min-height: 44px; padding: 0 18px; border-radius: 10px; border: none; cursor: pointer;
+  font-family: var(--font-heading); font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+}
+.install-btn { background: var(--lime); color: var(--green); }
+.install-btn-ghost { background: var(--surface); color: var(--green); }
+
+.install-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 190;
+  background: rgba(30,49,32,0.55);
+  display: flex; align-items: flex-end; justify-content: center;
+  animation: fadeIn 0.2s ease both;
+}
+.install-sheet {
+  width: 100%; max-width: 480px;
+  background: var(--white); color: var(--green);
+  border-radius: 20px 20px 0 0;
+  padding: 10px 22px calc(18px + env(safe-area-inset-bottom, 0px));
+  box-shadow: 0 -12px 40px rgba(0,0,0,0.25);
+  font-family: 'Inter', sans-serif;
+  animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.install-sheet-grip { width: 40px; height: 4px; border-radius: 2px; background: var(--bar-off); margin: 4px auto 16px; }
+.install-sheet-title { font-family: var(--font-heading); font-size: var(--text-xl); letter-spacing: 0.01em; text-transform: uppercase; line-height: 1.1; }
+.install-sheet-sub { font-size: 14px; opacity: 0.8; margin: 6px 0 16px; }
+.install-steps { list-style: none; display: flex; flex-direction: column; gap: 12px; margin: 0 0 18px; padding: 0; counter-reset: step; }
+.install-steps li { display: flex; align-items: center; gap: 14px; font-size: 15px; line-height: 1.35; }
+.install-steps li strong { font-weight: 700; }
+.install-step-icon {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 12px;
+  background: var(--surface); color: var(--green);
+  display: flex; align-items: center; justify-content: center;
+}
+.install-sheet-done { width: 100%; }

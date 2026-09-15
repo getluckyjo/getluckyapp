@@ -3,6 +3,7 @@
 import { Analytics } from '@vercel/analytics/next'
 import ServiceWorkerManager from './ServiceWorkerManager'
 import SessionTracker from './SessionTracker'
+import InstallPrompt from './InstallPrompt'
 
 /**
  * Everything the installed app mounts once, over every screen: the service
@@ -15,6 +16,7 @@ export default function PwaChrome() {
     <>
       <ServiceWorkerManager />
       <SessionTracker />
+      <InstallPrompt />
       <Analytics />
     </>
   )
