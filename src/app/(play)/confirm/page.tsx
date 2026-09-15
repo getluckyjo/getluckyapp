@@ -1,18 +1,28 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
 import { useBet } from '@/context/BetContext'
 
+/**
+ * Confirm — "Did it go in?" in the V2 system.
+ * The replay in a rounded card with the save-status chip on it, then the
+ * honest question: a lime YES and a quiet NOT THIS TIME. No tab bar; this
+ * is a decision, not a place to wander off from.
+ */
 export default function ConfirmPage() {
   const router = useRouter()
   const { videoBlob, betId, declareResult, uploadStatus, uploadProgress, startBackgroundUpload } = useBet()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [analysing, setAnalysing] = useState(true)
-  const [videoUrl, setVideoUrl] = useState<string | null>(null)
 
   const hasVideo = !!(videoBlob && videoBlob.size > 0)
+
+  // One object URL per blob, released when the blob changes or we leave.
+  const videoUrl = useMemo(() => (hasVideo && videoBlob ? URL.createObjectURL(videoBlob) : null), [videoBlob, hasVideo])
+  useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl) }, [videoUrl])
 
   // Guard: require a recorded video to reach this page
   useEffect(() => {
@@ -21,15 +31,7 @@ export default function ConfirmPage() {
     }
   }, [hasVideo, router])
 
-  useEffect(() => {
-    if (videoBlob && videoBlob.size > 0) {
-      const url = URL.createObjectURL(videoBlob)
-      setVideoUrl(url)
-      return () => URL.revokeObjectURL(url)
-    }
-  }, [videoBlob])
-
-  // Run mock AI verification
+  // Footage check (server-side, non-blocking for the golfer's declaration)
   useEffect(() => {
     async function runVerification() {
       try {
@@ -58,88 +60,74 @@ export default function ConfirmPage() {
 
   if (!hasVideo) return null
 
+  const saveChip =
+    uploadStatus === 'uploading' ? { tone: 'busy', label: `Saving video · ${uploadProgress}%` } :
+    uploadStatus === 'error'     ? { tone: 'error', label: 'Video not saved. Tap to retry' } :
+    uploadStatus === 'done'      ? { tone: 'ok', label: 'Video saved' } :
+    null
+
   return (
     <PhoneFrame statusTheme="dark">
-      <div className="screen-confirm">
-        <div className="signup-header" style={{ padding: 'var(--space-md) var(--page-px) 0' }}>
-          <button className="back-btn" onClick={() => router.back()}>←</button>
-        </div>
-        <div className="confirm-video">
-          {videoUrl ? (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 20 }}
-              controls
-              autoPlay
-              muted
-              loop
-              playsInline
-            />
-          ) : (
-            <div className="confirm-play-btn">▶</div>
-          )}
-          {uploadStatus === 'uploading' && (
-            <div style={{
-              position: 'absolute', top: 12, left: 12, zIndex: 5,
-              display: 'flex', alignItems: 'center', gap: 8,
-              background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(8px)',
-              padding: '6px 14px', borderRadius: 20,
-              color: 'white', fontSize: 12, fontWeight: 600,
-            }}>
-              <div style={{
-                width: 10, height: 10, borderRadius: '50%',
-                border: '2px solid rgba(255,255,255,0.3)',
-                borderTopColor: '#d4af37',
-                animation: 'spin 0.8s linear infinite',
-              }} />
-              Saving video… {uploadProgress}%
-            </div>
-          )}
-          {uploadStatus === 'error' && (
-            <button
-              onClick={() => {
-                if (videoBlob && betId) startBackgroundUpload(videoBlob, 'video/webm', betId)
-              }}
-              style={{
-                position: 'absolute', top: 12, left: 12, zIndex: 5,
-                background: 'rgba(180,60,60,0.7)', backdropFilter: 'blur(8px)',
-                padding: '6px 14px', borderRadius: 20,
-                color: 'white', fontSize: 12, fontWeight: 600,
-                border: 'none', cursor: 'pointer',
-              }}
-            >
-              ⚠ Video save failed — tap to retry
-            </button>
-          )}
-          <div className="confirm-ai-badge">
-            {analysing
-              ? '🤖 AI Analysing...'
-              : '✅ Analysis Complete'
-            }
+      <div className="v2-screen">
+        <AppHeader tone="light" />
+
+        <div className="vf-scroll" style={{ paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
+          <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Did it\ngo in?'}</h1>
+          <p className="vf-sub">Watch the replay and tell us straight. A claimed hole-in-one goes through full verification.</p>
+
+          <div className="cf-video">
+            {videoUrl ? (
+              <video
+                ref={videoRef}
+                src={videoUrl}
+                controls
+                autoPlay
+                muted
+                loop
+                playsInline
+              />
+            ) : (
+              <div className="cf-video-empty" />
+            )}
+
+            {saveChip && (
+              <button
+                type="button"
+                className={`cf-chip cf-chip--${saveChip.tone}`}
+                disabled={saveChip.tone !== 'error'}
+                onClick={() => {
+                  if (saveChip.tone === 'error' && videoBlob && betId) {
+                    startBackgroundUpload(videoBlob, videoBlob.type || 'video/webm', betId)
+                  }
+                }}
+              >
+                {saveChip.tone === 'busy' && <span className="cf-spinner" aria-hidden />}
+                {saveChip.label}
+              </button>
+            )}
+            <span className={`cf-chip cf-chip--right${analysing ? ' cf-chip--busy' : ' cf-chip--ok'}`}>
+              {analysing && <span className="cf-spinner" aria-hidden />}
+              {analysing ? 'Checking footage' : 'Footage received'}
+            </span>
           </div>
-        </div>
-        <div className="confirm-question">
-          <h3 className="confirm-title">Did it go in?</h3>
-          <p className="confirm-desc">
-            Watch the replay and confirm your result. Be honest — full verification follows for claimed hole-in-ones.
+
+          <div className="cf-actions">
+            <button
+              type="button"
+              className="btn-lime btn-lime--block"
+              onClick={handleHoleInOne}
+              disabled={analysing}
+            >
+              Yes, it went in!
+            </button>
+            <button type="button" className="btn-tile btn-tile--block" onClick={handleMiss}>
+              Not this time
+            </button>
+          </div>
+
+          <p className="cf-note">
+            Your honest declaration is the first step. A claim needs this footage, the course certificate and a 4-ball affidavit.
           </p>
-        </div>
-        <div className="confirm-buttons">
-          <button
-            className="btn-hole-in-one"
-            onClick={handleHoleInOne}
-            disabled={analysing}
-            style={{ opacity: analysing ? 0.6 : 1 }}
-          >
-            🏆 YES — Hole-in-One!
-          </button>
-          <button className="btn-no-luck" onClick={handleMiss}>
-            Not this time
-          </button>
-        </div>
-        <div className="confirm-footer-text">
-          Your honest declaration is the first step. Camera footage, course certificate, and 4-ball affidavit required to claim.
         </div>
       </div>
     </PhoneFrame>

@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
+import { GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 import type { Course, Hole, BetTier } from '@/context/BetContext'
 
@@ -111,83 +113,43 @@ export default function PaymentReturnPage() {
   }, [])
 
   return (
-    <PhoneFrame statusTheme="light">
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100%',
-        padding: 32,
-        background: 'linear-gradient(180deg, #1e3120 0%, #335231 100%)',
-        color: 'white',
-        textAlign: 'center',
-      }}>
-        {status === 'processing' && (
-          <>
-            <div style={{
-              width: 56, height: 56, borderRadius: '50%',
-              border: '3px solid rgba(255,255,255,0.2)',
-              borderTopColor: '#d4af37',
-              animation: 'spin 0.8s linear infinite',
-              marginBottom: 24,
-            }} />
-            <h3 style={{
-              fontFamily: "'Poster Gothic', sans-serif",
-              fontSize: 22,
-              fontWeight: 700,
-              marginBottom: 8,
-            }}>
-              {waiting ? 'Confirming Your Payment' : 'Setting Up Your Bet'}
-            </h3>
-            <p style={{
-              fontSize: 14,
-              opacity: 0.7,
-              lineHeight: 1.5,
-            }}>
-              {waiting
-                ? 'Waiting for confirmation from PayFast. This usually takes a few seconds — please don\u2019t close this page.'
-                : 'Payment confirmed. Preparing your challenge...'}
-            </p>
-          </>
-        )}
+    <PhoneFrame statusTheme="dark">
+      <div className="v2-screen">
+        <AppHeader tone="light" />
 
-        {status === 'error' && (
-          <>
-            <div style={{ fontSize: 48, marginBottom: 20 }}>!</div>
-            <h3 style={{
-              fontFamily: "'Poster Gothic', sans-serif",
-              fontSize: 22,
-              fontWeight: 700,
-              marginBottom: 12,
-            }}>
-              Something Went Wrong
-            </h3>
-            <p style={{
-              fontSize: 14,
-              opacity: 0.7,
-              lineHeight: 1.5,
-              marginBottom: 28,
-              maxWidth: 280,
-            }}>
-              {errorMsg}
-            </p>
-            <button
-              className="btn-gold"
-              onClick={() => router.push('/choose-stake')}
-              style={{ width: 'auto', padding: '14px 32px' }}
-            >
-              Try Again
-            </button>
-          </>
-        )}
+        <div className="v2-body" style={{ paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
+          <div className="v2-hero">
+            {status === 'processing' ? (
+              <>
+                <span className="pr-spinner" aria-hidden>
+                  <GolfBallIcon size={40} />
+                </span>
+                <h1 className="v2-title" aria-live="polite">
+                  {waiting ? 'Confirming\nyour payment' : 'Setting up\nyour shot'}
+                </h1>
+                <p className="v2-sub">
+                  {waiting
+                    ? 'Waiting for PayFast to confirm. This usually takes a few seconds. Please keep this page open.'
+                    : 'Payment received. Preparing your challenge\u2026'}
+                </p>
+              </>
+            ) : (
+              <>
+                <h1 className="v2-title">{'Something\nwent wrong'}</h1>
+                <p className="v2-sub" style={{ fontSize: 'var(--text-md)' }}>{errorMsg}</p>
+                <div className="miss-actions">
+                  <button type="button" className="btn-lime" onClick={() => router.push('/choose-stake')}>
+                    Try again
+                  </button>
+                  <button type="button" className="btn-tile" onClick={() => router.push('/home')}>
+                    Back to home
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </PhoneFrame>
   )
 }
