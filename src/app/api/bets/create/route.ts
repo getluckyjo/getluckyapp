@@ -11,7 +11,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { courseId, holeId, tier, paymentIntentId } = body
+    const { courseId, holeId, tier, paymentIntentId } = body as Record<string, unknown>
 
     if (!courseId || !holeId || !tier || !paymentIntentId) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -46,9 +46,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ── Idempotency guard: return existing bet if payment already processed ──
-    // Matches either reference: the bet is created against m_payment_id, and the
-    // ITN later swaps it for PayFast's pf_payment_id.
+    // ── Idempotency guard: return the existing bet if this payment already
+    // produced one. payment_intent_id is our reference and is never rewritten
+    // (migration 008); PayFast's id is kept separately in pf_payment_id.
     const { data: existing } = await supabase
       .from('bets')
       .select('id')
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
     // any POST with an invented reference produced a live bet for free.
     const { data: payment, error: payErr } = await supabase
       .from('payfast_payments')
-      .select('m_payment_id, user_id, course_id, hole_id, tier, amount_cents, status')
+      .select('m_payment_id, pf_payment_id, user_id, course_id, hole_id, tier, amount_cents, status')
       .eq('m_payment_id', paymentIntentId)
       .maybeSingle()
 
@@ -104,15 +104,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Legacy safety: a bet created before migration 008 may still carry
+    // PayFast's id as its reference. Find it by that rather than duplicate.
+    if (payment.pf_payment_id) {
+      const { data: legacy } = await supabase
+        .from('bets')
+        .select('id')
+        .eq('pf_payment_id', payment.pf_payment_id)
+        .maybeSingle()
+      if (legacy) return NextResponse.json({ betId: legacy.id })
+    }
+
     // Course, hole and tier come from the signed PayFast payload the ITN
     // recorded, not from the request body — so they cannot be swapped for a
-    // bigger prize after paying for a smaller one.
+    // bigger prize after paying for a smaller one. If the ITN did not carry
+    // them, the payment cannot be matched to a hole and no bet is granted.
     const amountCheck = verifyPaymentAmount(payment.tier ?? '', payment.amount_cents)
     const paidTier = BET_TIERS.find(t => t.tier === payment.tier)
     if (!amountCheck.ok || !paidTier) {
       log.warn('bets.create.refused_tier_amount', { user_id: user.id, m_payment_id: paymentIntentId, tier: payment.tier, amount_cents: payment.amount_cents })
       return NextResponse.json(
         { error: 'Payment could not be verified', code: 'PAYMENT_NOT_VERIFIED' },
+        { status: 402 },
+      )
+    }
+    if (!payment.course_id || !payment.hole_id) {
+      await alertOps({ event: 'bets.create.ledger_missing_target', path: 'bets_create', summary: 'A complete payment has no course/hole in its signed payload; no bet granted. Needs manual reconciliation.', details: { user_id: user.id, m_payment_id: paymentIntentId } })
+      return NextResponse.json(
+        { error: 'Payment could not be matched to a hole. Please contact support.', code: 'PAYMENT_UNMATCHED' },
         { status: 402 },
       )
     }
@@ -125,8 +144,9 @@ export async function POST(request: NextRequest) {
       .from('bets')
       .insert({
         user_id:             user.id,
-        course_id:           payment.course_id ?? courseId,
-        hole_id:             payment.hole_id   ?? holeId,
+        course_id:           payment.course_id,
+        hole_id:             payment.hole_id,
+        pf_payment_id:       payment.pf_payment_id ?? null,
         tier:                paidTier.tier,
         stake_pence:         paidTier.stakeZAR * 100,
         potential_win_pence: paidTier.winZAR   * 100,
@@ -154,7 +174,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create bet' }, { status: 500 })
     }
 
-    // Increment total_attempts on profile — best-effort, fire-and-forget.
+    // Link the ledger row to the bet it produced (reconciliation), and bump
+    // the attempt counter. Both best-effort: the bet exists either way.
+    const { error: linkErr } = await admin
+      .from('payfast_payments')
+      .update({ bet_id: bet.id })
+      .eq('m_payment_id', paymentIntentId)
+    if (linkErr) log.warn('bets.create.ledger_link_failed', { bet_id: bet.id, m_payment_id: paymentIntentId, error: linkErr.message })
     try {
       await admin.rpc('increment_attempts', { user_id: user.id })
     } catch {

@@ -33,6 +33,7 @@ export async function GET() {
     const { data: courses, error } = await supabase
       .from('courses')
       .select('*, holes(id, hole_number, par, distance_metres)')
+      .eq('is_partner', true)
       .eq('holes.is_active', true)
       .order('name')
 

@@ -34,11 +34,12 @@ describe('guardEnvironment', () => {
     expect(() => guardEnvironment({ VERCEL_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: PROD_URL, PAYFAST_SANDBOX: 'false' })).not.toThrow()
   })
 
-  it('does not throw (yet) for production in sandbox, but reports it', async () => {
+  it('refuses production in sandbox mode, and reports it', async () => {
     const Sentry = await import('@sentry/nextjs')
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(() => guardEnvironment({ VERCEL_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: PROD_URL, PAYFAST_SANDBOX: 'true' })).not.toThrow()
-    expect(spy).toHaveBeenCalledWith(expect.stringMatching(/SANDBOX/))
+    for (const value of ['true', 'False', '0', undefined]) {
+      expect(() => guardEnvironment({ VERCEL_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: PROD_URL, PAYFAST_SANDBOX: value }), String(value)).toThrow(/SANDBOX/)
+    }
     expect(Sentry.captureMessage).toHaveBeenCalledWith(expect.stringMatching(/SANDBOX/), 'fatal')
     spy.mockRestore()
   })

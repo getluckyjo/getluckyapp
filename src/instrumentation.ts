@@ -44,10 +44,12 @@ export function guardEnvironment(env: Record<string, string | undefined> = proce
   }
 
   if (vercelEnv === 'production' && payfastSandbox) {
-    // Not fatal yet: the audit's Batch 3 makes this refuse to start. Until
-    // then it is impossible to miss in the logs and in Sentry.
-    const message = 'PRODUCTION is running PayFast in SANDBOX mode: sandbox "payments" would create real bets.'
+    // A sandbox "payment" costs nothing and would create a real bet with a
+    // real prize. The PayFast routes also refuse per request (503); this
+    // makes the deployment itself fail so it is impossible to miss.
+    const message = 'Refusing to start PRODUCTION with PayFast in SANDBOX mode: set PAYFAST_SANDBOX=false and live merchant credentials.'
     console.error(message)
     Sentry.captureMessage(message, 'fatal')
+    throw new Error(message)
   }
 }

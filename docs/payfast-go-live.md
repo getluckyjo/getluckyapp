@@ -85,7 +85,6 @@ Variables). They are currently **commented out / sandbox** in
 | `PAYFAST_MERCHANT_KEY` | your live merchant key |
 | `PAYFAST_PASSPHRASE` | the passphrase you set in Step 1 |
 | `PAYFAST_SANDBOX` | `false` |
-| `NEXT_PUBLIC_PAYFAST_SANDBOX` | `false` |
 | `NEXT_PUBLIC_SITE_URL` | `https://<your-production-domain>` (no trailing slash) |
 
 Also confirm these are set (used by the ITN handler to write the bet):
@@ -97,6 +96,13 @@ Also confirm these are set (used by the ITN handler to write the bet):
 
 > `PAYFAST_SANDBOX` defaults to `true` everywhere. It is only "off" when the value
 > is exactly the string `false`. Anything else (unset, `False`, `0`) stays in sandbox.
+>
+> Since Batch 3 a **production** deployment refuses to start in sandbox, refuses
+> to start without `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
+> `PAYFAST_PASSPHRASE` and `NEXT_PUBLIC_SITE_URL`, and the two PayFast routes
+> answer 503 (with an ops alert) if any of that is wrong at request time. There
+> are no built-in fallback credentials any more: previews need a PayFast
+> sandbox account of their own.
 
 ## Step 3 — Redeploy
 

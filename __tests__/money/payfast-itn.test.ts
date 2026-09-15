@@ -13,13 +13,15 @@ const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/supabase/admin', () => adminClient)
 
 const PASSPHRASE = 'unit-test-passphrase'
-const MERCHANT_ID = '10000100'
+const MERCHANT_ID = '10012345'
 
 async function loadRoute(env: Record<string, string> = {}) {
-  vi.resetModules()
+  vi.unstubAllEnvs()
   vi.stubEnv('PAYFAST_MERCHANT_ID', MERCHANT_ID)
+  vi.stubEnv('PAYFAST_MERCHANT_KEY', 'sandboxkey123')
   vi.stubEnv('PAYFAST_PASSPHRASE', PASSPHRASE)
   vi.stubEnv('PAYFAST_SANDBOX', 'true')
+  vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://preview.example.com')
   for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v)
   return import('@/app/api/payments/payfast/notify/route')
 }
@@ -58,7 +60,6 @@ let db: FakeDb
 let validateResponse: string
 
 beforeEach(() => {
-  vi.unstubAllEnvs()
   db = new FakeDb()
   adminClient.createAdminClient.mockReset()
   adminClient.createAdminClient.mockImplementation(() => createFakeClient(db))
@@ -97,6 +98,37 @@ describe('ITN authentication', () => {
     expect(db.rows('payfast_payments')).toHaveLength(0)
   })
 
+  it('fails closed when the validate endpoint hangs: aborts after the timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const { POST } = await loadRoute()
+      vi.stubGlobal('fetch', vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_, reject) => {
+        init.signal?.addEventListener('abort', () => reject(new Error('The operation was aborted')))
+      })))
+      const pending = POST(post(itn()) as never)
+      await vi.advanceTimersByTimeAsync(10_001)
+      const res = await pending
+      expect(res.status).toBe(400)
+      expect(db.rows('payfast_payments')).toHaveLength(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('503 when PayFast is misconfigured (no credentials), touching nothing', async () => {
+    const { POST } = await loadRoute()
+    vi.stubEnv('PAYFAST_MERCHANT_ID', '')
+    const res = await POST(post(itn()) as never)
+    expect(res.status).toBe(503)
+    expect(db.rows('payfast_payments')).toHaveLength(0)
+  })
+
+  it('503 in production while still in sandbox mode', async () => {
+    const { POST } = await loadRoute({ VERCEL_ENV: 'production' })
+    const res = await POST(post(itn()) as never)
+    expect(res.status).toBe(503)
+  })
+
   it('rejects a merchant id that is not ours', async () => {
     const { POST } = await loadRoute()
     const res = await POST(post(itn({ merchant_id: '99999999' })) as never)
@@ -104,7 +136,7 @@ describe('ITN authentication', () => {
     expect(db.rows('payfast_payments')).toHaveLength(0)
   })
 
-  it('in production, drops notifications that do not come from a PayFast address', async () => {
+  it('in live mode, drops notifications that do not come from a PayFast address', async () => {
     const { POST } = await loadRoute({ PAYFAST_SANDBOX: 'false' })
     const fromElsewhere = await POST(post(itn(), { 'x-forwarded-for': '203.0.113.10' }) as never)
     expect(fromElsewhere.status).toBe(403)
@@ -200,12 +232,24 @@ describe('ledger writes', () => {
     expect(res.status).toBe(500)
   })
 
-  it('swaps the bet reference to PayFast\'s id without touching a resolved status', async () => {
+  it('attaches PayFast\'s id to an existing bet without rewriting our reference or touching status', async () => {
     const { POST } = await loadRoute()
-    const [bet] = db.seed('bets', { user_id: USER_A.id, payment_intent_id: 'gl_tier_1_1700000000000', status: 'miss' })
+    const [bet] = db.seed('bets', { user_id: USER_A.id, payment_intent_id: 'gl_tier_1_1700000000000', pf_payment_id: null, status: 'miss' })
     await POST(post(itn()) as never)
-    expect(bet.payment_intent_id).toBe('1089250')
+    expect(bet.payment_intent_id).toBe('gl_tier_1_1700000000000')
+    expect(bet.pf_payment_id).toBe('1089250')
     expect(bet.status).toBe('miss')
+  })
+
+  it('answers 500 on an unexpected failure after validation so PayFast retries', async () => {
+    const { POST } = await loadRoute()
+    adminClient.createAdminClient.mockImplementation(() => {
+      const c = createFakeClient(db)
+      c.from = (() => { throw new TypeError('boom') }) as typeof c.from
+      return c
+    })
+    const res = await POST(post(itn()) as never)
+    expect(res.status).toBe(500)
   })
 
   it('ignores a COMPLETE payment with no m_payment_id rather than crashing', async () => {

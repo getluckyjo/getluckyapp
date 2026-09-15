@@ -126,7 +126,7 @@ describe('bet creation', () => {
   beforeEach(() => { asUser(); verifiedProfile() })
 
   it('creates an active bet from the ledger row, ignoring the body\'s tier/course/hole', async () => {
-    ledgerRow()
+    const ledger = ledgerRow()
     const res = await post(body({ tier: 'tier_5', courseId: 'course-from-body', holeId: 'hole-from-body' }))
     expect(res.status).toBe(200)
     const { betId } = await res.json()
@@ -140,8 +140,19 @@ describe('bet creation', () => {
       stake_pence: 5000,
       potential_win_pence: 2_500_000,
       payment_intent_id: 'gl_tier_1_1700000000000',
+      pf_payment_id: '1089250',
       status: 'active',
     })
+    // The ledger row now points at the bet it produced.
+    expect(ledger.bet_id).toBe(betId)
+  })
+
+  it('402 PAYMENT_UNMATCHED when the ledger has no course/hole: never falls back to the body', async () => {
+    ledgerRow({ course_id: null, hole_id: null })
+    const res = await post(body())
+    expect(res.status).toBe(402)
+    expect((await res.json()).code).toBe('PAYMENT_UNMATCHED')
+    expect(db.rows('bets')).toHaveLength(0)
   })
 
   it('opens a play window and records the player as the actor', async () => {
@@ -204,17 +215,19 @@ describe('bet creation', () => {
     expect(db.rows('bets')).toHaveLength(1)
   })
 
-  // Documented in AUDIT.md B.3. The ITN rewrites bets.payment_intent_id to
-  // PayFast's id after the bet exists; a retried /payment-return then fails to
-  // find the bet by the original reference and inserts a second one. This test
-  // asserts the correct behaviour and is marked `fails` until Batch 3 fixes it.
-  it.fails('does not create a second bet after the ITN has swapped the reference (Batch 3)', async () => {
+  it('one payment, one bet: a retried return after the ITN attached PayFast\'s id finds the same bet', async () => {
     ledgerRow()
     const first = await (await post(body())).json()
-    db.find('bets', b => b.id === first.betId)!.payment_intent_id = '1089250'
-
     const second = await (await post(body())).json()
     expect(second.betId).toBe(first.betId)
+    expect(db.rows('bets')).toHaveLength(1)
+  })
+
+  it('one payment, one bet: a legacy bet whose reference the old ITN swapped is still found by pf_payment_id', async () => {
+    ledgerRow()
+    const [legacy] = db.seed('bets', { user_id: USER_A.id, payment_intent_id: '1089250', pf_payment_id: '1089250', status: 'miss' })
+    const res = await post(body())
+    expect((await res.json()).betId).toBe(legacy.id)
     expect(db.rows('bets')).toHaveLength(1)
   })
 })
