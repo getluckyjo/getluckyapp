@@ -40,13 +40,9 @@ export function useMembership(): MembershipState {
   const [state, setState] = useState<MembershipState>({ ...NON_MEMBER, loading: true })
 
   useEffect(() => {
-    if (!user) {
-      setState({ ...NON_MEMBER, loading: false })
-      return
-    }
+    if (!user) return
 
     let cancelled = false
-    setState(s => ({ ...s, loading: true }))
 
     fetch('/api/membership/status')
       .then(res => (res.ok ? res.json() : NON_MEMBER))
@@ -60,5 +56,8 @@ export function useMembership(): MembershipState {
     return () => { cancelled = true }
   }, [user])
 
+  // Signed out: nothing to look up, so never "loading". Derived rather than
+  // set in the effect, which is what react-hooks/set-state-in-effect objects to.
+  if (!user) return { ...NON_MEMBER, loading: false }
   return state
 }

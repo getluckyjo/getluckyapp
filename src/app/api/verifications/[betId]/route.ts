@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { log } from '@/lib/observability/log'
+import { alertOps } from '@/lib/observability/alerts'
 
 // GET — poll verification status
 export async function GET(
@@ -44,7 +46,8 @@ export async function GET(
     }
 
     return NextResponse.json({ verification, source: 'database' })
-  } catch {
+  } catch (err) {
+    log.error('claim.status_unhandled', err, { path: 'claim' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }
@@ -89,11 +92,14 @@ export async function POST(
       })
 
     if (error) {
+      await alertOps({ event: 'claim.submit_failed', path: 'claim', summary: 'A hole-in-one claim could not be recorded.', details: { user_id: user.id, bet_id: betId }, err: error })
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
+    log.info('claim.submitted', { user_id: user.id, bet_id: betId, has_certificate: !!certificatePath, has_affidavit: !!affidavitPath })
     return NextResponse.json({ success: true, source: 'database' })
-  } catch {
+  } catch (err) {
+    log.error('claim.submit_unhandled', err, { path: 'claim' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

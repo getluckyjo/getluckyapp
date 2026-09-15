@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { BET_TIERS } from '@/lib/tiers'
 import { verifyPaymentAmount } from '@/lib/payments'
+import { log } from '@/lib/observability/log'
+import { alertOps } from '@/lib/observability/alerts'
 
 export async function POST(request: NextRequest) {
   try {
@@ -65,7 +67,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle()
 
     if (payErr) {
-      console.error('[bets/create] Payments lookup failed:', payErr.message)
+      await alertOps({ event: 'bets.create.ledger_lookup_failed', path: 'bets_create', summary: 'Could not read the payments ledger; paid golfers cannot get their bet.', details: { user_id: user.id, m_payment_id: paymentIntentId }, err: payErr })
       return NextResponse.json(
         { error: 'Could not verify payment', code: 'PAYMENT_LOOKUP_FAILED' },
         { status: 500 },
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (payment.status !== 'complete') {
-      console.error(`[bets/create] Payment ${paymentIntentId} is ${payment.status} — refusing`)
+      log.warn('bets.create.refused_payment_status', { user_id: user.id, m_payment_id: paymentIntentId, status: payment.status })
       return NextResponse.json(
         { error: 'Payment could not be verified', code: 'PAYMENT_NOT_VERIFIED' },
         { status: 402 },
@@ -91,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (payment.user_id !== user.id) {
-      console.error(`[bets/create] Payment ${paymentIntentId} belongs to another user — refusing`)
+      log.warn('bets.create.refused_wrong_user', { user_id: user.id, m_payment_id: paymentIntentId, ledger_user_id: payment.user_id })
       return NextResponse.json(
         { error: 'Payment could not be verified', code: 'PAYMENT_NOT_VERIFIED' },
         { status: 402 },
@@ -104,7 +106,7 @@ export async function POST(request: NextRequest) {
     const amountCheck = verifyPaymentAmount(payment.tier ?? '', payment.amount_cents)
     const paidTier = BET_TIERS.find(t => t.tier === payment.tier)
     if (!amountCheck.ok || !paidTier) {
-      console.error(`[bets/create] Payment ${paymentIntentId} tier/amount inconsistent — refusing`)
+      log.warn('bets.create.refused_tier_amount', { user_id: user.id, m_payment_id: paymentIntentId, tier: payment.tier, amount_cents: payment.amount_cents })
       return NextResponse.json(
         { error: 'Payment could not be verified', code: 'PAYMENT_NOT_VERIFIED' },
         { status: 402 },
@@ -138,7 +140,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ betId: duplicate.id })
         }
       }
-      console.error('[bets/create] DB insert failed:', error.message, error.code, error.details)
+      await alertOps({ event: 'bets.create.insert_failed', path: 'bets_create', summary: 'A verified payment could not be turned into a bet.', details: { user_id: user.id, m_payment_id: paymentIntentId, code: error.code, details: error.details }, err: error })
       return NextResponse.json({ error: 'Failed to create bet' }, { status: 500 })
     }
 
@@ -149,9 +151,10 @@ export async function POST(request: NextRequest) {
       // Safe to ignore if RPC fails
     }
 
+    log.info('bets.create.created', { user_id: user.id, bet_id: bet.id, m_payment_id: paymentIntentId, tier: paidTier.tier })
     return NextResponse.json({ betId: bet.id })
   } catch (err) {
-    console.error('[bets/create] Unexpected error:', err)
+    log.error('bets.create.unhandled', err, { path: 'bets_create' })
     const msg = err instanceof Error ? err.message : 'Internal error'
     return NextResponse.json({ error: msg }, { status: 500 })
   }

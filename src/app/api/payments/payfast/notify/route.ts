@@ -3,6 +3,8 @@ import type { NextRequest } from 'next/server'
 import crypto from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { parseAmountToCents, verifyPaymentAmount } from '@/lib/payments'
+import { log } from '@/lib/observability/log'
+import { alertOps } from '@/lib/observability/alerts'
 
 const MERCHANT_ID = (process.env.PAYFAST_MERCHANT_ID ?? '10000100').trim()
 const PASSPHRASE  = (process.env.PAYFAST_PASSPHRASE  ?? '').trim()
@@ -57,7 +59,7 @@ async function validateWithPayFast(rawBody: string): Promise<boolean> {
     const text = await res.text()
     return text.trim().toUpperCase() === 'VALID'
   } catch (err) {
-    console.error('[PayFast ITN] Validate endpoint error:', err)
+    log.error('payfast.itn.validate_unreachable', err, { path: 'payfast_itn' })
     // Fail closed on network issues — reject the ITN; PayFast will retry
     return false
   }
@@ -86,34 +88,37 @@ export async function POST(request: NextRequest) {
 
       const hasValidIp = allIps.some(ip => VALID_IPS.has(ip))
       if (!hasValidIp) {
-        console.error('[PayFast ITN] Rejected — no valid IP found in:', allIps)
+        log.warn('payfast.itn.rejected_ip', { ips: allIps })
         return new NextResponse('Forbidden', { status: 403 })
       }
     }
 
     // ── 2. Signature verification ─────────────────────────────────────────
     if (!verifySignature(params)) {
-      console.error('[PayFast ITN] Invalid signature')
+      log.warn('payfast.itn.invalid_signature', { m_payment_id: params.m_payment_id ?? null, pf_payment_id: params.pf_payment_id ?? null })
       return new NextResponse('Invalid signature', { status: 400 })
     }
 
     // ── 3. Phone home — ask PayFast if this ITN is genuine ────────────────
     const pfValid = await validateWithPayFast(rawBody)
     if (!pfValid) {
-      console.error('[PayFast ITN] PayFast validate returned INVALID')
+      log.warn('payfast.itn.validate_invalid', { m_payment_id: params.m_payment_id ?? null, pf_payment_id: params.pf_payment_id ?? null })
       return new NextResponse('Validation failed', { status: 400 })
     }
 
     // ── 4. Merchant ID check ──────────────────────────────────────────────
     if (params.merchant_id !== MERCHANT_ID) {
-      console.error('[PayFast ITN] Merchant ID mismatch')
+      log.warn('payfast.itn.merchant_mismatch', { merchant_id: params.merchant_id ?? null, m_payment_id: params.m_payment_id ?? null })
       return new NextResponse('Merchant mismatch', { status: 400 })
     }
 
     // ── 5. Log all payment statuses for visibility ─────────────────────────
-    console.log(
-      `[PayFast ITN] Status: ${params.payment_status} | m_payment_id: ${params.m_payment_id} | pf_payment_id: ${params.pf_payment_id} | amount: ${params.amount_gross}`,
-    )
+    log.info('payfast.itn.received', {
+      payment_status: params.payment_status ?? null,
+      m_payment_id: params.m_payment_id ?? null,
+      pf_payment_id: params.pf_payment_id ?? null,
+      amount_gross: params.amount_gross ?? null,
+    })
 
     // Only process COMPLETE payments for DB updates
     if (params.payment_status !== 'COMPLETE') {
@@ -135,14 +140,16 @@ export async function POST(request: NextRequest) {
     const check       = verifyPaymentAmount(tier, amountCents)
     const amountOk    = check.ok
     if (!check.ok) {
-      console.error(
-        `[PayFast ITN] ⚠️ ${check.reason.toUpperCase()} — ${mPaymentId} tier:${tier || '(none)'} ` +
-        `paid:${amountCents}c expected:${check.expectedCents ?? '(unknown tier)'}c. Not granting a bet.`,
-      )
+      await alertOps({
+        event: `payfast.itn.${check.reason}`,
+        path: 'payfast_itn',
+        summary: `Payment ${mPaymentId} paid ${amountCents}c against tier ${tier || '(none)'} (expected ${check.expectedCents ?? 'unknown'}c). No bet granted; ledger row marked amount_mismatch.`,
+        details: { m_payment_id: mPaymentId, pf_payment_id: pfPaymentId, user_id: userId, tier, amount_cents: amountCents, expected_cents: check.expectedCents },
+      })
     }
 
     if (!mPaymentId) {
-      console.error('[PayFast ITN] COMPLETE with no m_payment_id — cannot record')
+      await alertOps({ event: 'payfast.itn.missing_reference', path: 'payfast_itn', summary: 'COMPLETE payment arrived with no m_payment_id; it cannot be matched to a checkout.', details: { pf_payment_id: pfPaymentId, user_id: userId, amount_cents: amountCents } })
       return new NextResponse('OK', { status: 200 })
     }
 
@@ -171,14 +178,17 @@ export async function POST(request: NextRequest) {
       if (payErr) {
         // Fail loudly. PayFast will retry, and a missing ledger row means the
         // payer cannot get their bet — this must not pass silently.
-        console.error(
-          `[PayFast ITN] ❌ Could not record payment ${mPaymentId}: ${payErr.message}. ` +
-          'If this says the relation "payfast_payments" does not exist, migration 005 has not been applied.',
-        )
+        await alertOps({
+          event: 'payfast.itn.ledger_write_failed',
+          path: 'payfast_itn',
+          summary: `Could not record payment ${mPaymentId}. The payer has paid and cannot get a bet until this is fixed. PayFast will retry.`,
+          details: { m_payment_id: mPaymentId, pf_payment_id: pfPaymentId, user_id: userId, amount_cents: amountCents, hint: 'If the error says relation "payfast_payments" does not exist, migration 005 is not applied.' },
+          err: payErr,
+        })
         return new NextResponse('Ledger write failed', { status: 500 })
       }
 
-      console.log(`[PayFast ITN] ✅ Payment recorded — ${mPaymentId} → pf:${pfPaymentId} (${amountCents}c)`)
+      log.info('payfast.itn.recorded', { m_payment_id: mPaymentId, pf_payment_id: pfPaymentId, user_id: userId, tier, amount_cents: amountCents, status: amountOk ? 'complete' : 'amount_mismatch' })
 
       // ── 8. If the bet already exists, swap our reference for PayFast's so
       // payouts reconcile. Never writes `status`: a late ITN must not reset a
@@ -188,17 +198,17 @@ export async function POST(request: NextRequest) {
           .from('bets')
           .update({ payment_intent_id: pfPaymentId })
           .eq('payment_intent_id', mPaymentId)
-        if (betErr) console.warn('[PayFast ITN] Bet reference swap warning:', betErr.message)
+        if (betErr) log.warn('payfast.itn.reference_swap_failed', { m_payment_id: mPaymentId, pf_payment_id: pfPaymentId, error: betErr.message })
       }
     } catch (dbErr) {
-      console.error('[PayFast ITN] ❌ Admin client unavailable (SUPABASE_SERVICE_ROLE_KEY?):', dbErr)
+      await alertOps({ event: 'payfast.itn.admin_client_unavailable', path: 'payfast_itn', summary: 'The ITN could not open a service-role client (SUPABASE_SERVICE_ROLE_KEY missing?). No payments can be recorded.', details: { m_payment_id: mPaymentId }, err: dbErr })
       return new NextResponse('Ledger write failed', { status: 500 })
     }
 
     // Always return 200 so PayFast stops retrying
     return new NextResponse('OK', { status: 200 })
   } catch (err) {
-    console.error('[PayFast ITN] Unexpected error:', err)
+    await alertOps({ event: 'payfast.itn.unhandled', path: 'payfast_itn', summary: 'Unhandled error in the ITN handler; the notification was acknowledged with 200 and may be lost.', err })
     // Still 200 — returning 4xx/5xx causes PayFast to retry repeatedly
     return new NextResponse('OK', { status: 200 })
   }

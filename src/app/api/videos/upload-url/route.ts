@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { log } from '@/lib/observability/log'
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,6 +48,7 @@ export async function POST(request: NextRequest) {
       .createSignedUploadUrl(storagePath)
 
     if (error) {
+      log.error('claim.upload_url_failed', error, { path: 'claim', user_id: user.id, bet_id: betId })
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
@@ -55,7 +57,8 @@ export async function POST(request: NextRequest) {
       storagePath,
       source: 'supabase',
     })
-  } catch {
+  } catch (err) {
+    log.error('claim.upload_url_unhandled', err, { path: 'claim' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

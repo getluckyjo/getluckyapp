@@ -100,13 +100,13 @@ export async function GET() {
     // Fetch related bet data for recent verifications
     const rvBetIds = [...new Set(rverifs.map((v: { bet_id: string }) => v.bet_id).filter(Boolean))]
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let rvBetsMap: Record<string, any> = {}
+    const rvBetsMap: Record<string, any> = {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let rvCoursesMap: Record<string, any> = {}
+    const rvCoursesMap: Record<string, any> = {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let rvHolesMap: Record<string, any> = {}
+    const rvHolesMap: Record<string, any> = {}
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let rvProfilesMap: Record<string, any> = {}
+    const rvProfilesMap: Record<string, any> = {}
 
     if (rvBetIds.length > 0) {
       const { data: rvBetsData } = await adminClient

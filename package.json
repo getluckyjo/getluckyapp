@@ -7,11 +7,17 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
+    "test": "vitest run --exclude \"__tests__/staging/**\"",
     "test:watch": "vitest",
-    "check:design": "node scripts/check-design-package.mjs"
+    "check:design": "node scripts/check-design-package.mjs",
+    "test:staging": "vitest run __tests__/staging",
+    "typecheck": "tsc --noEmit",
+    "staging:bootstrap": "node scripts/staging/bootstrap.mjs",
+    "staging:seed": "tsx scripts/staging/seed.mts",
+    "staging:verify-restore": "node scripts/staging/verify-restore.mjs"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.74.0",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.99.0",
     "clsx": "^2.1.1",
@@ -32,7 +38,9 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "jsdom": "^28.1.0",
+    "pg": "^8.23.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vitest": "^4.0.18"
   }

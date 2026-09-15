@@ -22,8 +22,6 @@ export const MOCK_ADMIN_USERS: AdminUserRecord[] = [
 ]
 
 // ── Mock Bets ──
-const courses = ['Leopard Creek', 'Fancourt', 'Pearl Valley', 'Steenberg', 'Sun City', 'Zimbali', 'Serengeti Estates', 'Atlantic Beach', 'Boschenmeer', 'Erinvale']
-
 export const MOCK_ADMIN_BETS: AdminBetRecord[] = [
   { id: 'b1', userId: 'u1', userName: 'Thabo Molefe', tier: 'tier_2', stakeCents: 10000, potentialWinCents: 6000000, status: 'active', declaredResult: null, declaredAt: null, videoUrl: null, paymentIntentId: 'pf_001', courseName: 'Leopard Creek', courseId: 'c1', holeNumber: 4, holeId: 'h1', createdAt: '2026-03-10T09:30:00Z' },
   { id: 'b2', userId: 'u2', userName: 'Lerato Nkosi', tier: 'tier_3', stakeCents: 25000, potentialWinCents: 20000000, status: 'claimed', declaredResult: 'win', declaredAt: '2026-03-09T14:22:00Z', videoUrl: 'u2/b2/shot.webm', paymentIntentId: 'pf_002', courseName: 'Fancourt', courseId: 'c2', holeNumber: 7, holeId: 'h2', createdAt: '2026-03-09T12:00:00Z' },

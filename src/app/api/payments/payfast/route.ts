@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@/lib/supabase/server'
+import { log } from '@/lib/observability/log'
 
 // ---------------------------------------------------------------------------
 // Config — sandbox by default; set PAYFAST_SANDBOX=false for production
@@ -133,7 +134,7 @@ export async function POST(request: NextRequest) {
 
     const signature = generateSignature(data, PASSPHRASE)
 
-    console.log('[PayFast] Redirect checkout | sandbox:', SANDBOX, '| amount:', tierData.amount)
+    log.info('payfast.checkout.created', { user_id: user.id, tier, amount: tierData.amount, course_id: String(courseId), hole_id: String(holeId), sandbox: SANDBOX, m_payment_id: mPaymentId })
 
     // Return the signed form fields — client will build a hidden form and submit
     return NextResponse.json({
@@ -143,7 +144,7 @@ export async function POST(request: NextRequest) {
       sandbox:      SANDBOX,
     })
   } catch (err) {
-    console.error('[PayFast] Payment creation failed:', err)
+    log.error('payfast.checkout.failed', err, { path: 'payfast_checkout' })
     return NextResponse.json({ error: 'Payment creation failed' }, { status: 500 })
   }
 }

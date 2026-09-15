@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { log } from '@/lib/observability/log'
 
 /**
  * Where a sign-in is allowed to land. Anything else falls back to /welcome so a
@@ -50,7 +51,7 @@ export async function finishSignIn(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: user.email, name }),
-    }).catch(err => console.error('[finish-sign-in] Welcome email failed:', err))
+    }).catch(err => log.error('auth.welcome_email_failed', err, { path: 'auth', user_id: user.id }))
   }
 
   if (!profile?.age_verified_at) {
