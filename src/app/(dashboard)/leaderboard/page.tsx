@@ -6,6 +6,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
+import { getInitials, formatRandFromCents as formatRand } from '@/lib/format'
 
 type Tab = 'biggest' | 'recent'
 
@@ -17,16 +18,6 @@ interface Winner {
   stakeCents: number
   course: string
   paidAt: string
-}
-
-function getInitials(name: string | null | undefined, email: string | null | undefined) {
-  if (name) return name.split(' ').map((p: string) => p[0]).join('').toUpperCase().slice(0, 2)
-  if (email) return email[0].toUpperCase()
-  return 'GL'
-}
-
-function formatRand(cents: number) {
-  return `R${Math.round(cents / 100).toLocaleString('en-ZA').replace(/,/g, ' ')}`
 }
 
 function formatDate(iso: string) {

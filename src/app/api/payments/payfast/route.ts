@@ -8,6 +8,9 @@ import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { BET_TIERS } from '@/lib/tiers'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
 
 // ---------------------------------------------------------------------------
 // PayFast-mandated parameter order for signature generation
@@ -39,7 +42,12 @@ function generateSignature(data: Record<string, string>, passphrase: string): st
   return crypto.createHash('md5').update(sigInput).digest('hex')
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const Body = z.object({
+  tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]),
+  courseId: uuid,
+  holeId: uuid,
+  userName: z.string().max(100).default(''),
+})
 
 // ---------------------------------------------------------------------------
 // POST /api/payments/payfast
@@ -67,21 +75,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
     await assertNotSuspended(supabase, user.id)
+    const limited = await enforceRateLimit(RULES.checkout, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
-    const body = await request.json().catch(() => ({})) as { tier?: unknown; userName?: unknown; courseId?: unknown; holeId?: unknown }
-    const tier = typeof body.tier === 'string' ? body.tier : ''
-    const courseId = typeof body.courseId === 'string' ? body.courseId : ''
-    const holeId = typeof body.holeId === 'string' ? body.holeId : ''
-    const userName = typeof body.userName === 'string' ? body.userName : ''
-
-    if (!UUID_RE.test(courseId) || !UUID_RE.test(holeId)) {
-      return NextResponse.json({ error: 'Missing course or hole' }, { status: 400 })
-    }
-
-    const tierData = BET_TIERS.find(t => t.tier === tier)
-    if (!tierData) {
-      return NextResponse.json({ error: 'Invalid tier' }, { status: 400 })
-    }
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { tier, courseId, holeId, userName } = body.data
+    const tierData = BET_TIERS.find(t => t.tier === tier)!
 
     // ── The target must be a real, active par-3 hole at a partner course ──
     const { data: hole } = await supabase
@@ -151,7 +151,6 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const known = claimErrorResponse(err)
     if (known) return known
-    log.error('payfast.checkout.failed', err, { path: 'payfast_checkout' })
-    return NextResponse.json({ error: 'Payment creation failed' }, { status: 500 })
+    return apiError('payfast.checkout.failed', err, { path: 'payfast_checkout', message: 'Could not start the payment. Please try again.' })
   }
 }

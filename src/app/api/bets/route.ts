@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { z } from 'zod'
+import { apiError, parseQuery } from '@/lib/api/http'
+
+const Query = z.object({ limit: z.coerce.number().int().min(1).max(500).default(20) })
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const parsed = parseInt(searchParams.get('limit') ?? '20', 10)
-    const limit = Math.min(Number.isNaN(parsed) ? 20 : Math.max(1, parsed), 500)
+    const q = parseQuery(request.url, Query)
+    if (!q.ok) return q.response
+    const { limit } = q.data
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -41,13 +45,9 @@ export async function GET(request: Request) {
       .order('created_at', { ascending: false })
       .limit(limit)
 
-    if (error) {
-      console.error('[bets] Query failed:', error.message)
-      return NextResponse.json({ bets: [], error: 'Failed to load bets' }, { status: 500 })
-    }
-
+    if (error) throw error
     return NextResponse.json({ bets: bets ?? [] })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('bets.list_failed', err, { message: 'Could not load your bets.' })
   }
 }

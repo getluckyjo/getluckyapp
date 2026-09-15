@@ -4,6 +4,17 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { assertOpen, claimErrorResponse } from '@/lib/claims/state-machine'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
+import { CaptureSchema, captureColumns } from '@/lib/claims/capture'
+
+const Body = z.object({
+  betId: uuid,
+  mimeType: z.string().max(100).default('video/webm'),
+  /** What the recorder reported: timestamps, duration, position. Optional; stored for the reviewer. */
+  capture: CaptureSchema.optional(),
+})
 
 /**
  * POST /api/videos/upload-url
@@ -17,11 +28,6 @@ import { assertOpen, claimErrorResponse } from '@/lib/claims/state-machine'
  */
 export async function POST(request: NextRequest) {
   try {
-    const { betId, mimeType = 'video/webm' } = await request.json().catch(() => ({})) as { betId?: unknown; mimeType?: unknown }
-
-    if (typeof betId !== 'string' || !betId) {
-      return NextResponse.json({ error: 'betId required' }, { status: 400 })
-    }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -29,11 +35,16 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.upload, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { betId, mimeType, capture } = body.data
 
     // Verify bet belongs to the current user (prevent IDOR)
     const { data: bet } = await supabase
       .from('bets')
-      .select('id, status, expires_at')
+      .select('id, status, expires_at, course_id, video_sha256')
       .eq('id', betId)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -44,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     assertOpen(bet)
 
-    const ext = typeof mimeType === 'string' && mimeType.includes('mp4') ? 'mp4' : 'webm'
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
     const storagePath = `${user.id}/${betId}/shot.${ext}`
 
     const { data, error } = await supabase.storage
@@ -52,13 +63,20 @@ export async function POST(request: NextRequest) {
       .createSignedUploadUrl(storagePath)
 
     if (error) {
-      log.error('claim.upload_url_failed', error, { path: 'claim', user_id: user.id, bet_id: betId })
-      return NextResponse.json({ error: error.message }, { status: 500 })
+      return apiError('claim.upload_url_failed', error, { path: 'claim', fields: { user_id: user.id, bet_id: betId }, message: 'Could not prepare the upload.' })
     }
+
+    // The capture report is recorded once, with the first upload slot, and
+    // never after the footage is sealed: the attestation belongs to the bytes
+    // that were hashed, not to a later retry.
+    const { data: course } = await supabase.from('courses').select('lat, lng').eq('id', bet.course_id).maybeSingle()
+    const attestation = bet.video_sha256
+      ? {}
+      : captureColumns(capture, { course: course ?? null, userAgent: request.headers.get('user-agent') })
 
     const { error: linkErr } = await createAdminClient()
       .from('bets')
-      .update({ video_url: storagePath, updated_by: user.id })
+      .update({ video_url: storagePath, updated_by: user.id, ...attestation })
       .eq('id', betId)
       .eq('user_id', user.id)
     if (linkErr) {
@@ -74,7 +92,6 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const known = claimErrorResponse(err)
     if (known) return known
-    log.error('claim.upload_url_unhandled', err, { path: 'claim' })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return apiError('claim.upload_url_unhandled', err, { path: 'claim' })
   }
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode } from 'react'
+import type { CaptureInput } from '@/lib/claims/capture'
 
 // Re-export shared tier definitions so existing client imports keep working
 export { BET_TIERS } from '@/lib/tiers'
@@ -32,7 +33,6 @@ interface BetSession {
   paymentIntentId: string | null
   betId: string | null
   videoBlob: Blob | null
-  videoUploadPath: string | null
   declaredResult: 'hole_in_one' | 'miss' | null
   uploadStatus: UploadStatus
   uploadProgress: number // 0–100
@@ -44,10 +44,9 @@ interface BetContextType extends BetSession {
   confirmPayment: (intentId: string) => void
   setBetId: (id: string) => void
   setVideoBlob: (blob: Blob) => void
-  setVideoUploadPath: (path: string) => void
   declareResult: (result: 'hole_in_one' | 'miss') => void
   resetSession: () => void
-  startBackgroundUpload: (blob: Blob, mimeType: string, betId: string) => void
+  startBackgroundUpload: (blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) => void
 }
 
 const defaultSession: BetSession = {
@@ -57,7 +56,6 @@ const defaultSession: BetSession = {
   paymentIntentId: null,
   betId: null,
   videoBlob: null,
-  videoUploadPath: null,
   declaredResult: null,
   uploadStatus: 'idle',
   uploadProgress: 0,
@@ -83,9 +81,6 @@ export function BetProvider({ children }: { children: ReactNode }) {
   function setVideoBlob(blob: Blob) {
     setSession(s => ({ ...s, videoBlob: blob }))
   }
-  function setVideoUploadPath(path: string) {
-    setSession(s => ({ ...s, videoUploadPath: path }))
-  }
   function declareResult(result: 'hole_in_one' | 'miss') {
     setSession(s => ({ ...s, declaredResult: result }))
   }
@@ -93,7 +88,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
     setSession(defaultSession)
   }
 
-  function startBackgroundUpload(blob: Blob, mimeType: string, betId: string) {
+  function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) {
     setSession(s => ({ ...s, uploadStatus: 'uploading', uploadProgress: 0 }))
 
     // Fire-and-forget — upload runs in the background
@@ -102,7 +97,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
         const urlRes = await fetch('/api/videos/upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ betId, mimeType }),
+          body: JSON.stringify({ betId, mimeType, ...(capture ? { capture } : {}) }),
         })
         const { signedUrl } = await urlRes.json()
 
@@ -153,7 +148,6 @@ export function BetProvider({ children }: { children: ReactNode }) {
         confirmPayment,
         setBetId,
         setVideoBlob,
-        setVideoUploadPath,
         declareResult,
         resetSession,
         startBackgroundUpload,

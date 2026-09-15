@@ -1,100 +1,73 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { MOCK_ADMIN_USERS } from '@/lib/admin-mock-data'
+import { apiError, parseQuery, pagination, boolString, searchTerm } from '@/lib/api/http'
+import { orSearchTerm } from '@/lib/admin/data'
 import type { AdminUserRecord, PaginatedResponse } from '@/types/admin'
 
+const Query = pagination.extend({
+  search: searchTerm.optional(),
+  suspended: boolString.optional(),
+})
+
+interface ProfileRow { id: string; name: string | null; email: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; suspended_reason: string | null; created_at: string }
+interface BetTotals { user_id: string; stake_pence: number | null; potential_win_pence: number | null; status: string }
+
 export async function GET(request: Request) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const q = parseQuery(request.url, Query)
+  if (!q.ok) return q.response
+  const { search, suspended, page, limit } = q.data
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-
-    const { searchParams } = new URL(request.url)
-    const search = searchParams.get('search')
-    const suspended = searchParams.get('suspended')
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-    const limit = Math.min(50, parseInt(searchParams.get('limit') ?? '20', 10))
-
-    if (auth.isMock || !auth.adminClient) {
-      let filtered = [...MOCK_ADMIN_USERS]
-      if (search) {
-        const s = search.toLowerCase()
-        filtered = filtered.filter(u =>
-          (u.name?.toLowerCase() || '').includes(s) || u.email.toLowerCase().includes(s)
-        )
-      }
-      if (suspended === 'true') filtered = filtered.filter(u => u.suspendedAt !== null)
-      if (suspended === 'false') filtered = filtered.filter(u => u.suspendedAt === null)
-
-      const total = filtered.length
-      const start = (page - 1) * limit
-      const data = filtered.slice(start, start + limit)
-
-      const resp: PaginatedResponse<AdminUserRecord> = { data, total, page, limit, totalPages: Math.ceil(total / limit) }
-      return NextResponse.json(resp)
+    let query = auth.adminClient.from('profiles').select('id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, suspended_reason, created_at', { count: 'exact' })
+    if (suspended === true) query = query.not('suspended_at', 'is', null)
+    if (suspended === false) query = query.is('suspended_at', null)
+    if (search) {
+      // In the query, so the count and the pages are right.
+      const s = orSearchTerm(search)
+      query = query.or(`name.ilike.*${s}*,email.ilike.*${s}*`)
     }
-
-    const adminClient = auth.adminClient
-    let query = adminClient
-      .from('profiles')
-      .select('*', { count: 'exact' })
-
-    if (suspended === 'true') query = query.not('suspended_at', 'is', null)
-    if (suspended === 'false') query = query.is('suspended_at', null)
-
     query = query.order('created_at', { ascending: false })
-
     const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
 
-    const { data: profiles, count, error } = await query
+    const { data, count, error } = await query
+    if (error) throw error
+    const profiles = (data ?? []) as ProfileRow[]
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    // Get bet aggregates for each user
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data: AdminUserRecord[] = await Promise.all((profiles ?? []).map(async (p: any) => {
-      const { data: userBets } = await adminClient
-        .from('bets')
-        .select('stake_pence, potential_win_pence, status')
-        .eq('user_id', p.id)
-
-      const bets = userBets ?? []
-      const totalStaked = bets.reduce((sum, b) => sum + (b.stake_pence ?? 0), 0)
-      const totalWon = bets
-        .filter(b => b.status === 'paid' || b.status === 'verified')
-        .reduce((sum, b) => sum + (b.potential_win_pence ?? 0), 0)
-
-      return {
-        id: p.id,
-        name: p.name,
-        email: '', // Will be filled if auth.users available
-        handicap: p.handicap,
-        totalAttempts: p.total_attempts ?? 0,
-        totalStaked,
-        totalWon,
-        paymentMethod: p.payment_method,
-        isAdmin: p.is_admin ?? false,
-        suspendedAt: p.suspended_at,
-        suspendedReason: p.suspended_reason,
-        createdAt: p.created_at,
-      }
-    }))
-
-    // Post-filter by search
-    let result = data
-    if (search) {
-      const s = search.toLowerCase()
-      result = data.filter(u => (u.name?.toLowerCase() || '').includes(s) || u.email.toLowerCase().includes(s))
+    // One query for the page's bet totals instead of one per user.
+    const ids = profiles.map(p => p.id)
+    const { data: betsRaw } = ids.length
+      ? await auth.adminClient.from('bets').select('user_id, stake_pence, potential_win_pence, status').in('user_id', ids)
+      : { data: [] as BetTotals[] }
+    const totals = new Map<string, { staked: number; won: number }>()
+    for (const b of (betsRaw ?? []) as BetTotals[]) {
+      const t = totals.get(b.user_id) ?? { staked: 0, won: 0 }
+      t.staked += b.stake_pence ?? 0
+      if (b.status === 'paid' || b.status === 'verified') t.won += b.potential_win_pence ?? 0
+      totals.set(b.user_id, t)
     }
 
-    return NextResponse.json({
-      data: result,
-      total: count ?? result.length,
-      page,
-      limit,
-      totalPages: Math.ceil((count ?? result.length) / limit),
-    })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    const records: AdminUserRecord[] = profiles.map(p => ({
+      id: p.id,
+      name: p.name,
+      email: p.email ?? '',
+      handicap: p.handicap,
+      totalAttempts: p.total_attempts ?? 0,
+      totalStaked: totals.get(p.id)?.staked ?? 0,
+      totalWon: totals.get(p.id)?.won ?? 0,
+      paymentMethod: p.payment_method,
+      isAdmin: p.is_admin ?? false,
+      suspendedAt: p.suspended_at,
+      suspendedReason: p.suspended_reason,
+      createdAt: p.created_at,
+    }))
+
+    const total = count ?? records.length
+    const resp: PaginatedResponse<AdminUserRecord> = { data: records, total, page, limit, totalPages: Math.ceil(total / limit) }
+    return NextResponse.json(resp)
+  } catch (err) {
+    return apiError('admin.users.list_failed', err, { path: 'admin_review' })
   }
 }

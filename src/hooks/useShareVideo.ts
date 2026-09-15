@@ -10,7 +10,7 @@ interface ShareVideoOptions {
 }
 
 export function useShareVideo(options: ShareVideoOptions) {
-  const { videoBlob, title, text, url = 'https://www.getluckygolf.co.za' } = options
+  const { videoBlob, title, text, url = typeof window !== 'undefined' ? window.location.origin : 'https://www.getluckyholeinone.com' } = options
   const [isSharing, setIsSharing] = useState(false)
 
   const hasVideo = Boolean(videoBlob && videoBlob.size > 0)

@@ -55,12 +55,14 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('gates', () => {
-  it('400 on missing fields, before touching the database', async () => {
+  it('400 INVALID_INPUT on missing or malformed fields, before touching the database', async () => {
     asUser()
     for (const missing of ['courseId', 'holeId', 'tier', 'paymentIntentId']) {
       const res = await post(body({ [missing]: undefined }))
       expect(res.status, `missing ${missing}`).toBe(400)
+      expect((await res.json()).code).toBe('INVALID_INPUT')
     }
+    expect((await post(body({ courseId: 'not-a-uuid' }))).status).toBe(400)
   })
 
   it('400 on an unknown tier', async () => {
@@ -127,7 +129,7 @@ describe('bet creation', () => {
 
   it('creates an active bet from the ledger row, ignoring the body\'s tier/course/hole', async () => {
     const ledger = ledgerRow()
-    const res = await post(body({ tier: 'tier_5', courseId: 'course-from-body', holeId: 'hole-from-body' }))
+    const res = await post(body({ tier: 'tier_5', courseId: '99999999-9999-4999-8999-999999999999', holeId: '88888888-8888-4888-8888-888888888888' }))
     expect(res.status).toBe(200)
     const { betId } = await res.json()
 

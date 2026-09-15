@@ -241,5 +241,6 @@ row counts at the bottom of that runbook.
   warning in the CI log is a pointer to Stage 3.
 - Sentry and the staging project need the dashboard steps above; the code
   degrades to "nothing happens" without them rather than failing.
-- The in-memory rate limiter is still in place and still ineffective
-  (AUDIT B.8); Batch 4 replaces it.
+- ~~The in-memory rate limiter is still in place and still ineffective
+  (AUDIT B.8); Batch 4 replaces it.~~ Done in Batch 4: Postgres-backed
+  limiter in `src/lib/rate-limit.ts`.

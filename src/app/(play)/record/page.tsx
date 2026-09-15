@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import { GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
+import type { CaptureInput } from '@/lib/claims/capture'
 
 const MAX_SECONDS = 120 // 2 minutes max
 
@@ -23,6 +24,11 @@ export default function RecordPage() {
   const chunksRef = useRef<Blob[]>([])
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const mimeTypeRef = useRef<string>('video/webm')
+  // What the recorder can attest about this capture: when it started and
+  // stopped, and where the phone was. Stored on the bet for the reviewer.
+  // Location is asked for once, when recording starts; "don't allow" is
+  // fine and simply leaves it blank.
+  const captureRef = useRef<{ startedAt: string; position?: { lat: number; lng: number; accuracyM: number } } | null>(null)
 
   // Guard: require course + hole selection (must come through choose-stake flow)
   useEffect(() => {
@@ -74,7 +80,8 @@ export default function RecordPage() {
         try {
           const status = await navigator.permissions.query({ name: 'camera' as PermissionName })
           setPermissionState(status.state === 'denied' ? 'denied' : 'prompt')
-        } catch {
+        } catch (err) {
+          console.warn('[record] camera permission query failed:', err)
           // permissions.query not supported — assume prompt can be retried
           setPermissionState('denied')
         }
@@ -104,7 +111,8 @@ export default function RecordPage() {
           return
         }
         // 'granted' or 'prompt' — proceed to request
-      } catch {
+      } catch (err) {
+        console.warn('[record] recorder setup failed:', err)
         // permissions API not supported — just request directly
       }
 
@@ -122,9 +130,32 @@ export default function RecordPage() {
 
   const handleRecordingComplete = useCallback((blob: Blob, mimeType: string) => {
     setVideoBlob(blob)
-    startBackgroundUpload(blob, mimeType, betId ?? 'pending') // runs in background — doesn't block
+    const started = captureRef.current
+    const endedAt = new Date().toISOString()
+    const capture: CaptureInput | undefined = started
+      ? {
+          startedAt: started.startedAt,
+          endedAt,
+          durationMs: Math.max(0, Date.parse(endedAt) - Date.parse(started.startedAt)),
+          ...(started.position ? { lat: started.position.lat, lng: started.position.lng, accuracyM: started.position.accuracyM } : {}),
+        }
+      : undefined
+    startBackgroundUpload(blob, mimeType, betId ?? 'pending', capture) // runs in background — doesn't block
     router.push('/confirm')
   }, [setVideoBlob, startBackgroundUpload, betId, router])
+
+  function requestPosition() {
+    if (!navigator.geolocation) return
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        if (captureRef.current) {
+          captureRef.current.position = { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracyM: pos.coords.accuracy }
+        }
+      },
+      () => { /* declined or unavailable: the reviewer sees no location */ },
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 60_000 },
+    )
+  }
 
   function startRecording() {
     if (!streamRef.current) return // No camera — permission overlay handles this
@@ -137,6 +168,8 @@ export default function RecordPage() {
 
     mimeTypeRef.current = mimeType
     chunksRef.current = []
+    captureRef.current = { startedAt: new Date().toISOString() }
+    requestPosition()
 
     const mr = new MediaRecorder(streamRef.current, {
       mimeType,

@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
+import { getInitials } from '@/lib/format'
 
 /**
  * Burger-menu drawer. The tab bar carries the five main surfaces; this holds
@@ -25,12 +26,6 @@ const SECONDARY = [
   { label: 'Privacy policy',   path: '/privacy' },
   { label: 'Responsible play', path: '/responsible-play' },
 ]
-
-function getInitials(name: string | null | undefined, email: string | null | undefined) {
-  if (name) return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
-  if (email) return email[0].toUpperCase()
-  return 'GL'
-}
 
 export default function AppMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter()

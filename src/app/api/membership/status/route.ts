@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { RULES, enforceRateLimit } from '@/lib/rate-limit'
+import { log } from '@/lib/observability/log'
 
 // ---------------------------------------------------------------------------
 // GET /api/membership/status
@@ -34,12 +36,15 @@ export async function GET() {
     if (!user?.email) {
       return NextResponse.json(notMember)
     }
+    const limited = await enforceRateLimit(RULES.membership, { userId: user.id })
+    if (limited) return limited
 
     let admin
     try {
       admin = createAdminClient()
-    } catch {
-      // Service role not configured — fail safe to non-member (never error the UI).
+    } catch (err) {
+      // Service role not configured — fail safe to non-member (never error the UI), but say so.
+      log.error('membership.admin_client_unavailable', err)
       return NextResponse.json(notMember)
     }
 
@@ -68,7 +73,7 @@ export async function GET() {
       foundingMember: !!member.is_founding_member,
     })
   } catch (err) {
-    console.warn('[Membership Status] lookup failed:', err)
+    log.error('membership.lookup_failed', err)
     return NextResponse.json(notMember)
   }
 }

@@ -41,6 +41,8 @@ export interface VerificationQueueItem {
   reviewedBy: string | null
   verifiedAt: string | null
   payoutInitiatedAt: string | null
+  riskScore: number
+  riskFlagCount: number
 }
 
 export interface ClaimEvent {
@@ -53,10 +55,53 @@ export interface ClaimEvent {
   created_at: string
 }
 
+import type { RiskFlag } from '@/lib/risk/labels'
+export type { RiskFlag }
+
+export interface CaptureAttestation {
+  startedAt: string | null
+  endedAt: string | null
+  durationMs: number | null
+  lat: number | null
+  lng: number | null
+  accuracyM: number | null
+  /** Metres from the reported position to the course; null when either is unknown. */
+  distanceM: number | null
+  userAgent: string | null
+  /** Seconds between recording end and the server sealing the footage; null when either is unknown. */
+  uploadLagS: number | null
+}
+
+export interface ClaimWitness {
+  id: string
+  role: 'witness' | 'club_official'
+  name: string
+  email: string
+  /** Named by the claimant, or added from the course's standing contacts. */
+  source: 'claimant' | 'course'
+  requestedAt: string | null
+  requestCount: number
+  respondedAt: string | null
+  response: 'confirmed' | 'denied' | null
+  responseNote: string | null
+  linkExpired: boolean
+  createdAt: string
+}
+
+export interface DocumentSealInfo { sha256: string | null; bytes: number | null }
+
 export interface VerificationDetail extends VerificationQueueItem {
   videoSignedUrl: string | null
   certificateSignedUrl: string | null
   affidavitSignedUrl: string | null
+  capture: CaptureAttestation
+  certificateSeal: DocumentSealInfo
+  affidavitSeal: DocumentSealInfo
+  witnesses: ClaimWitness[]
+  riskScore: number
+  riskFlags: RiskFlag[]
+  reviewChecklist: Record<string, unknown> | null
+  payoutReference: string | null
   userBetHistory: AdminBetRecord[]
   userTotalAttempts: number
   betStatus: BetStatus | null

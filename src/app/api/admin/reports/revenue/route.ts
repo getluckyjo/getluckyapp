@@ -1,86 +1,35 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { MOCK_ADMIN_BETS } from '@/lib/admin-mock-data'
+import { apiError } from '@/lib/api/http'
+import { adminTotals } from '@/lib/admin/data'
 import { TIER_LABELS } from '@/lib/tiers'
 
+interface TierRow { tier: string; bet_count: number; revenue_cents: number; payout_cents: number }
+interface CourseRow { course_id: string; course_name: string; bet_count: number; revenue_cents: number }
+
 export async function GET() {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const admin = auth.adminClient
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
+    const [totals, tierRes, courseRes] = await Promise.all([
+      adminTotals(admin),
+      admin.rpc('admin_revenue_by_tier'),
+      admin.rpc('admin_revenue_by_course'),
+    ])
+    if (tierRes.error) throw tierRes.error
+    if (courseRes.error) throw courseRes.error
 
-    if (auth.isMock || !auth.adminClient) {
-      const bets = MOCK_ADMIN_BETS
-
-      // Revenue by tier
-      const byTier = Object.entries(TIER_LABELS).map(([tier, label]) => {
-        const tierBets = bets.filter(b => b.tier === tier)
-        return {
-          tier,
-          label,
-          count: tierBets.length,
-          revenue: tierBets.reduce((s, b) => s + b.stakeCents, 0),
-          payouts: tierBets.filter(b => b.status === 'paid' || b.status === 'verified').reduce((s, b) => s + b.potentialWinCents, 0),
-        }
-      })
-
-      // Revenue by course
-      const courseMap = new Map<string, { name: string; revenue: number; count: number }>()
-      bets.forEach(b => {
-        const existing = courseMap.get(b.courseName) || { name: b.courseName, revenue: 0, count: 0 }
-        existing.revenue += b.stakeCents
-        existing.count += 1
-        courseMap.set(b.courseName, existing)
-      })
-      const byCourse = Array.from(courseMap.values()).sort((a, b) => b.revenue - a.revenue)
-
-      const totalRevenue = bets.reduce((s, b) => s + b.stakeCents, 0)
-      const totalPayouts = bets.filter(b => b.status === 'paid' || b.status === 'verified').reduce((s, b) => s + b.potentialWinCents, 0)
-
-      return NextResponse.json({
-        totalRevenue,
-        totalPayouts,
-        netProfit: totalRevenue - totalPayouts,
-        margin: totalRevenue > 0 ? ((totalRevenue - totalPayouts) / totalRevenue * 100).toFixed(1) : '0',
-        byTier,
-        byCourse,
-        totalBets: bets.length,
-      })
-    }
-
-    const adminClient = auth.adminClient
-
-    const { data: allBets } = await adminClient
-      .from('bets')
-      .select('tier, stake_pence, potential_win_pence, status, course_id, courses ( name )')
-
-    const bets = allBets ?? []
-    const totalRevenue = bets.reduce((s, b) => s + (b.stake_pence ?? 0), 0)
-    const totalPayouts = bets
-      .filter(b => b.status === 'paid')
-      .reduce((s, b) => s + (b.potential_win_pence ?? 0), 0)
-
+    const tierRows = new Map(((tierRes.data ?? []) as TierRow[]).map(r => [r.tier, r]))
     const byTier = Object.entries(TIER_LABELS).map(([tier, label]) => {
-      const tierBets = bets.filter(b => b.tier === tier)
-      return {
-        tier,
-        label,
-        count: tierBets.length,
-        revenue: tierBets.reduce((s, b) => s + (b.stake_pence ?? 0), 0),
-        payouts: tierBets.filter(b => b.status === 'paid').reduce((s, b) => s + (b.potential_win_pence ?? 0), 0),
-      }
+      const r = tierRows.get(tier)
+      return { tier, label, count: Number(r?.bet_count ?? 0), revenue: Number(r?.revenue_cents ?? 0), payouts: Number(r?.payout_cents ?? 0) }
     })
+    const byCourse = ((courseRes.data ?? []) as CourseRow[]).map(r => ({ name: r.course_name, revenue: Number(r.revenue_cents), count: Number(r.bet_count) }))
 
-    const courseMap = new Map<string, { name: string; revenue: number; count: number }>()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    bets.forEach((b: any) => {
-      const name = b.courses?.name || 'Unknown'
-      const existing = courseMap.get(name) || { name, revenue: 0, count: 0 }
-      existing.revenue += b.stake_pence ?? 0
-      existing.count += 1
-      courseMap.set(name, existing)
-    })
-    const byCourse = Array.from(courseMap.values()).sort((a, b) => b.revenue - a.revenue)
-
+    const totalRevenue = totals.total_revenue_cents
+    const totalPayouts = totals.total_payout_cents
     return NextResponse.json({
       totalRevenue,
       totalPayouts,
@@ -88,9 +37,9 @@ export async function GET() {
       margin: totalRevenue > 0 ? ((totalRevenue - totalPayouts) / totalRevenue * 100).toFixed(1) : '0',
       byTier,
       byCourse,
-      totalBets: bets.length,
+      totalBets: totals.total_bets,
     })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.reports.revenue_failed', err, { path: 'admin_review' })
   }
 }

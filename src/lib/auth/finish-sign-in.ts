@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { log } from '@/lib/observability/log'
+import { sendWelcomeEmail } from '@/lib/email/welcome'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { enqueue } from '@/lib/outbox'
 
 /**
  * Where a sign-in is allowed to land. Anything else falls back to /welcome so a
@@ -46,12 +49,23 @@ export async function finishSignIn(
   await supabase.from('profiles').upsert({ id: user.id, onboarding_done: true })
 
   if (isNewUser && user.email) {
+    // Queued: the outbox sends it within the minute and retries if Resend is
+    // down. Only if the queue itself cannot be written is it sent inline (a
+    // fire-and-forget fetch would be killed with the response).
     const name = user.user_metadata?.full_name ?? user.user_metadata?.name
-    fetch(`${origin}/api/email/welcome`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, name }),
-    }).catch(err => log.error('auth.welcome_email_failed', err, { path: 'auth', user_id: user.id }))
+    try {
+      await enqueue(createAdminClient(), 'welcome_email', { email: user.email, name })
+      log.info('auth.welcome_email_queued', { user_id: user.id })
+    } catch (queueErr) {
+      log.warn('auth.welcome_email_queue_failed', { user_id: user.id, error: String(queueErr) })
+      try {
+        const sent = await sendWelcomeEmail({ email: user.email, name })
+        if (sent.ok) log.info('auth.welcome_email_sent', { user_id: user.id, resend_id: sent.id })
+        else log.error('auth.welcome_email_failed', sent.error, { path: 'auth', user_id: user.id })
+      } catch (err) {
+        log.error('auth.welcome_email_failed', err, { path: 'auth', user_id: user.id })
+      }
+    }
   }
 
   if (!profile?.age_verified_at) {

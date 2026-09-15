@@ -6,21 +6,7 @@ import { parseAmountToCents, verifyPaymentAmount } from '@/lib/payments'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { resolvePayfastConfig, type PayfastConfig } from '@/lib/payfast/config'
-
-// PayFast's published ITN source IP ranges.
-// Ref: https://support.payfast.co.za/portal/en/kb/articles/what-ip-addresses-does-payfast-use
-//   197.97.145.144/28  → .144 – .159   (16)
-//   41.74.179.192/27   → .192 – .223   (32)
-//   102.216.36.0/28    → .0   – .15    (16)
-//   102.216.36.128/28  → .128 – .143   (16)
-//   144.126.193.139    → single IP
-const VALID_IPS = new Set([
-  ...Array.from({ length: 16 }, (_, i) => `197.97.145.${144 + i}`),
-  ...Array.from({ length: 32 }, (_, i) => `41.74.179.${192 + i}`),
-  ...Array.from({ length: 16 }, (_, i) => `102.216.36.${i}`),
-  ...Array.from({ length: 16 }, (_, i) => `102.216.36.${128 + i}`),
-  '144.126.193.139',
-])
+import { isFromPayfast } from '@/lib/payfast/ips'
 
 /** How long we give PayFast's validate endpoint before failing closed. */
 const VALIDATE_TIMEOUT_MS = 10_000
@@ -84,7 +70,7 @@ export async function POST(request: NextRequest) {
       const forwardedFor = request.headers.get('x-forwarded-for') ?? ''
       const realIp = request.headers.get('x-real-ip') ?? ''
       const allIps = [...forwardedFor.split(',').map(ip => ip.trim()), realIp.trim()].filter(Boolean)
-      if (!allIps.some(ip => VALID_IPS.has(ip))) {
+      if (!isFromPayfast(allIps)) {
         log.warn('payfast.itn.rejected_ip', { ips: allIps })
         return new NextResponse('Forbidden', { status: 403 })
       }
@@ -165,7 +151,7 @@ export async function POST(request: NextRequest) {
           user_id:       userId   || null,
           course_id:     courseId || null,
           hole_id:       holeId   || null,
-          tier:          check.ok ? tier : null,
+          tier:          check.ok ? check.tier : null,
           amount_cents:  amountCents,
           status:        check.ok ? 'complete' : 'amount_mismatch',
           raw_payload:   params,

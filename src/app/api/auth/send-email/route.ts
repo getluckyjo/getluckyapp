@@ -5,8 +5,9 @@ import { renderAuthEmail } from '@/lib/email/auth-emails'
 import { verifyStandardWebhook } from '@/lib/email/standard-webhooks'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
+import { z } from 'zod'
+import { FROM_ADDRESS } from '@/lib/email/from'
 
-const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Get Lucky Golf <noreply@getluckygolf.co.za>'
 
 /**
  * Supabase "Send Email" auth hook.
@@ -42,18 +43,20 @@ export async function POST(request: NextRequest) {
     return hookError(401, `Unauthorised: ${verdict.reason}`)
   }
 
-  let payload: HookPayload
+  let raw: unknown
   try {
-    payload = JSON.parse(body)
+    raw = JSON.parse(body)
   } catch {
     return hookError(400, 'Invalid JSON')
   }
-
-  const to = payload.user?.email
-  const data = payload.email_data
-  if (!to || !data?.token || !data?.token_hash) {
+  const parsed = HookPayload.safeParse(raw)
+  if (!parsed.success) {
+    log.warn('auth.email_hook.bad_payload', { issues: parsed.error.issues.map(i => i.path.join('.')) })
     return hookError(400, 'Missing user email or token')
   }
+  const payload = parsed.data
+  const to = payload.user.email
+  const data = payload.email_data
 
   const email = renderAuthEmail({
     type: data.email_action_type,
@@ -89,20 +92,19 @@ function hookError(status: number, message: string) {
   return NextResponse.json({ error: { http_code: status, message } }, { status })
 }
 
-interface HookPayload {
-  user?: {
-    id?: string
-    email?: string
-    new_email?: string | null
-    user_metadata?: Record<string, unknown>
-  }
-  email_data?: {
-    token: string
-    token_hash: string
-    redirect_to?: string
-    email_action_type: string
-    site_url?: string
-    token_new?: string
-    token_hash_new?: string
-  }
-}
+const HookPayload = z.object({
+  user: z.object({
+    id: z.string().optional(),
+    email: z.email(),
+    new_email: z.string().nullable().optional(),
+  }),
+  email_data: z.object({
+    token: z.string().min(1),
+    token_hash: z.string().min(1),
+    redirect_to: z.string().optional(),
+    email_action_type: z.string().min(1),
+    site_url: z.string().optional(),
+    token_new: z.string().optional(),
+    token_hash_new: z.string().optional(),
+  }),
+})

@@ -16,7 +16,9 @@ import { FakeDb, createFakeClient, jsonRequest, USER_A, COURSE_ID, HOLE_ID, type
 import { POST } from '@/app/api/payments/payfast/route'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
+const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
 vi.mock('@/lib/supabase/server', () => serverClient)
+vi.mock('@/lib/supabase/admin', () => adminClient)
 
 const OTHER_COURSE = '55555555-5555-4555-8555-555555555555'
 let db: FakeDb
@@ -67,6 +69,8 @@ beforeEach(() => {
   db = new FakeDb()
   env()
   serverClient.createClient.mockReset()
+  adminClient.createAdminClient.mockImplementation(() => createFakeClient(db))
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
@@ -173,6 +177,15 @@ describe('the signed checkout', () => {
 
     const { signature, ...fields } = formFields
     expect(signature).toBe(payfastSignature(fields, 'unit-test-passphrase'))
+  })
+
+  it('429 RATE_LIMITED after ten checkouts in ten minutes for one user', async () => {
+    asUser(USER_A); seedTarget()
+    for (let i = 0; i < 10; i++) expect((await checkout(good)).status, `checkout ${i + 1}`).toBe(200)
+    const eleventh = await checkout(good)
+    expect(eleventh.status).toBe(429)
+    expect((await eleventh.json()).code).toBe('RATE_LIMITED')
+    expect(Number(eleventh.headers.get('retry-after'))).toBeGreaterThan(0)
   })
 
   it('issues an unguessable, unique reference per checkout', async () => {

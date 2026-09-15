@@ -6,7 +6,7 @@ import { Eye, CheckCircle, XCircle, Clock } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import Pagination from '@/components/admin/Pagination'
 import ConfirmModal from '@/components/admin/ConfirmModal'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 import type { VerificationQueueItem, PaginatedResponse, VerificationStatus } from '@/types/admin'
 import { TIER_LABELS } from '@/lib/tiers'
 
@@ -42,7 +42,8 @@ export default function VerificationQueuePage() {
       setData(json.data || [])
       setTotal(json.total || 0)
       setTotalPages(json.totalPages || 1)
-    } catch {
+    } catch (err) {
+      console.error('[admin] request failed:', err)
       setData([])
     } finally {
       setLoading(false)
@@ -59,7 +60,8 @@ export default function VerificationQueuePage() {
         counts[stage.status] = json.total || 0
       }
       setPipelineCounts(counts)
-    } catch {
+    } catch (err) {
+      console.error('[admin] request failed:', err)
       // ignore
     }
   }, [])
@@ -92,7 +94,8 @@ export default function VerificationQueuePage() {
       setBatchNotes('')
       fetchData()
       fetchPipelineCounts()
-    } catch {
+    } catch (err) {
+      console.error('[admin] request failed:', err)
       // error handled silently
     }
   }
@@ -187,6 +190,7 @@ export default function VerificationQueuePage() {
           <option value="oldest">Oldest first</option>
           <option value="newest">Newest first</option>
           <option value="highest">Highest value</option>
+          <option value="risk">Most flags</option>
         </select>
       </div>
 
@@ -258,6 +262,7 @@ export default function VerificationQueuePage() {
               <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Tier</th>
               <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Potential Win</th>
               <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Status</th>
+              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Flags</th>
               <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Submitted</th>
               <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Action</th>
             </tr>
@@ -266,7 +271,7 @@ export default function VerificationQueuePage() {
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {Array.from({ length: 9 }).map((_, j) => (
                     <td key={j} style={{ padding: '14px' }}>
                       <div style={{ height: 16, background: '#f0f0f0', borderRadius: 4, width: '70%' }} />
                     </td>
@@ -275,7 +280,7 @@ export default function VerificationQueuePage() {
               ))
             ) : data.length === 0 ? (
               <tr>
-                <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#999' }}>
+                <td colSpan={9} style={{ padding: 40, textAlign: 'center', color: '#999' }}>
                   No claims to review
                 </td>
               </tr>
@@ -318,6 +323,20 @@ export default function VerificationQueuePage() {
                   </td>
                   <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                     <StatusBadge status={item.status} small />
+                  </td>
+                  <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                    {item.riskFlagCount > 0 ? (
+                      <span
+                        title={`Risk score ${item.riskScore}`}
+                        style={{
+                          display: 'inline-block', minWidth: 22, padding: '2px 7px', borderRadius: 11, fontSize: 12, fontWeight: 700,
+                          background: item.riskScore >= 6 ? '#fde8e8' : item.riskScore >= 3 ? '#fff4e0' : '#f0f0f0',
+                          color: item.riskScore >= 6 ? '#c0392b' : item.riskScore >= 3 ? '#b8860b' : '#666',
+                        }}
+                      >
+                        {item.riskFlagCount}
+                      </span>
+                    ) : <span style={{ color: '#ccc' }}>—</span>}
                   </td>
                   <td style={{ padding: '12px 14px', textAlign: 'right', color: '#999', fontSize: 12 }}>
                     {timeAgo(item.createdAt)}

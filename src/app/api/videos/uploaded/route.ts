@@ -4,6 +4,11 @@ import { createHash } from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
+
+const Body = z.object({ betId: uuid })
 
 /**
  * POST /api/videos/uploaded
@@ -17,16 +22,17 @@ import { log } from '@/lib/observability/log'
  */
 export async function POST(request: NextRequest) {
   try {
-    const { betId } = await request.json().catch(() => ({})) as { betId?: unknown }
-    if (typeof betId !== 'string' || !betId) {
-      return NextResponse.json({ error: 'betId required' }, { status: 400 })
-    }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.upload, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { betId } = body.data
 
     const { data: bet } = await supabase
       .from('bets')
@@ -68,7 +74,6 @@ export async function POST(request: NextRequest) {
     log.info('claim.video_recorded', { user_id: user.id, bet_id: betId, sha256, bytes: bytes.length })
     return NextResponse.json({ ok: true, sha256, bytes: bytes.length })
   } catch (err) {
-    log.error('claim.video_uploaded_unhandled', err, { path: 'claim' })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return apiError('claim.video_uploaded_unhandled', err, { path: 'claim' })
   }
 }

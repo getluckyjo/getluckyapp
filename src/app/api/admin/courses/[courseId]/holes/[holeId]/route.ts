@@ -1,64 +1,54 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
+import { apiError, parseBody } from '@/lib/api/http'
+import { log } from '@/lib/observability/log'
+import { HoleFieldsBase } from '@/lib/admin/schemas'
 
-export async function PATCH(
-  request: Request,
-  { params }: { params: Promise<{ courseId: string; holeId: string }> }
-) {
+type Params = { params: Promise<{ courseId: string; holeId: string }> }
+
+const Patch = HoleFieldsBase.partial().refine(v => Object.keys(v).length > 0, 'No valid fields to update')
+
+export async function PATCH(request: Request, { params }: Params) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const { courseId, holeId } = await params
+  const body = await parseBody(request, Patch)
+  if (!body.ok) return body.response
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-    const { holeId } = await params
-    const body = await request.json()
-
-    if (auth.isMock || !auth.adminClient) {
-      return NextResponse.json({ success: true, source: 'mock' })
-    }
-
-    // Whitelist allowed fields to prevent mass assignment
-    const ALLOWED_FIELDS = ['hole_number', 'par', 'distance_metres', 'is_active', 'jackpot_amount'] as const
-    const updates: Record<string, unknown> = {}
-    for (const key of ALLOWED_FIELDS) {
-      if (body[key] !== undefined) updates[key] = body[key]
-    }
-
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
-    }
-
-    const { error } = await auth.adminClient
+    const { data, error } = await auth.adminClient
       .from('holes')
-      .update(updates)
+      .update(body.data)
       .eq('id', holeId)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      .eq('course_id', courseId)
+      .select('id')
+    if (error) {
+      if (error.code === '23505') return NextResponse.json({ error: 'That hole number already exists on this course', code: 'DUPLICATE_HOLE' }, { status: 409 })
+      throw error
+    }
+    if (!data || data.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    log.info('admin.hole_updated', { admin_id: auth.user.id, hole_id: holeId, fields: Object.keys(body.data) })
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.holes.update_failed', err, { path: 'admin_review' })
   }
 }
 
-export async function DELETE(
-  _request: Request,
-  { params }: { params: Promise<{ courseId: string; holeId: string }> }
-) {
+export async function DELETE(_request: Request, { params }: Params) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const { courseId, holeId } = await params
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-    const { holeId } = await params
-
-    if (auth.isMock || !auth.adminClient) {
-      return NextResponse.json({ success: true, source: 'mock' })
+    const { count } = await auth.adminClient.from('bets').select('id', { count: 'exact', head: true }).eq('hole_id', holeId)
+    if (count && count > 0) {
+      return NextResponse.json({ error: 'Cannot delete a hole with existing bets; deactivate it instead', code: 'HAS_BETS' }, { status: 409 })
     }
-
-    const { error } = await auth.adminClient
-      .from('holes')
-      .delete()
-      .eq('id', holeId)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const { error } = await auth.adminClient.from('holes').delete().eq('id', holeId).eq('course_id', courseId)
+    if (error) throw error
+    log.info('admin.hole_deleted', { admin_id: auth.user.id, hole_id: holeId })
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.holes.delete_failed', err, { path: 'admin_review' })
   }
 }

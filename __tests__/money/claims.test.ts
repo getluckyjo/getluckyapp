@@ -172,8 +172,11 @@ describe('GET /api/bets/[betId]', () => {
 describe('POST /api/verifications/[betId] — submitting a claim', () => {
   const submit = (betId: string, body: unknown = {}) =>
     submitClaim(jsonRequest('http://x', body) as never, params(betId))
-  const cert = (bet: Record<string, unknown>) => `${USER_A.id}/${bet.id}/certificate/1-cert.pdf`
-  const aff = (bet: Record<string, unknown>) => `${USER_A.id}/${bet.id}/affidavit/2-aff.pdf`
+  // The browser uploads straight to storage before submitting; the server
+  // reads each document back to hash it, so the objects must exist.
+  const cert = (bet: Record<string, unknown>) => { const p = `${USER_A.id}/${bet.id}/certificate/1-cert.pdf`; db.putObject('verification-docs', p, 'cert bytes'); return p }
+  const aff = (bet: Record<string, unknown>) => { const p = `${USER_A.id}/${bet.id}/affidavit/2-aff.pdf`; db.putObject('verification-docs', p, 'aff bytes'); return p }
+  const PARTNER = [{ role: 'witness', name: 'Sipho Dlamini', email: 'sipho@example.com' }]
 
   it('401 without a session', async () => {
     asUser(null as never)
@@ -183,7 +186,7 @@ describe('POST /api/verifications/[betId] — submitting a claim', () => {
   it('moves an active bet to claimed/win and opens a documents_received verification', async () => {
     asUser()
     const bet = ownBet()
-    const res = await submit(bet.id as string, { certificatePath: cert(bet), affidavitPath: aff(bet) })
+    const res = await submit(bet.id as string, { witnesses: PARTNER, certificatePath: cert(bet), affidavitPath: aff(bet) })
     expect(res.status).toBe(200)
     expect(bet).toMatchObject({ status: 'claimed', declared_result: 'win', updated_by: USER_A.id })
     expect(typeof bet.declared_at).toBe('string')
@@ -195,9 +198,9 @@ describe('POST /api/verifications/[betId] — submitting a claim', () => {
   it('a second submit before review updates the same verification and keeps the original declared_at', async () => {
     asUser()
     const bet = ownBet()
-    await submit(bet.id as string, { certificatePath: cert(bet) })
+    await submit(bet.id as string, { witnesses: PARTNER, certificatePath: cert(bet) })
     const declaredAt = bet.declared_at
-    await submit(bet.id as string, { affidavitPath: aff(bet) })
+    await submit(bet.id as string, { witnesses: PARTNER, affidavitPath: aff(bet) })
     expect(db.rows('verifications')).toHaveLength(1)
     expect(db.rows('verifications')[0]).toMatchObject({ certificate_path: cert(bet), affidavit_path: aff(bet) })
     expect(bet.declared_at).toBe(declaredAt)
@@ -235,7 +238,7 @@ describe('POST /api/verifications/[betId] — submitting a claim', () => {
   it('410 BET_EXPIRED: an active bet past its window cannot be claimed', async () => {
     asUser()
     const bet = ownBet({ expires_at: PAST })
-    const res = await submit(bet.id as string, { certificatePath: cert(bet) })
+    const res = await submit(bet.id as string, { witnesses: PARTNER, certificatePath: cert(bet) })
     expect(res.status).toBe(410)
     expect(bet.status).toBe('active')
     expect(db.rows('verifications')).toHaveLength(0)
@@ -260,7 +263,7 @@ describe('POST /api/verifications/[betId] — submitting a claim', () => {
       42,
     ]
     for (const certificatePath of bad) {
-      const res = await submit(bet.id as string, { certificatePath })
+      const res = await submit(bet.id as string, { witnesses: PARTNER, certificatePath })
       expect(res.status, String(certificatePath)).toBe(400)
     }
     expect(bet.status).toBe('active')

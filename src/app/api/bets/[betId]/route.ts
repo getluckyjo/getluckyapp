@@ -5,6 +5,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { assertNotSuspended, assertOpen, claimErrorResponse, transitionBet } from '@/lib/claims/state-machine'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
+import { apiError, parseBody } from '@/lib/api/http'
+
+const Body = z.object({ status: z.enum(['miss', 'claimed']) })
 
 /**
  * PATCH /api/bets/[betId]
@@ -20,18 +25,17 @@ export async function PATCH(
 ) {
   try {
     const { betId } = await params
-    const body = await request.json().catch(() => ({})) as { status?: unknown }
-    const status = body.status
-
-    if (status !== 'miss' && status !== 'claimed') {
-      return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
-    }
 
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.claim, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { status } = body.data
 
     // RLS shows the caller only their own bets: this is the ownership check.
     const { data: bet } = await supabase
@@ -70,7 +74,7 @@ export async function PATCH(
     const known = claimErrorResponse(err)
     if (known) return known
     await alertOps({ event: 'claim.declare_failed', path: 'claim', summary: 'A result declaration could not be saved.', err })
-    return NextResponse.json({ error: 'Could not save your result' }, { status: 500 })
+    return apiError('claim.declare_unhandled', err, { path: 'claim', message: 'Could not save your result.' })
   }
 }
 
@@ -95,12 +99,9 @@ export async function GET(
       .eq('user_id', user.id)
       .single()
 
-    if (error) {
-      return NextResponse.json({ bet: null, error: error.message })
-    }
-
+    if (error) return NextResponse.json({ bet: null, error: 'Not found' })
     return NextResponse.json({ bet, source: 'database' })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('bets.detail_failed', err, { message: 'Could not load this bet.' })
   }
 }

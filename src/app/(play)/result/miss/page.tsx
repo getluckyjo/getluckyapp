@@ -48,7 +48,7 @@ export default function TryAgainPage() {
   }
 
   useEffect(() => {
-    if (!betId || betId.startsWith('bet_mock') || betId.startsWith('bet_fallback')) return
+    if (!betId) return
     fetch(`/api/bets/${betId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },

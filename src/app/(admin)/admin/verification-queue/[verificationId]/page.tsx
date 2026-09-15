@@ -7,9 +7,11 @@ import StatusBadge from '@/components/admin/StatusBadge'
 import VideoPlayer from '@/components/admin/VideoPlayer'
 import DocumentViewer from '@/components/admin/DocumentViewer'
 import ConfirmModal from '@/components/admin/ConfirmModal'
-import { formatZAR, timeAgo } from '@/lib/admin-mock-data'
+import { formatZAR, timeAgo } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { VerificationDetail } from '@/types/admin'
+import { REVIEW_CHECKLIST, MIN_DECISION_NOTES } from '@/lib/claims/checklist'
+import { RULE_LABELS, describeFlag } from '@/lib/risk/labels'
 
 const TIMELINE_STAGES = [
   { key: 'pending', label: 'Claim Submitted', icon: Clock },
@@ -27,8 +29,73 @@ export default function VerificationDetailPage() {
   const [detail, setDetail] = useState<VerificationDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState('')
-  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | 'pay' | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [payoutError, setPayoutError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [payoutReference, setPayoutReference] = useState('')
+  const [checklist, setChecklist] = useState<Record<string, boolean>>({})
+  const [packHash, setPackHash] = useState<string | null>(null)
+  const [witnessBusy, setWitnessBusy] = useState<string | null>(null)
+
+  const reload = async () => {
+    const data = await fetch(`/api/admin/verifications/${verificationId}`).then(r => r.json())
+    setDetail(data)
+  }
+
+  const sendAgain = async (witnessId?: string) => {
+    setWitnessBusy(witnessId ?? 'all')
+    try {
+      await fetch(`/api/admin/verifications/${verificationId}/witness-requests`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(witnessId ? { witnessId } : {}),
+      })
+      await reload()
+    } finally {
+      setWitnessBusy(null)
+    }
+  }
+
+  const exportPack = async () => {
+    const res = await fetch(`/api/admin/verifications/${verificationId}/evidence-pack`)
+    if (!res.ok) { setPackHash('export failed'); return }
+    const hash = res.headers.get('x-evidence-sha256')
+    const blob = await res.blob()
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `evidence-${detail?.betId ?? verificationId}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    setPackHash(hash)
+  }
+  const checklistComplete = REVIEW_CHECKLIST.every(i => checklist[i.key])
+  const notesOk = notes.trim().length >= MIN_DECISION_NOTES
+
+  const confirmPayout = async () => {
+    if (!detail) return
+    setSubmitting(true)
+    setPayoutError(null)
+    try {
+      const res = await fetch(`/api/admin/bets/${detail.betId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'paid', payoutReference: payoutReference.trim() }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setPayoutError(body.error ?? 'Could not confirm the payout')
+      } else {
+        const data = await fetch(`/api/admin/verifications/${verificationId}`).then(r => r.json())
+        setDetail(data)
+      }
+    } catch (err) {
+      console.error('[admin] payout request failed:', err)
+      setPayoutError('Could not confirm the payout')
+    } finally {
+      setSubmitting(false)
+      setConfirmAction(null)
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/admin/verifications/${verificationId}`)
@@ -43,19 +110,29 @@ export default function VerificationDetailPage() {
 
   const handleAction = async (action: 'approve' | 'reject' | 'under_review') => {
     setSubmitting(true)
+    setActionError(null)
     try {
       const res = await fetch(`/api/admin/verifications/${verificationId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'under_review', reviewerNotes: notes }),
+        body: JSON.stringify({
+          status: action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'under_review',
+          reviewerNotes: notes,
+          ...(action === 'approve' ? { checklist } : {}),
+        }),
       })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        setActionError(body.error ?? 'The review could not be saved')
+      }
       if (res.ok) {
         setConfirmAction(null)
         // Refresh data
         const data = await fetch(`/api/admin/verifications/${verificationId}`).then(r => r.json())
         setDetail(data)
       }
-    } catch {
+    } catch (err) {
+      console.error('[admin] review request failed:', err)
       // error
     } finally {
       setSubmitting(false)
@@ -210,12 +287,127 @@ export default function VerificationDetailPage() {
               </div>
               <div>Footage size: <strong style={{ color: '#111' }}>{detail.videoBytes ? `${(detail.videoBytes / 1_000_000).toFixed(1)} MB` : '—'}</strong></div>
               <div style={{ wordBreak: 'break-all' }}>SHA-256: <code style={{ fontSize: 11, color: '#111' }}>{detail.videoSha256 ?? '—'}</code></div>
+
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 4, fontWeight: 600, color: '#111' }}>Recorder report</div>
+              {detail.capture.startedAt ? (
+                <>
+                  <div>Recording: <strong style={{ color: '#111' }}>{new Date(detail.capture.startedAt).toLocaleString('en-ZA')}</strong>{detail.capture.durationMs != null && <> for <strong style={{ color: '#111' }}>{Math.round(detail.capture.durationMs / 1000)} s</strong></>}</div>
+                  <div>
+                    Sealed after: {detail.capture.uploadLagS != null
+                      ? <strong style={{ color: detail.capture.uploadLagS > 15 * 60 ? '#c0392b' : '#111' }}>{detail.capture.uploadLagS < 120 ? `${detail.capture.uploadLagS} s` : `${Math.round(detail.capture.uploadLagS / 60)} min`}{detail.capture.uploadLagS > 15 * 60 ? ' (long gap between recording and upload)' : ''}</strong>
+                      : <strong style={{ color: '#111' }}>—</strong>}
+                  </div>
+                </>
+              ) : (
+                <div><strong style={{ color: '#c0392b' }}>No recorder timestamps</strong> (older app, or the report failed its sanity checks)</div>
+              )}
+              <div>
+                Location: {detail.capture.lat != null && detail.capture.lng != null ? (
+                  <strong style={{ color: detail.capture.distanceM != null && detail.capture.distanceM > 2000 ? '#c0392b' : '#111' }}>
+                    {detail.capture.distanceM != null
+                      ? `${detail.capture.distanceM < 1000 ? `${detail.capture.distanceM} m` : `${(detail.capture.distanceM / 1000).toFixed(1)} km`} from the course`
+                      : 'recorded; course has no coordinates'}
+                    {detail.capture.accuracyM != null ? ` (±${detail.capture.accuracyM} m)` : ''}
+                    {' '}<a href={`https://www.google.com/maps?q=${detail.capture.lat},${detail.capture.lng}`} target="_blank" rel="noreferrer" style={{ color: '#335231' }}>map</a>
+                  </strong>
+                ) : <strong style={{ color: '#c0392b' }}>not shared</strong>}
+              </div>
+              <div style={{ wordBreak: 'break-all' }}>Device: <span style={{ color: '#111' }}>{detail.capture.userAgent ?? '—'}</span></div>
+
+              <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 8, marginTop: 4, fontWeight: 600, color: '#111' }}>Documents as submitted</div>
+              {([['Certificate', detail.certificateSeal], ['Affidavit', detail.affidavitSeal]] as const).map(([label, seal]) => (
+                <div key={label} style={{ wordBreak: 'break-all' }}>
+                  {label}: {seal.sha256
+                    ? <><strong style={{ color: '#111' }}>{seal.bytes ? `${(seal.bytes / 1000).toFixed(0)} KB` : ''}</strong> <code style={{ fontSize: 11, color: '#111' }}>{seal.sha256}</code></>
+                    : <strong style={{ color: '#999' }}>not hashed (submitted before Batch 9)</strong>}
+                </div>
+              ))}
             </div>
+          </div>
+
+          {/* Witnesses */}
+          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Named by the claimant</h3>
+            {detail.witnesses.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#999' }}>No witnesses named (claim predates Batch 9)</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: 13 }}>
+                {detail.witnesses.map(w => {
+                  const status = w.response === 'confirmed' ? { text: `Confirmed ${w.respondedAt ? new Date(w.respondedAt).toLocaleString('en-ZA') : ''}`, color: '#1a7f37' }
+                    : w.response === 'denied' ? { text: `Said no ${w.respondedAt ? new Date(w.respondedAt).toLocaleString('en-ZA') : ''}`, color: '#c0392b' }
+                    : w.linkExpired ? { text: 'Link expired, no answer', color: '#b8860b' }
+                    : w.requestedAt ? { text: `Asked ${new Date(w.requestedAt).toLocaleDateString('en-ZA')}${w.requestCount > 1 ? ` (×${w.requestCount})` : ''}, no answer yet`, color: '#666' }
+                    : { text: 'Not asked yet', color: '#c0392b' }
+                  return (
+                    <div key={w.id} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                      <div>
+                        <div><strong style={{ color: '#111' }}>{w.name}</strong> <span style={{ color: '#666' }}>· {w.email}</span></div>
+                        <div style={{ fontSize: 12, color: '#999' }}>
+                          {w.role === 'club_official' ? 'Club official' : 'Playing partner'}{w.source === 'course' ? ' (course contact)' : ''} · <span style={{ color: status.color, fontWeight: 600 }}>{status.text}</span>
+                        </div>
+                        {w.responseNote && <div style={{ fontSize: 12, color: '#333', marginTop: 2 }}>“{w.responseNote}”</div>}
+                      </div>
+                      {!w.response && (
+                        <button
+                          onClick={() => sendAgain(w.id)}
+                          disabled={witnessBusy !== null}
+                          style={{ fontSize: 12, padding: '4px 10px', borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer', color: '#335231', whiteSpace: 'nowrap' }}
+                        >
+                          {witnessBusy === w.id ? 'Sending…' : w.requestedAt ? 'Send again' : 'Send request'}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+                <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>Answers go to this page and the evidence pack, never to the golfer. Links work once and expire after 14 days.</div>
+              </div>
+            )}
+          </div>
+
+          {/* Risk flags */}
+          <div style={{ background: '#fff', borderRadius: 12, border: `1px solid ${detail.riskScore >= 6 ? '#f5b7b1' : '#e5e5e5'}`, padding: 20 }}>
+            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 4 }}>Risk Flags</h3>
+            <div style={{ fontSize: 12, color: '#999', marginBottom: 12 }}>
+              Re-evaluated each time this page opens. Score {detail.riskScore}. Nothing here decides; each flag needs a line in the notes.
+            </div>
+            {detail.riskFlags.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#1a7f37' }}>No rules fired.</div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {detail.riskFlags.map(flag => (
+                  <div key={flag.rule} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <span style={{
+                      flexShrink: 0, marginTop: 2, padding: '2px 8px', borderRadius: 10, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                      background: flag.severity === 'high' ? '#fde8e8' : flag.severity === 'medium' ? '#fff4e0' : '#f0f0f0',
+                      color: flag.severity === 'high' ? '#c0392b' : flag.severity === 'medium' ? '#b8860b' : '#666',
+                    }}>{flag.severity}</span>
+                    <div style={{ fontSize: 13 }}>
+                      <div style={{ fontWeight: 600, color: '#111' }}>{RULE_LABELS[flag.rule]?.label ?? flag.rule}</div>
+                      <div style={{ color: '#333' }}>{describeFlag(flag)}</div>
+                      <div style={{ color: '#999', fontSize: 12 }}>{RULE_LABELS[flag.rule]?.why}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Audit trail */}
           <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
-            <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', marginBottom: 12 }}>Audit Trail</h3>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: '#111', margin: 0 }}>Audit Trail</h3>
+              <button
+                onClick={exportPack}
+                style={{ fontSize: 12, padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer', color: '#335231', fontWeight: 600 }}
+              >
+                Export evidence pack
+              </button>
+            </div>
+            {packHash && (
+              <div style={{ fontSize: 12, color: '#666', marginBottom: 10, wordBreak: 'break-all' }}>
+                Pack SHA-256: <code style={{ fontSize: 11, color: '#111' }}>{packHash}</code>. Send the file and this hash together; the insurer verifies with <code>sha256sum</code>.
+              </div>
+            )}
             {detail.events.length === 0 ? (
               <div style={{ fontSize: 13, color: '#999' }}>No events recorded (bet predates the audit log)</div>
             ) : (
@@ -326,7 +518,7 @@ export default function VerificationDetailPage() {
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes about this claim..."
+              placeholder={`Say what you checked and why you decided. At least ${MIN_DECISION_NOTES} characters to approve or reject.`}
               style={{
                 width: '100%', padding: 12, borderRadius: 8, border: '1px solid #e5e5e5',
                 fontSize: 13, resize: 'vertical', minHeight: 80, marginBottom: 16,
@@ -374,7 +566,35 @@ export default function VerificationDetailPage() {
                   </button>
                 </>
               )}
+              {detail.status === 'approved' && detail.betStatus === 'verified' && (
+                <button
+                  onClick={() => setConfirmAction('pay')}
+                  disabled={submitting}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '10px 20px', borderRadius: 8, border: 'none',
+                    background: '#335231', fontSize: 14, cursor: 'pointer', color: '#fff', fontWeight: 600,
+                  }}
+                >
+                  <CheckCircle size={16} /> Confirm Payout Made
+                </button>
+              )}
+              {detail.betStatus === 'paid' && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: '#335231' }}>
+                  <CheckCircle size={16} /> Prize paid
+                </span>
+              )}
             </div>
+            {payoutError && <div style={{ marginTop: 10, fontSize: 13, color: '#c0392b' }}>{payoutError}</div>}
+            {actionError && <div style={{ marginTop: 10, fontSize: 13, color: '#c0392b' }}>{actionError}</div>}
+            {detail.reviewChecklist && (
+              <div style={{ marginTop: 12, fontSize: 12, color: '#666' }}>
+                {detail.reviewChecklist.batch
+                  ? 'Approved through the batch action: no per-claim checklist was completed.'
+                  : `Checklist completed ${typeof detail.reviewChecklist.completed_at === 'string' ? new Date(detail.reviewChecklist.completed_at).toLocaleString('en-ZA') : ''}.`}
+                {detail.payoutReference && <> Payout reference: <strong style={{ color: '#111' }}>{detail.payoutReference}</strong></>}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -384,20 +604,51 @@ export default function VerificationDetailPage() {
         open={confirmAction === 'approve'}
         title="Approve This Claim"
         message={`This will verify the hole-in-one claim and authorize a payout of ${formatZAR(detail.potentialWinCents)} to ${detail.userName}. This action moves the bet to "verified" status.`}
-        confirmLabel="Approve & Verify"
+        confirmLabel={checklistComplete && notesOk ? 'Approve & Verify' : 'Complete the checklist first'}
         variant="success"
-        onConfirm={() => handleAction('approve')}
+        onConfirm={() => { if (checklistComplete && notesOk) handleAction('approve') }}
         onCancel={() => setConfirmAction(null)}
-      />
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13, color: '#333' }}>
+          {REVIEW_CHECKLIST.map(item => (
+            <label key={item.key} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }}>
+              <input type="checkbox" checked={!!checklist[item.key]} onChange={e => setChecklist(c => ({ ...c, [item.key]: e.target.checked }))} style={{ marginTop: 3 }} />
+              <span>{item.label}</span>
+            </label>
+          ))}
+          {!notesOk && <div style={{ color: '#c0392b', fontSize: 12 }}>Reviewer notes need at least {MIN_DECISION_NOTES} characters: say how the certificate was confirmed and what you made of each flag.</div>}
+        </div>
+      </ConfirmModal>
+      <ConfirmModal
+        open={confirmAction === 'pay'}
+        title="Confirm the Prize Was Paid"
+        message="Only confirm once the money has actually left the account. This marks the bet as paid, publishes it on the winners list, and is recorded in the audit trail with your admin id."
+        confirmLabel={payoutReference.trim().length >= 3 ? 'Yes, the prize was paid' : 'Enter the payout reference'}
+        variant="success"
+        onConfirm={() => { if (payoutReference.trim().length >= 3) confirmPayout() }}
+        onCancel={() => setConfirmAction(null)}
+      >
+        <label style={{ display: 'block', fontSize: 13, color: '#333' }}>
+          Bank or PayFast reference
+          <input
+            value={payoutReference}
+            onChange={e => setPayoutReference(e.target.value)}
+            placeholder="e.g. FNB-2026-09-15-0042"
+            style={{ display: 'block', width: '100%', marginTop: 6, padding: '8px 10px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13 }}
+          />
+        </label>
+      </ConfirmModal>
       <ConfirmModal
         open={confirmAction === 'reject'}
         title="Reject This Claim"
         message={`This will reject ${detail.userName}'s claim for ${formatZAR(detail.potentialWinCents)}. The bet will remain as "claimed" and no payout will be issued.`}
-        confirmLabel="Reject Claim"
+        confirmLabel={notesOk ? 'Reject Claim' : 'Write the reason first'}
         variant="danger"
-        onConfirm={() => handleAction('reject')}
+        onConfirm={() => { if (notesOk) handleAction('reject') }}
         onCancel={() => setConfirmAction(null)}
-      />
+      >
+        {!notesOk && <div style={{ color: '#c0392b', fontSize: 12 }}>The reason goes in the reviewer notes (at least {MIN_DECISION_NOTES} characters) and is kept in the audit trail.</div>}
+      </ConfirmModal>
     </div>
   )
 }

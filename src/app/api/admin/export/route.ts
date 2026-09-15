@@ -1,92 +1,66 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
-import { MOCK_ADMIN_BETS, MOCK_ADMIN_USERS, MOCK_ADMIN_VERIFICATIONS } from '@/lib/admin-mock-data'
+import { apiError, parseBody } from '@/lib/api/http'
+import { BET_SELECT, betsForVerifications, namesForBets, type BetRowLike, type VerificationRowLike } from '@/lib/admin/data'
+import { log } from '@/lib/observability/log'
+import { toCSV } from '@/lib/admin/csv'
 
-function toCSV(headers: string[], rows: string[][]): string {
-  const escape = (v: string) => {
-    let safe = v.replace(/"/g, '""')
-    // Prevent CSV injection: prefix formula-triggering characters with a single quote
-    if (/^[=+\-@\t\r]/.test(safe)) safe = `'${safe}`
-    return `"${safe}"`
-  }
-  const lines = [headers.map(escape).join(',')]
-  rows.forEach(row => lines.push(row.map(v => escape(String(v ?? ''))).join(',')))
-  return lines.join('\n')
-}
+const Body = z.object({ type: z.enum(['bets', 'users', 'verifications']) })
+
+const LIMIT = 500
 
 export async function POST(request: Request) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const body = await parseBody(request, Body)
+  if (!body.ok) return body.response
+  const { type } = body.data
+  const admin = auth.adminClient
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-
-    const body = await request.json()
-    const { type } = body as { type: 'bets' | 'users' | 'verifications' }
-
     let csv = ''
 
     if (type === 'bets') {
-      if (auth.isMock || !auth.adminClient) {
-        csv = toCSV(
-          ['ID', 'User', 'Course', 'Hole', 'Tier', 'Stake (cents)', 'Potential Win (cents)', 'Status', 'Declared Result', 'Created'],
-          MOCK_ADMIN_BETS.map(b => [b.id, b.userName ?? '', b.courseName, String(b.holeNumber), b.tier, String(b.stakeCents), String(b.potentialWinCents), b.status, b.declaredResult ?? '', b.createdAt])
-        )
-      } else {
-        const { data } = await auth.adminClient
-          .from('bets')
-          .select(`*, profiles ( name ), courses ( name ), holes ( hole_number )`)
-          .order('created_at', { ascending: false })
-          .limit(500)
-
-        csv = toCSV(
-          ['ID', 'User', 'Course', 'Hole', 'Tier', 'Stake (cents)', 'Potential Win (cents)', 'Status', 'Declared Result', 'Created'],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (data ?? []).map((b: any) => [b.id, b.profiles?.name ?? '', b.courses?.name ?? '', String(b.holes?.hole_number ?? ''), b.tier, String(b.stake_pence), String(b.potential_win_pence), b.status, b.declared_result ?? '', b.created_at])
-        )
-      }
+      const { data, error } = await admin.from('bets').select(BET_SELECT).order('created_at', { ascending: false }).limit(LIMIT)
+      if (error) throw error
+      const bets = (data ?? []) as BetRowLike[]
+      const names = await namesForBets(admin, bets)
+      csv = toCSV(
+        ['ID', 'User', 'Course', 'Hole', 'Tier', 'Stake (cents)', 'Potential Win (cents)', 'Status', 'Declared Result', 'Created'],
+        bets.map(b => [b.id, names.users.get(b.user_id) ?? '', names.courses.get(b.course_id) ?? '', String(names.holes.get(b.hole_id) ?? ''), b.tier, String(b.stake_pence), String(b.potential_win_pence), b.status, b.declared_result ?? '', b.created_at]),
+      )
     } else if (type === 'users') {
-      if (auth.isMock || !auth.adminClient) {
-        csv = toCSV(
-          ['ID', 'Name', 'Email', 'Handicap', 'Total Attempts', 'Total Staked (cents)', 'Total Won (cents)', 'Payment Method', 'Suspended', 'Created'],
-          MOCK_ADMIN_USERS.map(u => [u.id, u.name ?? '', u.email, String(u.handicap ?? ''), String(u.totalAttempts), String(u.totalStaked), String(u.totalWon), u.paymentMethod ?? '', u.suspendedAt ? 'Yes' : 'No', u.createdAt])
-        )
-      } else {
-        const { data } = await auth.adminClient.from('profiles').select('*').order('created_at', { ascending: false }).limit(500)
-        csv = toCSV(
-          ['ID', 'Name', 'Handicap', 'Total Attempts', 'Payment Method', 'Admin', 'Suspended', 'Created'],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (data ?? []).map((p: any) => [p.id, p.name ?? '', String(p.handicap ?? ''), String(p.total_attempts ?? 0), p.payment_method ?? '', p.is_admin ? 'Yes' : 'No', p.suspended_at ? 'Yes' : 'No', p.created_at])
-        )
-      }
-    } else if (type === 'verifications') {
-      if (auth.isMock || !auth.adminClient) {
-        csv = toCSV(
-          ['ID', 'Bet ID', 'User', 'Course', 'Hole', 'Tier', 'Potential Win (cents)', 'Status', 'Submitted', 'Docs Received', 'Verified'],
-          MOCK_ADMIN_VERIFICATIONS.map(v => [v.id, v.betId, v.userName ?? '', v.courseName, String(v.holeNumber), v.tier, String(v.potentialWinCents), v.status, v.createdAt, v.documentsReceivedAt ?? '', v.verifiedAt ?? ''])
-        )
-      } else {
-        const { data } = await auth.adminClient
-          .from('verifications')
-          .select(`*, bets!inner ( tier, potential_win_pence, user_id, courses ( name ), holes ( hole_number ), profiles ( name ) )`)
-          .order('created_at', { ascending: false })
-          .limit(500)
-
-        csv = toCSV(
-          ['ID', 'Bet ID', 'User', 'Course', 'Hole', 'Tier', 'Potential Win (cents)', 'Status', 'Submitted', 'Docs Received', 'Verified'],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (data ?? []).map((v: any) => [v.id, v.bet_id, v.bets?.profiles?.name ?? '', v.bets?.courses?.name ?? '', String(v.bets?.holes?.hole_number ?? ''), v.bets?.tier ?? '', String(v.bets?.potential_win_pence ?? ''), v.status, v.created_at, v.documents_received_at ?? '', v.verified_at ?? ''])
-        )
-      }
+      const { data, error } = await admin.from('profiles').select('id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, created_at').order('created_at', { ascending: false }).limit(LIMIT)
+      if (error) throw error
+      type P = { id: string; name: string | null; email: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; created_at: string }
+      csv = toCSV(
+        ['ID', 'Name', 'Email', 'Handicap', 'Total Attempts', 'Payment Method', 'Admin', 'Suspended', 'Created'],
+        ((data ?? []) as P[]).map(p => [p.id, p.name ?? '', p.email ?? '', String(p.handicap ?? ''), String(p.total_attempts ?? 0), p.payment_method ?? '', p.is_admin ? 'Yes' : 'No', p.suspended_at ? 'Yes' : 'No', p.created_at]),
+      )
     } else {
-      return NextResponse.json({ error: 'Invalid export type' }, { status: 400 })
+      const { data, error } = await admin.from('verifications').select('*').order('created_at', { ascending: false }).limit(LIMIT)
+      if (error) throw error
+      const rows = (data ?? []) as VerificationRowLike[]
+      const bets = await betsForVerifications(admin, rows)
+      const names = await namesForBets(admin, [...bets.values()])
+      csv = toCSV(
+        ['ID', 'Bet ID', 'User', 'Course', 'Hole', 'Tier', 'Potential Win (cents)', 'Status', 'Submitted', 'Docs Received', 'Verified'],
+        rows.map(v => {
+          const b = bets.get(v.bet_id)
+          return [v.id, v.bet_id, b ? names.users.get(b.user_id) ?? '' : '', b ? names.courses.get(b.course_id) ?? '' : '', b ? String(names.holes.get(b.hole_id) ?? '') : '', b?.tier ?? '', String(b?.potential_win_pence ?? ''), v.status, v.created_at, v.documents_received_at ?? '', v.verified_at ?? '']
+        }),
+      )
     }
 
+    log.info('admin.export', { admin_id: auth.user.id, type })
     return new NextResponse(csv, {
       headers: {
         'Content-Type': 'text/csv',
         'Content-Disposition': `attachment; filename="${type}-export-${new Date().toISOString().slice(0, 10)}.csv"`,
       },
     })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+  } catch (err) {
+    return apiError('admin.export_failed', err, { path: 'admin_review' })
   }
 }

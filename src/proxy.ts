@@ -1,75 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-
-// ── Rate limiting (in-memory sliding window) ──────────────────────────────
-interface RateEntry { count: number; resetAt: number }
-const rateStore = new Map<string, RateEntry>()
-let cleanupCounter = 0
-
-const RATE_LIMITS: { pattern: string; limit: number; windowMs: number }[] = [
-  { pattern: '/api/payments/payfast/notify', limit: 0, windowMs: 0 },     // EXEMPT — never rate-limit ITN
-  { pattern: '/api/auth/send-email',         limit: 0, windowMs: 0 },     // EXEMPT — Supabase hook, signature-verified; all calls share a few IPs
-  { pattern: '/api/payments/payfast',        limit: 5,  windowMs: 60_000 },
-  { pattern: '/api/bets/create',             limit: 10, windowMs: 60_000 },
-  { pattern: '/api/videos/upload-url',       limit: 10, windowMs: 60_000 },
-  { pattern: '/api/admin',                   limit: 30, windowMs: 60_000 },
-]
-const DEFAULT_API_LIMIT = 60
-const DEFAULT_API_WINDOW = 60_000
-
-function getClientIp(request: NextRequest): string {
-  const forwarded = request.headers.get('x-forwarded-for')
-  if (forwarded) return forwarded.split(',')[0].trim()
-  return request.headers.get('x-real-ip') ?? 'unknown'
-}
-
-function checkRateLimit(request: NextRequest, pathname: string): NextResponse | null {
-  if (!pathname.startsWith('/api/')) return null
-
-  // Find matching rule
-  let limit = DEFAULT_API_LIMIT
-  let windowMs = DEFAULT_API_WINDOW
-  for (const rule of RATE_LIMITS) {
-    if (pathname.startsWith(rule.pattern)) {
-      if (rule.limit === 0) return null // exempt
-      limit = rule.limit
-      windowMs = rule.windowMs
-      break
-    }
-  }
-
-  const ip = getClientIp(request)
-  const routeKey = RATE_LIMITS.find(r => r.limit > 0 && pathname.startsWith(r.pattern))?.pattern ?? '/api'
-  const key = `${ip}:${routeKey}`
-  const now = Date.now()
-  const entry = rateStore.get(key)
-
-  if (!entry || entry.resetAt < now) {
-    rateStore.set(key, { count: 1, resetAt: now + windowMs })
-  } else {
-    entry.count++
-    if (entry.count > limit) {
-      const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
-      return NextResponse.json(
-        { error: 'Too many requests. Please try again shortly.' },
-        { status: 429, headers: { 'Retry-After': String(retryAfter) } },
-      )
-    }
-  }
-
-  // Lazy cleanup every ~100 requests
-  if (++cleanupCounter >= 100) {
-    cleanupCounter = 0
-    for (const [k, e] of rateStore) { if (e.resetAt < now) rateStore.delete(k) }
-  }
-
-  return null
-}
+import type { Database } from '@/types/database'
 
 // ── Route config ──────────────────────────────────────────────────────────
 // Reachable signed out. Marketing, legal, and the sign-in flow itself.
-const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play', '/app']
+// /witness is the one-question page a named witness reaches from their email; they have no account.
+const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play', '/witness']
 
 // Reachable signed out because the app still shows something useful, or because
 // bouncing would be worse than letting them through:
@@ -118,9 +55,8 @@ export async function proxy(request: NextRequest) {
     }
   }
 
-  // ── Rate limiting check (API routes only) ───────────────────────────────
-  const rateLimitResponse = checkRateLimit(request, pathname)
-  if (rateLimitResponse) return rateLimitResponse
+  // Rate limiting lives in the API routes themselves (src/lib/rate-limit.ts),
+  // backed by Postgres. An in-memory limiter here limited nothing on Vercel.
 
   // API routes and admin routes handle their own auth (admin in its layout and
   // handlers; API routes with getUser() per route).
@@ -136,15 +72,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next({ request })
   }
 
-  // Skip auth gate if Supabase is not yet configured
+  // Without a Supabase URL there is no session to check; let the page render
+  // its signed-out state rather than crashing in the proxy.
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
-  if (!supabaseUrl || supabaseUrl.includes('YOUR_PROJECT_REF')) {
+  if (!supabaseUrl) {
     return NextResponse.next({ request })
   }
 
   let supabaseResponse = NextResponse.next({ request })
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {

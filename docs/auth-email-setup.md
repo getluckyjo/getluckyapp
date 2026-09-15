@@ -1,7 +1,7 @@
 # Sign-in: Supabase settings and the branded auth email
 
-The app has three doors in: Google, Facebook and email (a six-digit code plus
-a sign-in button). All three end at `/auth/callback` or `/auth/confirm` and
+The app has two doors in: Google and email (a six-digit code plus a sign-in
+button). All three end at `/auth/callback` or `/auth/confirm` and
 then run the same post-sign-in steps (`src/lib/auth/finish-sign-in.ts`).
 
 Two things live outside this repo and have to be set in the Supabase

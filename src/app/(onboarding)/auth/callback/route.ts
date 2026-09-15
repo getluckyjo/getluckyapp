@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { finishSignIn, safeNext } from '@/lib/auth/finish-sign-in'
 import { log } from '@/lib/observability/log'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 /**
  * Where Supabase sends the browser back after Google (PKCE `code`),
@@ -13,6 +14,9 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
   const next = safeNext(searchParams.get('next'))
+
+  const limited = await enforceRateLimit(RULES.authConfirm, { ip: clientIp(request) })
+  if (limited) return limited
 
   try {
     const supabase = await createClient()

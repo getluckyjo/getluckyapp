@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { finishSignIn, safeNext } from '@/lib/auth/finish-sign-in'
 import { log } from '@/lib/observability/log'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 const OTP_TYPES: EmailOtpType[] = ['signup', 'invite', 'magiclink', 'recovery', 'email_change', 'email']
 
@@ -19,6 +20,9 @@ const OTP_TYPES: EmailOtpType[] = ['signup', 'invite', 'magiclink', 'recovery', 
  */
 export async function POST(request: NextRequest) {
   const { origin } = new URL(request.url)
+  const limited = await enforceRateLimit(RULES.authConfirm, { ip: clientIp(request) })
+  if (limited) return limited
+
   const form = await request.formData()
   const tokenHash = String(form.get('token_hash') ?? '')
   const rawType = String(form.get('type') ?? 'magiclink')

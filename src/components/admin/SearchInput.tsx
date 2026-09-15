@@ -1,7 +1,7 @@
 'use client'
 
 import { Search } from 'lucide-react'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useRef } from 'react'
 
 interface SearchInputProps {
   placeholder?: string
@@ -12,11 +12,15 @@ interface SearchInputProps {
 
 export default function SearchInput({ placeholder = 'Search...', value, onChange, debounceMs = 300 }: SearchInputProps) {
   const [local, setLocal] = useState(value)
+  const [lastValue, setLastValue] = useState(value)
   const timeout = useRef<ReturnType<typeof setTimeout>>(null)
 
-  useEffect(() => {
+  // Adopt a new value from the parent during render (the React-documented
+  // way to reset state on a prop change) rather than one render later.
+  if (value !== lastValue) {
+    setLastValue(value)
     setLocal(value)
-  }, [value])
+  }
 
   const handleChange = (v: string) => {
     setLocal(v)

@@ -3,6 +3,14 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { z } from 'zod'
+import { apiError, parseBody } from '@/lib/api/http'
+
+const Body = z.object({
+  dateOfBirth: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Please enter a valid date of birth.'),
+  consent: z.boolean().default(false),
+})
 
 /**
  * POST /api/profile/age-check
@@ -20,14 +28,13 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.ageCheck, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
-    const body = await request.json().catch(() => null) as { dateOfBirth?: unknown; consent?: unknown } | null
-    const dob = typeof body?.dateOfBirth === 'string' ? body.dateOfBirth.trim() : ''
-    const consent = body?.consent === true
+    const body = await parseBody(request, Body)
+    if (!body.ok) return body.response
+    const { dateOfBirth: dob, consent } = body.data
 
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
-      return NextResponse.json({ error: 'Please enter a valid date of birth.', code: 'INVALID_DOB' }, { status: 400 })
-    }
     const age = ageFromDob(dob)
     if (age === null || age < 0 || age > 120) {
       return NextResponse.json({ error: 'Please enter a valid date of birth.', code: 'INVALID_DOB' }, { status: 400 })
@@ -60,8 +67,7 @@ export async function POST(request: NextRequest) {
     log.info('age_check.passed', { user_id: user.id })
     return NextResponse.json({ ok: true })
   } catch (err) {
-    log.error('age_check.unhandled', err, { path: 'auth' })
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    return apiError('age_check.unhandled', err, { path: 'auth' })
   }
 }
 

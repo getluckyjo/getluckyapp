@@ -1,142 +1,74 @@
 import { NextResponse } from 'next/server'
+import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
-import { MOCK_ADMIN_BETS } from '@/lib/admin-mock-data'
+import { apiError, parseQuery, pagination, uuid, searchTerm, dateLike } from '@/lib/api/http'
+import { BET_SELECT, namesForBets, orSearchTerm, toAdminBetRecord, type BetRowLike } from '@/lib/admin/data'
+import { BET_STATUSES } from '@/lib/claims/state-machine'
+import { BET_TIERS } from '@/lib/tiers'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
 
+const Query = pagination.extend({
+  status: z.enum(BET_STATUSES).optional(),
+  tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
+  courseId: uuid.optional(),
+  search: searchTerm.optional(),
+  dateFrom: dateLike.optional(),
+  dateTo: dateLike.optional(),
+  sort: z.enum(['created_at', 'stake_pence']).default('created_at'),
+  order: z.enum(['asc', 'desc']).default('desc'),
+})
+
 export async function GET(request: Request) {
+  const auth = await requireAdmin()
+  if (!auth.ok) return auth.error
+  const q = parseQuery(request.url, Query)
+  if (!q.ok) return q.response
+  const { status, tier, courseId, search, dateFrom, dateTo, sort, order, page, limit } = q.data
+  const admin = auth.adminClient
+
   try {
-    const auth = await requireAdmin()
-    if (auth.error) return auth.error
-
-    const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-    const tier = searchParams.get('tier')
-    const courseId = searchParams.get('courseId')
-    const search = searchParams.get('search')
-    const dateFrom = searchParams.get('dateFrom')
-    const dateTo = searchParams.get('dateTo')
-    const sort = searchParams.get('sort') || 'created_at'
-    const order = searchParams.get('order') || 'desc'
-    const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10))
-    const limit = Math.min(50, parseInt(searchParams.get('limit') ?? '20', 10))
-
-    if (auth.isMock || !auth.adminClient) {
-      let filtered = [...MOCK_ADMIN_BETS]
-      if (status) filtered = filtered.filter(b => b.status === status)
-      if (tier) filtered = filtered.filter(b => b.tier === tier)
-      if (courseId) filtered = filtered.filter(b => b.courseId === courseId)
-      if (search) {
-        const s = search.toLowerCase()
-        filtered = filtered.filter(b =>
-          (b.userName?.toLowerCase() || '').includes(s) ||
-          b.courseName.toLowerCase().includes(s) ||
-          b.id.toLowerCase().includes(s)
-        )
-      }
-      if (dateFrom) filtered = filtered.filter(b => b.createdAt >= dateFrom)
-      if (dateTo) filtered = filtered.filter(b => b.createdAt <= dateTo)
-
-      filtered.sort((a, b) => {
-        const aVal = sort === 'stake_pence' ? a.stakeCents : new Date(a.createdAt).getTime()
-        const bVal = sort === 'stake_pence' ? b.stakeCents : new Date(b.createdAt).getTime()
-        return order === 'asc' ? aVal - bVal : bVal - aVal
-      })
-
-      const total = filtered.length
-      const start = (page - 1) * limit
-      const data = filtered.slice(start, start + limit)
-
-      const resp: PaginatedResponse<AdminBetRecord> = { data, total, page, limit, totalPages: Math.ceil(total / limit) }
-      return NextResponse.json(resp)
-    }
-
-    const adminClient = auth.adminClient
-
-    // Step 1: Query bets
-    let query = adminClient
-      .from('bets')
-      .select('*', { count: 'exact' })
-
+    let query = admin.from('bets').select(BET_SELECT, { count: 'exact' })
     if (status) query = query.eq('status', status)
     if (tier) query = query.eq('tier', tier)
     if (courseId) query = query.eq('course_id', courseId)
     if (dateFrom) query = query.gte('created_at', dateFrom)
     if (dateTo) query = query.lte('created_at', dateTo)
 
-    query = query.order(sort === 'stake_pence' ? 'stake_pence' : 'created_at', { ascending: order === 'asc' })
+    if (search) {
+      // Resolve the search to ids first, then filter in the query so the
+      // count and the pages are right (it used to post-filter one page).
+      const s = orSearchTerm(search)
+      const [users, courses] = await Promise.all([
+        admin.from('profiles').select('id').or(`name.ilike.*${s}*,email.ilike.*${s}*`).limit(100),
+        admin.from('courses').select('id').ilike('name', `%${search}%`).limit(50),
+      ])
+      const conds: string[] = []
+      if (uuid.safeParse(search).success) conds.push(`id.eq.${search}`)
+      const userIds = ((users.data ?? []) as { id: string }[]).map(u => u.id)
+      const courseIds = ((courses.data ?? []) as { id: string }[]).map(c => c.id)
+      if (userIds.length) conds.push(`user_id.in.(${userIds.join(',')})`)
+      if (courseIds.length) conds.push(`course_id.in.(${courseIds.join(',')})`)
+      if (!conds.length) {
+        const empty: PaginatedResponse<AdminBetRecord> = { data: [], total: 0, page, limit, totalPages: 0 }
+        return NextResponse.json(empty)
+      }
+      query = query.or(conds.join(','))
+    }
 
+    query = query.order(sort, { ascending: order === 'asc' })
     const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
 
-    const { data: rows, count: betCount, error } = await query
+    const { data, count, error } = await query
+    if (error) throw error
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    const betRows = rows ?? []
-
-    // Step 2: Fetch related profiles, courses, holes
-    const userIds = [...new Set(betRows.map((b: { user_id: string }) => b.user_id).filter(Boolean))]
-    const courseIds = [...new Set(betRows.map((b: { course_id: string }) => b.course_id).filter(Boolean))]
-    const holeIds = [...new Set(betRows.map((b: { hole_id: string }) => b.hole_id).filter(Boolean))]
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const profilesMap: Record<string, any> = {}
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const coursesMap: Record<string, any> = {}
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const holesMap: Record<string, any> = {}
-
-    const [profilesRes, coursesRes, holesRes] = await Promise.all([
-      userIds.length > 0 ? adminClient.from('profiles').select('id, name').in('id', userIds) : Promise.resolve({ data: [] }),
-      courseIds.length > 0 ? adminClient.from('courses').select('id, name').in('id', courseIds) : Promise.resolve({ data: [] }),
-      holeIds.length > 0 ? adminClient.from('holes').select('id, hole_number').in('id', holeIds) : Promise.resolve({ data: [] }),
-    ])
-
-    for (const p of profilesRes.data ?? []) profilesMap[p.id] = p
-    for (const c of coursesRes.data ?? []) coursesMap[c.id] = c
-    for (const h of holesRes.data ?? []) holesMap[h.id] = h
-
-    // Step 3: Combine
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let data: AdminBetRecord[] = betRows.map((b: any) => ({
-      id: b.id,
-      userId: b.user_id,
-      userName: b.user_id ? profilesMap[b.user_id]?.name : null,
-      tier: b.tier,
-      stakeCents: b.stake_pence,
-      potentialWinCents: b.potential_win_pence,
-      status: b.status,
-      declaredResult: b.declared_result,
-      declaredAt: b.declared_at,
-      videoUrl: b.video_url,
-      paymentIntentId: b.payment_intent_id,
-      courseName: b.course_id ? coursesMap[b.course_id]?.name ?? '' : '',
-      courseId: b.course_id,
-      holeNumber: b.hole_id ? holesMap[b.hole_id]?.hole_number ?? 0 : 0,
-      holeId: b.hole_id,
-      createdAt: b.created_at,
-    }))
-
-    // Post-filter by search (name search requires post-filtering)
-    if (search) {
-      const s = search.toLowerCase()
-      data = data.filter(b =>
-        (b.userName?.toLowerCase() || '').includes(s) ||
-        b.courseName.toLowerCase().includes(s) ||
-        b.id.toLowerCase().includes(s)
-      )
-    }
-
-    return NextResponse.json({
-      data,
-      total: betCount ?? data.length,
-      page,
-      limit,
-      totalPages: Math.ceil((betCount ?? data.length) / limit),
-    })
-  } catch {
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 })
+    const rows = (data ?? []) as BetRowLike[]
+    const names = await namesForBets(admin, rows)
+    const records = rows.map(b => toAdminBetRecord(b, names))
+    const total = count ?? records.length
+    const resp: PaginatedResponse<AdminBetRecord> = { data: records, total, page, limit, totalPages: Math.ceil(total / limit) }
+    return NextResponse.json(resp)
+  } catch (err) {
+    return apiError('admin.bets.list_failed', err, { path: 'admin_review' })
   }
 }

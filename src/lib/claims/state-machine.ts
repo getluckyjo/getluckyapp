@@ -158,6 +158,8 @@ export interface Review {
   to: VerificationStatus
   actorId: string
   notes?: string
+  /** Extra verification columns to set with the transition (e.g. review_checklist). */
+  extra?: Record<string, unknown>
 }
 
 /**
@@ -193,6 +195,7 @@ export async function reviewVerification(admin: SupabaseClient, r: Review): Prom
     updated_by: r.actorId,
     ...(r.notes !== undefined ? { reviewer_notes: r.notes } : {}),
     ...(r.to === 'approved' ? { verified_at: now } : {}),
+    ...(r.extra ?? {}),
   }
 
   const { data: updated, error } = await admin

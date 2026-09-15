@@ -1,5 +1,5 @@
 // One-off prod SQL runner. Usage:
-//   DATABASE_URL='postgresql://...' node scripts/run-sql.mjs supabase/apply-003-and-admin.sql
+//   DATABASE_URL='postgresql://...' node scripts/run-sql.mjs supabase/migrations/010_admin_queries.sql
 // Reads connection from DATABASE_URL env (never hard-coded / committed).
 import { readFileSync } from 'node:fs'
 import pg from 'pg'
