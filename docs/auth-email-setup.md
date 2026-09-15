@@ -85,13 +85,18 @@ on or off as before; either way the hook renders the message.
 
 ---
 
-## 3. Facebook (optional)
+## 3. Facebook
 
-The Facebook tile calls Supabase's Facebook provider. Enable it under
-**Authentication → Providers → Facebook** with a Meta app ID and secret, and
-add `https://<project-ref>.supabase.co/auth/v1/callback` to the Meta app's
-valid OAuth redirect URIs. Until then the tile shows a "use Google or email"
-message and does no harm.
+Not offered. The V2 comps show a Facebook tile next to Google; it was
+removed on 15 September 2026 because a public Meta app needs live-mode
+review, a data-deletion callback and a Meta business account before anyone
+outside the developer list can use it. Sign-in is Google or the email code.
+
+To bring it back later: create the Meta app with the Facebook Login product,
+add `https://<project-ref>.supabase.co/auth/v1/callback` to its valid OAuth
+redirect URIs, enable Facebook under **Supabase → Authentication →
+Providers**, and restore the tile and `signInWithFacebook` from git history
+(they were added in PR #3 and removed in PR #6).
 
 ---
 
