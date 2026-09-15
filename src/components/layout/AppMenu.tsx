@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useAuth } from '@/context/AuthContext'
 import { getInitials } from '@/lib/format'
 
@@ -61,7 +62,7 @@ export default function AppMenu({ open, onClose }: { open: boolean; onClose: () 
         onClick={e => e.stopPropagation()}
       >
         <div className="app-menu-top">
-          <img src="/brand/logo-corner.svg" alt="Get Lucky" className="app-menu-logo" draggable={false} />
+          <Image src="/brand/logo-corner.svg" alt="Get Lucky" width={173} height={133} unoptimized className="app-menu-logo" draggable={false} />
           <button type="button" className="app-menu-close" aria-label="Close menu" onClick={onClose}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
               <path d="M6 6l12 12M18 6L6 18" />
