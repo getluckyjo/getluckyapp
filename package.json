@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "staging:bootstrap": "node scripts/staging/bootstrap.mjs",
     "staging:seed": "tsx scripts/staging/seed.mts",
-    "staging:verify-restore": "node scripts/staging/verify-restore.mjs"
+    "staging:verify-restore": "node scripts/staging/verify-restore.mjs",
+    "load:event-day": "node scripts/load/event-day.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.74.0",

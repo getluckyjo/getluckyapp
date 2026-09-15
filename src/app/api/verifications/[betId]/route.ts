@@ -14,7 +14,8 @@ import { DocumentMissingError, sealDocument } from '@/lib/claims/documents'
 import { WitnessesSchema, hasPlayingPartner, replaceWitnesses, witnessesForBet } from '@/lib/claims/witnesses'
 import { hashIdentifier } from '@/lib/risk/hash'
 import { tryRefreshClaimRisk } from '@/lib/risk/rules'
-import { attachCourseContacts, sendWitnessRequests } from '@/lib/claims/confirmation'
+import { attachCourseContacts } from '@/lib/claims/confirmation'
+import { enqueue } from '@/lib/outbox'
 
 const Body = z.object({
   certificatePath: z.string().max(500).nullable().optional(),
@@ -200,13 +201,13 @@ export async function POST(
     }
 
     // The people to ask: those the claimant named, plus the course's standing
-    // contacts. Then ask them. The claim is recorded either way; a failure
-    // here is logged and the reviewer can send again from the admin.
+    // contacts. The asking happens in the outbox, not in this request. The
+    // claim is recorded either way; a failure here is logged and the reviewer
+    // can send again from the admin.
     try {
       if (namedNow.length > 0) await replaceWitnesses(admin, betId, saved.id, namedNow)
       await attachCourseContacts(admin, betId, saved.id, bet.course_id)
-      const sent = await sendWitnessRequests(admin, betId)
-      if (sent.failed > 0) log.warn('claim.witness_requests_partial', { bet_id: betId, ...sent })
+      await enqueue(admin, 'witness_request', { betId })
     } catch (err) {
       log.error('claim.witnesses_write_failed', err, { path: 'claim', user_id: user.id, bet_id: betId })
     }

@@ -497,6 +497,22 @@ export interface Database {
         Update: { name?: string; email?: string }
         Relationships: []
       }
+      outbox: {
+        Row: {
+          id: number
+          kind: string
+          payload: Json
+          attempts: number
+          next_attempt_at: string
+          last_error: string | null
+          created_at: string
+          done_at: string | null
+          failed_at: string | null
+        }
+        Insert: { kind: string; payload: Json; attempts?: number; next_attempt_at?: string; last_error?: string | null; done_at?: string | null; failed_at?: string | null }
+        Update: { attempts?: number; next_attempt_at?: string; last_error?: string | null; done_at?: string | null; failed_at?: string | null }
+        Relationships: []
+      }
       rate_limits: {
         Row: { key: string; count: number; window_start: string }
         Insert: never

@@ -1,10 +1,9 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { timingSafeEqual } from 'node:crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { apiError } from '@/lib/api/http'
+import { requireCron } from '@/lib/cron-auth'
 import { runRetention } from '@/lib/retention'
 
 export const dynamic = 'force-dynamic'
@@ -18,14 +17,8 @@ export const maxDuration = 60
  * anyone who finds the URL.
  */
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET
-  if (!secret) {
-    log.error('retention.misconfigured', 'CRON_SECRET is not set; the retention sweep did not run')
-    return NextResponse.json({ error: 'Not configured' }, { status: 503 })
-  }
-  if (!bearerMatches(request.headers.get('authorization'), secret)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const refused = requireCron(request, 'retention')
+  if (refused) return refused
 
   try {
     const result = await runRetention(createAdminClient())
@@ -41,10 +34,4 @@ export async function GET(request: NextRequest) {
   } catch (err) {
     return apiError('retention.unhandled', err, { path: 'claim' })
   }
-}
-
-function bearerMatches(header: string | null, secret: string): boolean {
-  const expected = Buffer.from(`Bearer ${secret}`)
-  const given = Buffer.from(header ?? '')
-  return given.length === expected.length && timingSafeEqual(given, expected)
 }

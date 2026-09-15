@@ -34,6 +34,17 @@ const QUERIES = [
   ['revenue by tier',                     `select * from public.admin_revenue_by_tier()`],
   ['revenue by course',                   `select * from public.admin_revenue_by_course()`],
   ['dashboard totals (old way: all bets)',`select stake_pence, potential_win_pence, status from public.bets`],
+  // Stage 4
+  ['queue by risk (claimed bets)',        `select id from public.bets where status in ('claimed','verified','paid') order by risk_score desc limit 5000`],
+  ['risk: hole cluster (7 days)',         `select id from public.bets where hole_id = (select hole_id from public.bets limit 1) and status in ('claimed','verified','paid') and created_at >= now() - interval '7 days'`],
+  ['risk: shared ip (30 days)',           `select user_id from public.bets where claim_ip_hash = 'none' and created_at >= now() - interval '30 days'`],
+  ['risk: duplicate footage',             `select id from public.bets where video_sha256 = 'none'`],
+  ['retention: misses to purge',          `select id, video_url from public.bets where status = 'miss' and footage_purged_at is null and declared_at <= now() - interval '90 days' limit 200`],
+  ['retention: rejected to purge',        `select id from public.verifications where status = 'rejected' and documents_purged_at is null and updated_at <= now() - interval '90 days' limit 200`],
+  ['witnesses for a claim',               `select * from public.claim_witnesses where bet_id = (select id from public.bets limit 1)`],
+  ['witness token lookup',                `select id from public.claim_witnesses where token_hash = 'none'`],
+  ['outbox due',                          `select id, kind from public.outbox where done_at is null and failed_at is null and next_attempt_at <= now() order by next_attempt_at limit 25`],
+  ['deleted account by email hash',       `select bets from public.deleted_accounts where email_hash = 'none'`],
 ]
 
 const results = []

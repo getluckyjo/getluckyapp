@@ -12,7 +12,8 @@ PayFast · Resend · Sentry · Vercel.
 
 | Question | Read |
 |---|---|
-| How does money move, what can go wrong, what did the audit find | [`AUDIT.md`](./AUDIT.md) |
+| How the system works, the data model, the fraud controls, the runbooks | [`ARCHITECTURE.md`](./ARCHITECTURE.md) |
+| What the audit found before any of this was built | [`AUDIT.md`](./AUDIT.md) |
 | The safety net: staging, tests, CI, alerts, backups | [`docs/stage-2-safety-net.md`](./docs/stage-2-safety-net.md), [`docs/restore-runbook.md`](./docs/restore-runbook.md) |
 | What each remediation batch changed and how to test it | `docs/batch-*.md` |
 | Going live with PayFast | [`docs/payfast-go-live.md`](./docs/payfast-go-live.md) |
@@ -42,6 +43,7 @@ Against the staging Supabase project (needs the `STAGING_*` variables):
 npm run staging:bootstrap    # apply supabase/migrations/*.sql, idempotent
 npm run staging:seed         # fake users, bets, claims, documents
 npm run test:staging         # Row Level Security probed as a real user
+npm run load:event-day       # 120 golfers in 10 minutes against a preview URL (BASE_URL=…), see docs/batch-12-scale.md
 ```
 
 ## Environment variables
@@ -57,7 +59,7 @@ npm run test:staging         # Row Level Security probed as a real user
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | all | source maps upload when the token is set |
 | `OPS_ALERT_EMAIL` | server | where money-path alerts are emailed |
 | `BET_WINDOW_HOURS` | server | play window after purchase, default 24 |
-| `CRON_SECRET` | server | Vercel sends it as the bearer token to `/api/cron/retention`; the sweep refuses to run without it |
+| `CRON_SECRET` | server | Vercel sends it as the bearer token to `/api/cron/outbox` (every minute) and `/api/cron/retention` (nightly); both refuse to run without it |
 | `RISK_HASH_SALT` | server | at least 16 random characters; salts the hashed IP, device and email used by the risk rules. Without it those rules stay quiet and the log says so once |
 | `RETENTION_DAYS` | server | footage of misses and documents of rejected claims are purged after this many days, default 90 |
 
@@ -75,12 +77,15 @@ src/lib/payfast/        PayFast configuration and address list
 src/lib/rate-limit.ts   Postgres-backed limiter
 src/lib/account/        account deletion: what goes, what stays, what blocks it
 src/lib/risk/           the velocity and anomaly rules, thresholds, hashing
+src/lib/outbox.ts       background jobs (emails), drained every minute by /api/cron/outbox
+src/lib/claims/         also: capture attestation, document sealing, witnesses, confirmation tokens
 src/lib/retention.ts    the nightly purge of footage and documents (vercel.json schedules it)
 src/lib/observability/  structured log + ops alerts (Sentry + email)
 src/lib/api/http.ts     parseBody / parseQuery / apiError
 supabase/migrations/    numbered, idempotent; apply in order (see each batch doc for timing)
 __tests__/              vitest; helpers/fake-supabase.ts is the in-memory PostgREST look-alike
-scripts/staging/        bootstrap, seed, verify-restore, explain
+scripts/staging/        bootstrap, seed, verify-restore, explain (query timings)
+scripts/load/           the event-day load test
 ```
 
 ## Database types

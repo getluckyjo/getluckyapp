@@ -9,6 +9,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, COURSE_ID, HOLE_ID } from '../helpers/fake-supabase'
 import { sendWitnessRequests, lookupToken, hashToken } from '@/lib/claims/confirmation'
+import { drainOutbox } from '@/lib/outbox'
 import { replaceWitnesses } from '@/lib/claims/witnesses'
 import { buildWitnessRequest } from '@/lib/email/witness-request'
 import { POST as submitClaim } from '@/app/api/verifications/[betId]/route'
@@ -181,10 +182,15 @@ describe('claim submission asks everyone', () => {
       ['sipho@example.com', 'witness', 'claimant'],
       ['manager@club.example', 'club_official', 'course'],
     ])
+    // Nothing is sent in the request; the outbox drain sends it within the minute.
+    expect(sentTo()).toHaveLength(0)
+    expect(db.rows('outbox').map(j => j.kind)).toEqual(['witness_request'])
+    expect(await drainOutbox(admin())).toMatchObject({ claimed: 1, done: 1 })
     expect(sentTo().map(m => m.to).sort()).toEqual(['manager@club.example', 'sipho@example.com'])
 
     // Resubmitting with the same witness sends nothing new; adding one sends one more.
     await submit({ certificatePath: `${USER_A.id}/${b.id}/certificate/c.pdf`, witnesses: [{ role: 'witness', name: 'Sipho Dlamini', email: 'sipho@example.com' }, { role: 'witness', name: 'Thandi Nkosi', email: 't@example.com' }] })
+    await drainOutbox(admin())
     expect(sentTo().map(m => m.to).sort()).toEqual(['manager@club.example', 'sipho@example.com', 't@example.com'])
     expect(db.rows('claim_witnesses')).toHaveLength(3)
   })
