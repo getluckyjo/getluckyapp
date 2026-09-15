@@ -36,9 +36,13 @@ export default function LandingPage() {
 
         <div className="landing-body">
           <h1 className="landing-welcome">Welcome to</h1>
-          <img
+          <Image
             src="/brand/logo-lockup.svg"
             alt="Get Lucky Hole-in-1 Challenge"
+            width={552}
+            height={588}
+            unoptimized
+            priority
             className="landing-lockup"
             draggable={false}
           />

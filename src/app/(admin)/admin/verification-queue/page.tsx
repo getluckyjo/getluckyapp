@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Eye, CheckCircle, XCircle, Clock } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
@@ -24,7 +24,6 @@ export default function VerificationQueuePage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [sort, setSort] = useState('oldest')
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -32,42 +31,49 @@ export default function VerificationQueuePage() {
   const [batchNotes, setBatchNotes] = useState('')
   const [pipelineCounts, setPipelineCounts] = useState<Record<string, number>>({})
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ page: String(page), sort })
-      if (statusFilter) params.set('status', statusFilter)
-      const res = await fetch(`/api/admin/verifications?${params}`)
-      const json: PaginatedResponse<VerificationQueueItem> = await res.json()
-      setData(json.data || [])
-      setTotal(json.total || 0)
-      setTotalPages(json.totalPages || 1)
-    } catch (err) {
-      console.error('[admin] request failed:', err)
-      setData([])
-    } finally {
-      setLoading(false)
-    }
+  // Loading is derived: the page is loading until the query it currently
+  // shows has been answered, so no state is set synchronously in an effect.
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ page: String(page), sort })
+    if (statusFilter) params.set('status', statusFilter)
+    return params.toString()
   }, [page, statusFilter, sort])
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
+  const loading = loadedQuery !== query
+  // Bumped after a batch action so both fetches re-run without changing the query.
+  const [refresh, setRefresh] = useState(0)
+  const reload = () => setRefresh(n => n + 1)
 
-  // Fetch pipeline counts (all statuses)
-  const fetchPipelineCounts = useCallback(async () => {
-    try {
-      const counts: Record<string, number> = {}
-      for (const stage of PIPELINE_STAGES) {
-        const res = await fetch(`/api/admin/verifications?status=${stage.status}&limit=1`)
-        const json = await res.json()
-        counts[stage.status] = json.total || 0
-      }
-      setPipelineCounts(counts)
-    } catch (err) {
-      console.error('[admin] request failed:', err)
-      // ignore
-    }
-  }, [])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/admin/verifications?${query}`)
+      .then(res => res.json() as Promise<PaginatedResponse<VerificationQueueItem>>)
+      .then(json => {
+        if (cancelled) return
+        setData(json.data || [])
+        setTotal(json.total || 0)
+        setTotalPages(json.totalPages || 1)
+      })
+      .catch(err => {
+        console.error('[admin] request failed:', err)
+        if (!cancelled) setData([])
+      })
+      .finally(() => { if (!cancelled) setLoadedQuery(query) })
+    return () => { cancelled = true }
+  }, [query, refresh])
 
-  useEffect(() => { fetchData() }, [fetchData])
-  useEffect(() => { fetchPipelineCounts() }, [fetchPipelineCounts])
+  // Pipeline counts (all statuses), one request per stage in parallel
+  useEffect(() => {
+    let cancelled = false
+    Promise.all(PIPELINE_STAGES.map(stage =>
+      fetch(`/api/admin/verifications?status=${stage.status}&limit=1`)
+        .then(res => res.json())
+        .then(json => [stage.status, json.total || 0] as const),
+    ))
+      .then(totals => { if (!cancelled) setPipelineCounts(Object.fromEntries(totals)) })
+      .catch(err => console.error('[admin] request failed:', err))
+    return () => { cancelled = true }
+  }, [refresh])
 
   const toggleSelect = (id: string) => {
     const next = new Set(selected)
@@ -92,8 +98,7 @@ export default function VerificationQueuePage() {
       setSelected(new Set())
       setBatchModal(null)
       setBatchNotes('')
-      fetchData()
-      fetchPipelineCounts()
+      reload()
     } catch (err) {
       console.error('[admin] request failed:', err)
       // error handled silently

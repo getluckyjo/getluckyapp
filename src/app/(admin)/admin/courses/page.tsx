@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Edit, Trash2, MapPin, CheckCircle, XCircle } from 'lucide-react'
 import SearchInput from '@/components/admin/SearchInput'
@@ -14,30 +14,38 @@ export default function AdminCoursesPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [partnerFilter, setPartnerFilter] = useState('')
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' })
-      if (search) params.set('search', search)
-      if (partnerFilter) params.set('partner', partnerFilter)
-      const res = await fetch(`/api/admin/courses?${params}`)
-      const json: PaginatedResponse<AdminCourseRecord> = await res.json()
-      setData(json.data || [])
-      setTotal(json.total || 0)
-      setTotalPages(json.totalPages || 1)
-    } catch {
-      setData([])
-    } finally {
-      setLoading(false)
-    }
+  // Loading is derived: the page is loading until the query it currently
+  // shows has been answered, so no state is set synchronously in an effect.
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ page: String(page), limit: '20' })
+    if (search) params.set('search', search)
+    if (partnerFilter) params.set('partner', partnerFilter)
+    return params.toString()
   }, [page, search, partnerFilter])
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
+  const loading = loadedQuery !== query
+  // Bumped after an edit so the list re-fetches without changing the query.
+  const [refresh, setRefresh] = useState(0)
+  const reload = () => setRefresh(n => n + 1)
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/admin/courses?${query}`)
+      .then(res => res.json() as Promise<PaginatedResponse<AdminCourseRecord>>)
+      .then(json => {
+        if (cancelled) return
+        setData(json.data || [])
+        setTotal(json.total || 0)
+        setTotalPages(json.totalPages || 1)
+      })
+      .catch(() => { if (!cancelled) setData([]) })
+      .finally(() => { if (!cancelled) setLoadedQuery(query) })
+    return () => { cancelled = true }
+  }, [query, refresh])
 
   const togglePartner = async (courseId: string, currentValue: boolean) => {
     await fetch(`/api/admin/courses/${courseId}`, {
@@ -45,14 +53,14 @@ export default function AdminCoursesPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ is_partner: !currentValue }),
     })
-    fetchData()
+    reload()
   }
 
   const handleDelete = async () => {
     if (!deleteModal) return
     await fetch(`/api/admin/courses/${deleteModal}`, { method: 'DELETE' })
     setDeleteModal(null)
-    fetchData()
+    reload()
   }
 
   return (

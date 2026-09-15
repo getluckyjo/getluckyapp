@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { BurgerIcon } from '@/components/icons'
 import AppMenu from './AppMenu'
 
@@ -25,7 +26,7 @@ export default function AppHeader({ tone = 'light' }: { tone?: 'light' | 'dark' 
         >
           <BurgerIcon size={18} />
         </button>
-        <img src="/brand/logo-corner.svg" alt="Get Lucky" className="app-header-logo" draggable={false} />
+        <Image src="/brand/logo-corner.svg" alt="Get Lucky" width={173} height={133} unoptimized priority className="app-header-logo" draggable={false} />
       </header>
       <AppMenu open={menuOpen} onClose={() => setMenuOpen(false)} />
     </>
