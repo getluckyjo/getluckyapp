@@ -49,6 +49,9 @@ export default function LandingPage() {
           >
             Get started
           </button>
+          <button type="button" className="landing-link" onClick={() => router.push('/onboarding')}>
+            New here? See how it works
+          </button>
         </div>
 
         <SponsorBanner />

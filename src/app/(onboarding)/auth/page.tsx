@@ -131,9 +131,11 @@ function AuthForm() {
             <p className="v2-sub">
               {mode === 'sent'
                 ? `We sent a six-digit code to\n${email.trim()}`
-                : next
-                  ? 'Sign in to place your bet.\nIt takes one tap.'
-                  : 'Sign in &\nJoin 15 000+\nGolfers already playing...'}
+                : mode === 'email'
+                  ? 'Enter your email and we’ll\nsend you a code.'
+                  : next
+                    ? 'Sign in to place your bet.\nIt takes one tap.'
+                    : 'Sign in &\nJoin 15 000+\nGolfers already playing...'}
             </p>
 
             {shownError && (
@@ -149,22 +151,20 @@ function AuthForm() {
 
               {mode === 'email' && (
                 <form className="signin-email" onSubmit={handleEmail}>
-                  <label htmlFor="signin-email" className="sr-only">Email address</label>
-                  <div className="signin-email-row">
-                    <input
-                      id="signin-email"
-                      type="email"
-                      inputMode="email"
-                      autoComplete="email"
-                      autoFocus
-                      placeholder="you@email.com"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                    />
-                    <button type="submit" className="btn-lime" disabled={busy === 'email'}>
-                      {busy === 'email' ? 'Sending' : 'Send code'}
-                    </button>
-                  </div>
+                  <label htmlFor="signin-email" className="signin-label">Your email</label>
+                  <input
+                    id="signin-email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoFocus
+                    placeholder="you@email.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                  />
+                  <button type="submit" className="btn-lime btn-lime--block" disabled={busy === 'email'}>
+                    {busy === 'email' ? 'Sending…' : 'Send me a code'}
+                  </button>
                   <button type="button" className="signin-cancel" onClick={() => { setMode('idle'); setError(null) }}>
                     Back
                   </button>
@@ -173,25 +173,23 @@ function AuthForm() {
 
               {mode === 'sent' && (
                 <form className="signin-email" onSubmit={handleCode}>
-                  <label htmlFor="signin-code" className="sr-only">Six-digit code</label>
-                  <div className="signin-email-row">
-                    <input
-                      id="signin-code"
-                      className="signin-code"
-                      type="text"
-                      inputMode="numeric"
-                      autoComplete="one-time-code"
-                      pattern="[0-9]*"
-                      maxLength={6}
-                      autoFocus
-                      placeholder="000000"
-                      value={code}
-                      onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    />
-                    <button type="submit" className="btn-lime" disabled={busy === 'code'}>
-                      {busy === 'code' ? 'Checking' : 'Sign in'}
-                    </button>
-                  </div>
+                  <label htmlFor="signin-code" className="signin-label">Six-digit code</label>
+                  <input
+                    id="signin-code"
+                    className="signin-code"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    autoFocus
+                    placeholder="000000"
+                    value={code}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  />
+                  <button type="submit" className="btn-lime btn-lime--block" disabled={busy === 'code'}>
+                    {busy === 'code' ? 'Checking…' : 'Sign in'}
+                  </button>
                   <div className="signin-sent-actions">
                     <button type="button" className="signin-cancel" onClick={handleResend} disabled={busy === 'email'}>
                       {busy === 'email' ? 'Sending…' : resent ? 'Sent again' : 'Send a new code'}
@@ -208,7 +206,7 @@ function AuthForm() {
 
               {mode !== 'sent' && (
                 <>
-                  <span className="signin-or">or sign in with</span>
+                  <span className="signin-or" aria-hidden><i />or sign in with<i /></span>
                   <div className="signin-social">
                     <button
                       type="button"
