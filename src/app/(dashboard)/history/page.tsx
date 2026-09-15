@@ -28,15 +28,15 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: 'won', label: 'Won' },
 ]
 
-function getStatusBadge(bet: BetRecord) {
-  if (bet.status === 'paid' || bet.status === 'verified') {
-    return { label: 'Won!', bg: 'rgba(74,157,91,0.12)', color: '#2d6a3f' }
-  }
-  if (bet.declared_result === 'win' || bet.status === 'claimed') {
-    return { label: 'Claimed', bg: 'rgba(201,168,76,0.15)', color: '#a07820' }
-  }
-  return { label: 'Miss', bg: '#f5f0e8', color: '#999' }
+type Outcome = 'won' | 'claimed' | 'miss'
+
+function getOutcome(bet: BetRecord): Outcome {
+  if (bet.status === 'paid' || bet.status === 'verified') return 'won'
+  if (bet.declared_result === 'win' || bet.status === 'claimed') return 'claimed'
+  return 'miss'
 }
+
+const OUTCOME_LABEL: Record<Outcome, string> = { won: 'Won', claimed: 'Claimed', miss: 'Miss' }
 
 function matchesFilter(bet: BetRecord, filter: Filter): boolean {
   if (filter === 'all') return true
@@ -47,21 +47,21 @@ function matchesFilter(bet: BetRecord, filter: Filter): boolean {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-ZA', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  })
+  return new Date(iso).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function formatStake(cents: number) {
-  return `R${(cents / 100).toLocaleString('en-ZA')}`
-}
-
-function formatWin(cents: number) {
-  return `R${(cents / 100).toLocaleString('en-ZA')}`
+function formatRand(cents: number) {
+  return `R${(cents / 100).toLocaleString('en-ZA').replace(/,/g, ' ')}`
 }
 
 const PAGE_SIZE = 20
 
+/**
+ * My bets — every attempt the golfer has made, in the V2 system.
+ * Display title, three stat tiles, a row of filter pills, then white
+ * cards: a ball disc (lime when it went in), course and hole, an outcome
+ * badge, and the stake / prize line underneath.
+ */
 export default function HistoryPage() {
   const router = useRouter()
   const [allBets, setAllBets] = useState<BetRecord[]>([])
@@ -81,158 +81,147 @@ export default function HistoryPage() {
   const visible = filtered.slice(0, visibleCount)
   const hasMore = visibleCount < filtered.length
 
-  // Reset visible count when filter changes
   const handleFilter = useCallback((f: Filter) => {
     setFilter(f)
     setVisibleCount(PAGE_SIZE)
   }, [])
 
-  // Summary stats
   const totalStaked = allBets.reduce((s, b) => s + b.stake_pence, 0)
-  const totalWon = allBets
-    .filter(b => b.status === 'paid' || b.status === 'verified')
-    .reduce((s, b) => s + b.potential_win_pence, 0)
-  const claimCount = allBets.filter(b =>
-    b.declared_result === 'win' || b.status === 'claimed' || b.status === 'paid' || b.status === 'verified'
-  ).length
+  const totalWon = allBets.filter(b => getOutcome(b) === 'won').reduce((s, b) => s + b.potential_win_pence, 0)
+  const claimCount = allBets.filter(b => getOutcome(b) !== 'miss').length
 
   return (
-    <PhoneFrame statusTheme="dark" hideSponsor>
-      <div className="screen-history">
+    <PhoneFrame statusTheme="dark">
+      <div className="v2-screen">
         <AppHeader tone="light" />
-        <header className="page-head">
-          <h1 className="page-title">My Bets</h1>
-          <div className="page-sub" style={{ whiteSpace: 'nowrap', paddingBottom: 4 }}>
-            {loading ? '—' : allBets.length} total
-          </div>
-        </header>
 
-        {/* Summary */}
-        <div className="history-summary">
-          {loading ? (
-            [0, 1, 2].map(i => (
-              <div key={i} className="history-summary-card">
-                <div className="skeleton" style={{ height: 20, width: '70%', margin: '0 auto 6px', borderRadius: 4 }} />
-                <div className="skeleton" style={{ height: 10, width: '55%', margin: '0 auto', borderRadius: 3 }} />
-              </div>
-            ))
-          ) : (
-            <>
-              <div className="history-summary-card">
-                <div className="history-summary-val">{allBets.length}</div>
-                <div className="history-summary-label">Attempts</div>
-              </div>
-              <div className="history-summary-card">
-                <div className="history-summary-val">{formatStake(totalStaked)}</div>
-                <div className="history-summary-label">Total Staked</div>
-              </div>
-              <div className="history-summary-card">
-                <div className="history-summary-val" style={{ color: claimCount > 0 ? 'var(--gold)' : undefined }}>
-                  {totalWon > 0 ? formatWin(totalWon) : claimCount > 0 ? `${claimCount} claim${claimCount > 1 ? 's' : ''}` : 'R0'}
-                </div>
-                <div className="history-summary-label">{totalWon > 0 ? 'Won' : 'Claims'}</div>
-              </div>
-            </>
-          )}
-        </div>
-
-        {/* Filter chips */}
-        <div className="history-filters" role="group" aria-label="Filter bets">
-          {FILTERS.map(f => (
-            <button
-              key={f.key}
-              aria-pressed={filter === f.key}
-              className={`filter-chip${filter === f.key ? ' active' : ''}`}
-              onClick={() => handleFilter(f.key)}
-            >
-              {f.label}
-              {!loading && f.key !== 'all' && (
-                <span style={{ marginLeft: 5, opacity: 0.7 }}>
-                  ({allBets.filter(b => matchesFilter(b, f.key)).length})
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* List */}
-        <div className="history-list">
-          {loading ? (
-            [0, 1, 2, 4].map(i => (
-              <div key={i} className="history-bet-card">
-                <div className="history-bet-top">
-                  <div className="skeleton" style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0 }} />
-                  <div style={{ flex: 1 }}>
-                    <div className="skeleton" style={{ height: 14, width: '65%', marginBottom: 6, borderRadius: 4 }} />
-                    <div className="skeleton" style={{ height: 11, width: '45%', borderRadius: 3 }} />
-                  </div>
-                  <div className="skeleton" style={{ height: 22, width: 44, borderRadius: 6, flexShrink: 0 }} />
-                </div>
-              </div>
-            ))
-          ) : filtered.length === 0 ? (
-            <div className="history-empty">
-              <div className="history-empty-icon" aria-hidden><GolfBallIcon size={52} ball="#fff" style={{ color: 'var(--green)' }} /></div>
-              <div className="history-empty-title">
-                {filter === 'all' ? 'No bets yet' : `No ${FILTERS.find(f => f.key === filter)?.label.toLowerCase()} bets`}
-              </div>
-              <div className="history-empty-sub">
-                {filter === 'all'
-                  ? 'Select a course and take your first shot!'
-                  : 'Try a different filter above.'}
-              </div>
+        <div className="vf-scroll">
+          <header className="page-head" style={{ padding: 0 }}>
+            <h1 className="v2-title" style={{ marginBottom: 0 }}>My bets</h1>
+            <div className="page-sub" style={{ whiteSpace: 'nowrap', paddingBottom: 6 }}>
+              {loading ? '—' : allBets.length} total
             </div>
-          ) : (
-            <>
-              {visible.map(bet => {
-                const badge = getStatusBadge(bet)
+          </header>
+
+          {/* Summary */}
+          <div className="hist-summary">
+            {loading ? (
+              [0, 1, 2].map(i => (
+                <div key={i} className="hist-stat">
+                  <div className="skeleton" style={{ height: 20, width: '70%', margin: '0 auto 6px' }} />
+                  <div className="skeleton" style={{ height: 10, width: '55%', margin: '0 auto' }} />
+                </div>
+              ))
+            ) : (
+              <>
+                <div className="hist-stat">
+                  <div className="hist-stat-val">{allBets.length}</div>
+                  <div className="hist-stat-label">Attempts</div>
+                </div>
+                <div className="hist-stat">
+                  <div className="hist-stat-val">{formatRand(totalStaked)}</div>
+                  <div className="hist-stat-label">Staked</div>
+                </div>
+                <div className="hist-stat">
+                  <div className="hist-stat-val">
+                    {totalWon > 0 ? formatRand(totalWon) : claimCount > 0 ? claimCount : 'R0'}
+                  </div>
+                  <div className="hist-stat-label">{totalWon > 0 ? 'Won' : claimCount > 0 ? 'Claims' : 'Won'}</div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Filter chips */}
+          <div className="hist-filters" role="group" aria-label="Filter bets">
+            {FILTERS.map(f => (
+              <button
+                key={f.key}
+                type="button"
+                aria-pressed={filter === f.key}
+                className={`filter-chip${filter === f.key ? ' active' : ''}`}
+                onClick={() => handleFilter(f.key)}
+              >
+                {f.label}
+                {!loading && f.key !== 'all' && (
+                  <small>{allBets.filter(b => matchesFilter(b, f.key)).length}</small>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* List */}
+          <div className="hist-list">
+            {loading ? (
+              [0, 1, 2, 3].map(i => (
+                <div key={i} className="hist-card">
+                  <div className="hist-card-top">
+                    <div className="skeleton" style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <div className="skeleton" style={{ height: 14, width: '65%', marginBottom: 6 }} />
+                      <div className="skeleton" style={{ height: 11, width: '45%' }} />
+                    </div>
+                    <div className="skeleton" style={{ height: 22, width: 50, borderRadius: 999, flexShrink: 0 }} />
+                  </div>
+                </div>
+              ))
+            ) : filtered.length === 0 ? (
+              <div className="hist-empty">
+                <span className="nf-ball" aria-hidden><GolfBallIcon size={38} /></span>
+                <div className="hist-empty-title">
+                  {filter === 'all' ? 'No bets yet' : `No ${FILTERS.find(f => f.key === filter)?.label.toLowerCase()} yet`}
+                </div>
+                <div className="hist-empty-sub">
+                  {filter === 'all'
+                    ? 'Pick a par 3 and take your first shot.'
+                    : 'Try a different filter above.'}
+                </div>
+                {filter === 'all' && (
+                  <button type="button" className="btn-lime" onClick={() => router.push('/select-course')}>
+                    Play now
+                  </button>
+                )}
+              </div>
+            ) : (
+              visible.map(bet => {
+                const outcome = getOutcome(bet)
                 return (
-                  <div key={bet.id} className="history-bet-card fade-up">
-                    <div className="history-bet-top">
-                      <div className="history-bet-icon">⛳</div>
-                      <div className="history-bet-meta">
-                        <div className="history-bet-course">
-                          {bet.courses?.name ?? 'Unknown Course'}
-                        </div>
-                        <div className="history-bet-sub">
+                  <div key={bet.id} className={`hist-card${outcome === 'won' ? ' is-won' : ''}`}>
+                    <div className="hist-card-top">
+                      <span className="hist-card-icon" aria-hidden><GolfBallIcon size={22} /></span>
+                      <div className="hist-card-meta">
+                        <div className="hist-card-course">{bet.courses?.name ?? 'Unknown course'}</div>
+                        <div className="hist-card-sub">
                           Hole {bet.holes?.hole_number ?? '?'} · Par {bet.holes?.par ?? 3} · {formatDate(bet.created_at)}
                         </div>
                       </div>
-                      <div
-                        className="history-bet-badge"
-                        style={{ background: badge.bg, color: badge.color }}
-                      >
-                        {badge.label}
-                      </div>
+                      <span className={`hist-badge hist-badge--${outcome}`}>{OUTCOME_LABEL[outcome]}</span>
                     </div>
-                    <div className="history-bet-footer">
-                      <div className="history-bet-stake">
-                        Staked {formatStake(bet.stake_pence)}
-                      </div>
-                      <div className="history-bet-win">
-                        Win {formatWin(bet.potential_win_pence)}
-                      </div>
+                    <div className="hist-card-foot">
+                      <span className="hist-card-stake">Staked {formatRand(bet.stake_pence)}</span>
+                      <span className="hist-card-win">
+                        {outcome === 'won' ? 'Won' : 'Prize'}<strong>{formatRand(bet.potential_win_pence)}</strong>
+                      </span>
                     </div>
                   </div>
                 )
-              })}
-            </>
-          )}
+              })
+            )}
+
+            {hasMore && !loading && (
+              <button
+                type="button"
+                className="btn-tile btn-tile--block hist-more"
+                onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+              >
+                Load more ({filtered.length - visibleCount} remaining)
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Load more */}
-        {hasMore && !loading && (
-          <button
-            className="history-load-more"
-            onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
-          >
-            Load more ({filtered.length - visibleCount} remaining)
-          </button>
-        )}
+        <BottomTabBar active="history" />
       </div>
-
-      {/* Bottom tab bar */}
-      <BottomTabBar active="history" />
     </PhoneFrame>
   )
 }

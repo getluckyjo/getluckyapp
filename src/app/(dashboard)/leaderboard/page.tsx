@@ -47,10 +47,17 @@ function getInitials(name: string | null | undefined, email: string | null | und
   return 'GL'
 }
 
-function formatWin(amount: number) {
-  return `R${amount.toLocaleString('en-ZA')}`
+function formatRand(amount: number) {
+  return `R${amount.toLocaleString('en-ZA').replace(/,/g, ' ')}`
 }
 
+/**
+ * Winners — the wall of aces in the V2 system.
+ * Display title with the running total, a segmented toggle between biggest
+ * and most recent, a three-up podium with the leader in green and lime,
+ * the signed-in golfer's own row as a nudge to play, then the rest as
+ * white rows with display-face amounts.
+ */
 export default function LeaderboardPage() {
   const router = useRouter()
   const { user, profile } = useAuth()
@@ -67,111 +74,68 @@ export default function LeaderboardPage() {
   const totalPaidOut = BIGGEST_WINNERS.reduce((s, w) => s + w.amount, 0)
 
   return (
-    <PhoneFrame statusTheme="dark" hideSponsor>
-      <div className="screen-leaderboard">
+    <PhoneFrame statusTheme="dark">
+      <div className="v2-screen">
         <AppHeader tone="light" />
-        <header className="page-head" style={{ display: 'block' }}>
-          <h1 className="page-title">Winners</h1>
-          <div className="page-sub">
-            R{totalPaidOut.toLocaleString('en-ZA')} paid out to date
-          </div>
-        </header>
 
-        {/* Tabs */}
-        <div className="leaderboard-tabs" role="tablist" aria-label="Winners list view">
-          <button
-            role="tab"
-            aria-selected={tab === 'biggest'}
-            className={`lb-tab${tab === 'biggest' ? ' active' : ''}`}
-            onClick={() => setTab('biggest')}
-          >
-            Biggest Wins
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === 'recent'}
-            className={`lb-tab${tab === 'recent' ? ' active' : ''}`}
-            onClick={() => setTab('recent')}
-          >
-            Most Recent
-          </button>
-        </div>
+        <div className="vf-scroll">
+          <h1 className="v2-title" style={{ marginBottom: 6 }}>Winners</h1>
+          <p className="vf-sub" style={{ marginBottom: 0 }}>{formatRand(totalPaidOut)} paid out to date</p>
 
-        {/* List */}
-        <div className="leaderboard-list">
-          {/* Podium top 3 */}
-          <div className="lb-podium">
-            {[podium[1], podium[0], podium[2]].map((w, i) => {
-              const actualRank = i === 0 ? 2 : i === 1 ? 1 : 3
-              return (
-                <div key={w.rank} className={`lb-podium-item rank-${actualRank}`}>
-                  {actualRank === 1 && <div className="lb-podium-crown">👑</div>}
-                  <div className="lb-podium-avatar">{w.initials}</div>
-                  <div className="lb-podium-name">{w.name}</div>
-                  <div className="lb-podium-amount">{formatWin(w.amount)}</div>
-                  <div className="lb-podium-course">{w.course}</div>
-                </div>
-              )
-            })}
+          <div className="lb-seg" role="tablist" aria-label="Winners list view">
+            <button role="tab" type="button" aria-selected={tab === 'biggest'} className={`lb-tab${tab === 'biggest' ? ' active' : ''}`} onClick={() => setTab('biggest')}>
+              Biggest wins
+            </button>
+            <button role="tab" type="button" aria-selected={tab === 'recent'} className={`lb-tab${tab === 'recent' ? ' active' : ''}`} onClick={() => setTab('recent')}>
+              Most recent
+            </button>
           </div>
 
-          {/* Your position (if signed in) */}
+          {/* Podium: 2 · 1 · 3 */}
+          <div className="lb-podium" key={tab}>
+            {[podium[1], podium[0], podium[2]].map(w => (
+              <div key={w.rank} className={`lb-podium-item rank-${w.rank}`}>
+                <span className="lb-podium-rank" aria-label={`Rank ${w.rank}`}>#{w.rank}</span>
+                <div className="lb-podium-avatar" aria-hidden>{w.initials}</div>
+                <div className="lb-podium-name">{w.name}</div>
+                <div className="lb-podium-amount">{formatRand(w.amount)}</div>
+                <div className="lb-podium-course">{w.course}</div>
+              </div>
+            ))}
+          </div>
+
           {user && (
-            <div className="lb-you-banner">
-              <div style={{
-                width: 'clamp(32px, 9vw, 36px)', height: 'clamp(32px, 9vw, 36px)', borderRadius: '50%',
-                background: 'linear-gradient(135deg, var(--green-mid), var(--green-deep))',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 'var(--text-body)', fontWeight: 700, color: 'white', flexShrink: 0,
-              }}>
-                {userInitials}
+            <div className="lb-you">
+              <div className="lb-avatar" aria-hidden>{userInitials}</div>
+              <div className="lb-info">
+                <div className="lb-name">{firstName} (you)</div>
+                <div className="lb-sub" style={{ whiteSpace: 'normal' }}>Win your first hole-in-one to appear here</div>
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 'var(--text-body)', fontWeight: 700, color: 'var(--green-deep)' }}>
-                  {firstName} (You)
-                </div>
-                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--gray-light)', marginTop: 1 }}>
-                  Win your first hole-in-one to appear here!
-                </div>
-              </div>
-              <button
-                onClick={() => router.push('/select-course')}
-                style={{
-                  padding: '7px 12px', background: 'var(--green-deep)',
-                  border: 'none', borderRadius: 'var(--radius-sm)', color: 'white',
-                  fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer', flexShrink: 0,
-                }}
-              >
-                Play →
+              <button type="button" className="lb-you-cta" onClick={() => router.push('/select-course')}>
+                Play
               </button>
             </div>
           )}
 
-          {/* Rest of leaderboard */}
-          {rest.map(w => (
-            <div key={w.rank} className="lb-row">
-              <div className="lb-rank-num">{w.rank}</div>
-              <div className="lb-row-avatar">{w.initials}</div>
-              <div className="lb-row-info">
-                <div className="lb-row-name">{w.name}</div>
-                <div className="lb-row-sub">{w.course} · {w.date}</div>
+          <div className="lb-list">
+            {rest.map(w => (
+              <div key={w.rank} className="lb-row">
+                <div className="lb-rank">{w.rank}</div>
+                <div className="lb-avatar" aria-hidden>{w.initials}</div>
+                <div className="lb-info">
+                  <div className="lb-name">{w.name}</div>
+                  <div className="lb-sub">{w.course} · {w.date}</div>
+                </div>
+                <div className="lb-amount">{formatRand(w.amount)}</div>
               </div>
-              <div className="lb-row-amount">{formatWin(w.amount)}</div>
-            </div>
-          ))}
-
-          {/* Footer note */}
-          <div style={{
-            textAlign: 'center', padding: '4px 0 8px',
-            fontSize: 'var(--text-xs)', color: 'var(--gray-light)',
-          }}>
-            All prizes independently verified · Updated daily
+            ))}
           </div>
-        </div>
-      </div>
 
-      {/* Bottom tab bar */}
-      <BottomTabBar active="leaderboard" />
+          <p className="lb-note">All prizes independently verified · Updated daily</p>
+        </div>
+
+        <BottomTabBar active="leaderboard" />
+      </div>
     </PhoneFrame>
   )
 }
