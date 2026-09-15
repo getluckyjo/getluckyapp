@@ -2,42 +2,30 @@
 
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
+import BottomTabBar from '@/components/layout/BottomTabBar'
+import { GolfBallIcon } from '@/components/icons'
 
 export default function NotFound() {
   const router = useRouter()
 
   return (
     <PhoneFrame statusTheme="dark">
-      <div style={{
-        width: '100%', height: '100%', background: 'var(--cream-light)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        padding: '0 var(--page-px)', textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 64, marginBottom: 'var(--space-md)' }}>⛳</div>
-        <div style={{
-          fontFamily: 'Poster Gothic, sans-serif', fontSize: 'var(--text-2xl)',
-          fontWeight: 900, color: 'var(--green-deep)', marginBottom: 'var(--space-xs)',
-          textTransform: 'uppercase',
-        }}>
-          Out of Bounds
+      <div className="v2-screen">
+        <AppHeader tone="light" />
+        <div className="v2-body">
+          <div className="v2-hero">
+            <span className="nf-ball" aria-hidden>
+              <GolfBallIcon size={44} />
+            </span>
+            <h1 className="v2-title">{'Out of\nbounds'}</h1>
+            <p className="v2-sub">That page doesn&apos;t exist.{'\n'}Let&apos;s get you back on the fairway.</p>
+            <button type="button" className="btn-lime" onClick={() => router.push('/home')}>
+              Back to home
+            </button>
+          </div>
         </div>
-        <div style={{
-          fontSize: 'var(--text-body)', color: 'var(--gray-light)',
-          marginBottom: 'var(--space-xl)', lineHeight: 1.5,
-        }}>
-          This page doesn't exist. Let's get you back on the fairway.
-        </div>
-        <button
-          className="btn-gold"
-          onClick={() => router.push('/home')}
-          style={{
-            padding: 'clamp(14px, 3.5vw, 18px) clamp(28px, 7vw, 40px)',
-            fontSize: 'var(--text-md)', fontWeight: 700,
-            borderRadius: 'var(--radius-md)',
-          }}
-        >
-          Back to Home
-        </button>
+        <BottomTabBar />
       </div>
     </PhoneFrame>
   )

@@ -22,7 +22,8 @@ const TABS = [
   { key: 'account',     label: 'Account', path: '/account',       Icon: AccountIcon },
 ] as const
 
-export default function BottomTabBar({ active }: { active: ActiveTab }) {
+/** `active` may be omitted on pages that belong to no tab (legal, not found). */
+export default function BottomTabBar({ active }: { active?: ActiveTab }) {
   const router = useRouter()
 
   return (
