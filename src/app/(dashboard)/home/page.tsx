@@ -26,26 +26,28 @@ interface BetRecord {
  */
 export default function HomePage() {
   const router = useRouter()
-  const { user } = useAuth()
-  const [activeClaim, setActiveClaim] = useState<BetRecord | null>(null)
+  const { user, profile } = useAuth()
+  // Keyed by user so a sign-out never shows the previous golfer's claim,
+  // without an effect having to reset state.
+  const [claim, setClaim] = useState<{ userId: string; bet: BetRecord | null } | null>(null)
 
   const userId = user?.id
+  const firstName = (profile?.name ?? user?.user_metadata?.full_name ?? '').split(' ')[0] || null
+  const activeClaim = userId && claim?.userId === userId ? claim.bet : null
+
   useEffect(() => {
-    if (!userId) {
-      setActiveClaim(null)
-      return
-    }
+    if (!userId) return
     let cancelled = false
     fetch('/api/bets?limit=50')
       .then(r => r.json())
       .then(data => {
         if (cancelled || !data.bets) return
         const bets = data.bets as BetRecord[]
-        const claim = bets.find(
+        const found = bets.find(
           b => b.status === 'claimed' ||
             (b.declared_result === 'win' && b.status !== 'paid' && b.status !== 'verified'),
         )
-        setActiveClaim(claim ?? null)
+        setClaim({ userId, bet: found ?? null })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -73,6 +75,7 @@ export default function HomePage() {
 
         <div className="v2-body">
           <div className="v2-hero">
+            {firstName && <span className="home-hello">Welcome back, {firstName}</span>}
             <h1 className="v2-title">{'1 Shot,\nR1 Million.'}</h1>
             <p className="v2-sub">
               Choose a PAR 3.{'\n'}

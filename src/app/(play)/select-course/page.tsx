@@ -8,6 +8,7 @@ import BottomTabBar from '@/components/layout/BottomTabBar'
 import { SearchIcon, GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 import type { Course, Hole } from '@/context/BetContext'
+import { localCoursePhoto } from '@/lib/course-photo'
 
 interface ApiHole {
   id: string
@@ -49,10 +50,11 @@ function toContextHole(h: ApiHole, courseId: string): Hole {
   }
 }
 
-/** Course photo, or the brand-green tile when there is none or it fails to load. */
-function CourseThumb({ src }: { src: string | null }) {
+/** Our own course photo, else the seed's, else the brand-green tile. */
+function CourseThumb({ name, src }: { name: string; src: string | null }) {
   const [failed, setFailed] = useState(false)
-  if (!src || failed) {
+  const photo = localCoursePhoto(name) ?? src
+  if (!photo || failed) {
     return (
       <div className="cs-thumb" aria-hidden>
         <GolfBallIcon size={30} ball="rgba(255,255,255,0.9)" />
@@ -61,7 +63,7 @@ function CourseThumb({ src }: { src: string | null }) {
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={src} alt="" className="cs-thumb" loading="lazy" onError={() => setFailed(true)} />
+    <img src={photo} alt="" className="cs-thumb" loading="lazy" decoding="async" onError={() => setFailed(true)} />
   )
 }
 
@@ -86,10 +88,10 @@ export default function SelectCoursePage() {
   const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null)
   const [selectedHoleId, setSelectedHoleId] = useState<string | null>(null)
 
-  function loadCourses() {
-    setLoading(true)
-    setFetchError(false)
-    fetch('/api/courses')
+  // Sets state only from the response callbacks, so the initial load can
+  // run from an effect; the Retry button resets the flags itself first.
+  function fetchCourses() {
+    return fetch('/api/courses')
       .then(r => r.json())
       .then(data => {
         setCourses(data.courses ?? [])
@@ -101,8 +103,13 @@ export default function SelectCoursePage() {
       })
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { loadCourses() }, [])
+  useEffect(() => { fetchCourses() }, [])
+
+  function retry() {
+    setLoading(true)
+    setFetchError(false)
+    fetchCourses()
+  }
 
   // Regions ordered by how many courses they hold, so the busiest provinces
   // sit first in the chip row (the comp leads with Western Cape, Gauteng).
@@ -159,6 +166,11 @@ export default function SelectCoursePage() {
               value={search}
               onChange={e => setSearch(e.target.value)}
             />
+            {search && (
+              <button type="button" className="cs-search-clear" aria-label="Clear search" onClick={() => setSearch('')}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden><path d="M6 6l12 12M18 6L6 18" /></svg>
+              </button>
+            )}
           </div>
 
           <div className="cs-chips" role="tablist" aria-label="Filter by region">
@@ -193,7 +205,7 @@ export default function SelectCoursePage() {
             <div className="cs-state">
               <h3>Couldn&apos;t load courses</h3>
               <p>Check your connection and try again.</p>
-              <button type="button" className="btn-lime" onClick={loadCourses}>Retry</button>
+              <button type="button" className="btn-lime" onClick={retry}>Retry</button>
             </div>
           ) : filtered.length === 0 ? (
             <div className="cs-state">
@@ -210,10 +222,14 @@ export default function SelectCoursePage() {
                   type="button"
                   className={`cs-card${selectedCourseId === c.id ? ' is-selected' : ''}`}
                   style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
-                  onClick={() => handleSelectCourse(c)}
+                  onClick={e => {
+                    handleSelectCourse(c)
+                    // Bring the chosen card clear of the hole sheet that opens below.
+                    e.currentTarget.scrollIntoView({ block: 'start', behavior: 'smooth' })
+                  }}
                   aria-pressed={selectedCourseId === c.id}
                 >
-                  <CourseThumb src={c.image_url} />
+                  <CourseThumb name={c.name} src={c.image_url} />
                   <div className="cs-info">
                     <div className="cs-name">{c.name}</div>
                     <div className="cs-loc">{c.location_text ?? c.region}</div>

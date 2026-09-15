@@ -792,6 +792,13 @@ body {
 .v2-step { margin: clamp(18px, 4vh, 30px) 0 0; }
 
 /* ── SCREEN: HOME ── */
+.home-hello {
+  display: inline-flex; align-items: center; margin-bottom: 12px; padding: 6px 12px; border-radius: 999px;
+  background: var(--lime); color: var(--green);
+  font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  box-shadow: 2px 3px 0 rgba(0,0,0,0.25);
+  animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 .home-claim {
   display: flex; align-items: center; gap: 12px;
   margin-top: 18px; padding: 12px 14px;
@@ -820,6 +827,11 @@ body {
   font-family: 'Inter', sans-serif; font-size: var(--text-md); color: var(--green);
 }
 .cs-search input::placeholder { color: rgba(52,82,49,0.45); }
+.cs-search input::-webkit-search-cancel-button { display: none; }
+.cs-search-clear {
+  position: absolute; right: 8px; width: 32px; height: 32px; border-radius: 50%; border: none; cursor: pointer;
+  background: var(--surface); color: var(--green); display: flex; align-items: center; justify-content: center;
+}
 .cs-chips {
   display: flex; gap: 10px; margin: 14px 0 0;
   padding: 6px var(--page-px) 8px;                /* room for the selected chip's shadow */
