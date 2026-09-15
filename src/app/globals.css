@@ -1480,6 +1480,33 @@ body {
   border: 3px solid rgba(52,82,49,0.15); border-top-color: var(--green);
   animation: spin 1s linear infinite;
 }
+.pr-order { width: 100%; margin: 4px 0 18px; }
+.pr-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.pr-step {
+  display: flex; align-items: center; gap: 10px;
+  font-family: 'Inter', sans-serif; font-size: var(--text-md); font-weight: 600; color: var(--green);
+}
+.pr-step.is-pending { opacity: 0.5; }
+.pr-step-dot {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--bar-off); background: var(--white); color: var(--white);
+  display: flex; align-items: center; justify-content: center;
+}
+.pr-step.is-completed .pr-step-dot { background: var(--green); border-color: var(--green); }
+.pr-step.is-active .pr-step-dot { background: var(--lime); border-color: var(--green); animation: vfPulse 2s ease-in-out infinite; }
+.pr-ref {
+  display: flex; align-items: center; gap: 12px; width: 100%; margin: 0 0 20px; padding: 12px 14px;
+  background: var(--white); border: none; border-radius: 12px; cursor: pointer; text-align: left;
+  font-family: 'Inter', sans-serif; color: var(--green);
+}
+.pr-ref-label { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; opacity: 0.65; }
+.pr-ref-code { flex: 1; min-width: 0; font-family: 'Space Mono', monospace; font-size: var(--text-md); font-weight: 700; overflow-wrap: anywhere; }
+.pr-ref-copy {
+  flex-shrink: 0; padding: 6px 12px; border-radius: 999px; background: var(--lime);
+  font-size: var(--text-sm); font-weight: 700;
+}
+.pr-note { margin: -8px 0 18px; font-family: 'Inter', sans-serif; font-size: var(--text-sm); color: var(--green); opacity: 0.7; }
+.miss-actions .btn-lime { text-decoration: none; }
 
 /* ── LEGAL PAGES + NOT FOUND (V2) ── */
 .legal-back {
