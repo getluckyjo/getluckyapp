@@ -1,61 +1,37 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { finishSignIn, safeNext } from '@/lib/auth/finish-sign-in'
 
+/**
+ * Where Supabase sends the browser back after Google/Facebook (PKCE `code`),
+ * and where the sign-in screen sends it after a six-digit code has already
+ * created a session client-side (no `code`; the cookie is enough).
+ */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  // V2 flow: sign in → "All set! Swing your shot." → select a course. The
-  // welcome beat is the default landing; a specific `next` (someone bounced
-  // off /account, say) still goes straight there.
-  const rawNext = searchParams.get('next') ?? '/welcome'
-  // Prevent open redirect: only allow known safe paths
-  const SAFE_PATHS = ['/welcome', '/home', '/history', '/leaderboard', '/account', '/select-course']
-  const next = SAFE_PATHS.some(p => rawNext === p) ? rawNext : '/welcome'
+  const next = safeNext(searchParams.get('next'))
 
-  if (code) {
+  try {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (!error) {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        // Check onboarding + age-verification state
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('onboarding_done, age_verified_at')
-          .eq('id', user.id)
-          .single()
-
-        const isNewUser = !profile?.onboarding_done
-
-        // Mark onboarding as done so the user goes straight to /home
-        await supabase
-          .from('profiles')
-          .upsert({ id: user.id, onboarding_done: true })
-
-        // Send welcome email to new users (fire-and-forget)
-        if (isNewUser) {
-          const email = user.email
-          const name = user.user_metadata?.full_name ?? user.user_metadata?.name
-          if (email) {
-            fetch(`${origin}/api/email/welcome`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, name }),
-            }).catch((err) => console.error('[auth-callback] Welcome email failed:', err))
-          }
-        }
-
-        // Gate: anyone who hasn't passed the 18+ age check goes there first,
-        // before they can reach any real-money flow.
-        if (!profile?.age_verified_at) {
-          return NextResponse.redirect(`${origin}/age-check`)
-        }
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code)
+      if (error) {
+        // Logged so the production trail says *why* — the two usual causes are
+        // a code verifier that lives on a different host (www vs bare domain)
+        // and a link that a mail scanner already consumed.
+        console.error('[auth-callback] exchangeCodeForSession failed:', error.message)
+        return NextResponse.redirect(`${origin}/auth?error=oauth_error`)
       }
-      return NextResponse.redirect(`${origin}${next}`)
     }
-  }
 
-  return NextResponse.redirect(`${origin}/auth?error=oauth_error`)
+    return await finishSignIn(supabase, origin, next)
+  } catch (err) {
+    // Supabase unreachable or misconfigured. A sign-in screen with a message
+    // beats a bare 500 in the golfer's face.
+    console.error('[auth-callback] unexpected failure:', err)
+    return NextResponse.redirect(`${origin}/auth?error=oauth_error`)
+  }
 }

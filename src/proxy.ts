@@ -9,6 +9,7 @@ let cleanupCounter = 0
 
 const RATE_LIMITS: { pattern: string; limit: number; windowMs: number }[] = [
   { pattern: '/api/payments/payfast/notify', limit: 0, windowMs: 0 },     // EXEMPT — never rate-limit ITN
+  { pattern: '/api/auth/send-email',         limit: 0, windowMs: 0 },     // EXEMPT — Supabase hook, signature-verified; all calls share a few IPs
   { pattern: '/api/payments/payfast',        limit: 5,  windowMs: 60_000 },
   { pattern: '/api/bets/create',             limit: 10, windowMs: 60_000 },
   { pattern: '/api/videos/upload-url',       limit: 10, windowMs: 60_000 },
@@ -95,7 +96,27 @@ const DASHBOARD_ROUTES = ['/home', '/history', '/leaderboard', '/account', '/mem
 const PLAY_ROUTES = ['/select-course', '/choose-stake', '/record', '/confirm', '/result', '/verify']
 
 export async function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
+  const { pathname, searchParams } = request.nextUrl
+
+  // ── Stray sign-in credentials on the root ───────────────────────────────
+  // Supabase sends the browser to its configured Site URL — this origin's
+  // root — when the redirect it was asked for is not on the project's
+  // allow-list (www vs bare domain, a preview host) or an old email template
+  // still points at it. Forward the credential to the route that can use it
+  // instead of dropping it on the landing page.
+  if (pathname === '/') {
+    if (searchParams.has('code')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/callback'
+      return NextResponse.redirect(url, 307)
+    }
+    if (searchParams.has('token_hash')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/confirm'
+      if (!url.searchParams.has('type')) url.searchParams.set('type', 'magiclink')
+      return NextResponse.redirect(url, 307)
+    }
+  }
 
   // ── Rate limiting check (API routes only) ───────────────────────────────
   const rateLimitResponse = checkRateLimit(request, pathname)

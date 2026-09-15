@@ -1125,12 +1125,17 @@ body {
   font-family: 'Inter', sans-serif; font-size: var(--text-sm); color: var(--green); text-decoration: underline;
   align-self: flex-start;
 }
-.signin-sent {
-  width: 100%; padding: 14px 16px;
-  background: var(--white); border-radius: 6px; border-left: 4px solid var(--lime);
-  font-family: 'Inter', sans-serif; font-size: var(--text-body); color: var(--green); line-height: 1.5;
+.signin-code {
+  font-family: var(--font-heading) !important; font-size: 26px !important;
+  letter-spacing: 0.22em; text-align: center;
 }
-.signin-sent strong { font-weight: 700; }
+.signin-code::placeholder { letter-spacing: 0.22em; }
+.signin-sent-actions { display: flex; gap: 18px; }
+.signin-cancel:disabled { opacity: 0.6; cursor: default; }
+.signin-hint {
+  margin: 4px 0 0; font-family: 'Inter', sans-serif;
+  font-size: var(--text-sm); line-height: 1.5; color: var(--green); opacity: 0.8;
+}
 .v2-step { margin: clamp(18px, 4vh, 30px) 0 0; }
 
 /* ── SCREEN: HOME ── */

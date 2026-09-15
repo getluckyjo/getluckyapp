@@ -1,9 +1,9 @@
 import { resend } from '@/lib/resend'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { emailShell, headline, paragraph, ctaButton, divider, escapeHtml, siteUrl } from '@/lib/email/layout'
 
 const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Get Lucky Golf <noreply@getluckygolf.co.za>'
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.getluckygolf.co.za'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,13 +13,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
-    const firstName = name?.split(' ')[0] ?? 'Golfer'
+    const firstName = typeof name === 'string' && name.trim() ? name.trim().split(' ')[0] : 'Golfer'
 
     const { data, error } = await resend.emails.send({
       from: FROM_ADDRESS,
       to: email,
-      subject: 'Welcome to Get Lucky Golf! ⛳',
+      subject: 'Welcome to Get Lucky. One shot, R1 million.',
       html: buildWelcomeHtml(firstName),
+      text: buildWelcomeText(firstName),
     })
 
     if (error) {
@@ -35,92 +36,50 @@ export async function POST(request: NextRequest) {
   }
 }
 
+const TIERS = [
+  ['R50', 'R25 000'],
+  ['R100', 'R60 000'],
+  ['R150', 'R100 000'],
+  ['R250', 'R200 000'],
+  ['R500', 'R500 000'],
+  ['R1 000', 'R1 000 000'],
+] as const
+
 function buildWelcomeHtml(firstName: string): string {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to Get Lucky Golf</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-</head>
-<body style="margin:0;padding:0;background-color:#f5f0e1;font-family:'Inter',system-ui,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f5f0e1;padding:40px 0;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-          <!-- Header -->
-          <tr>
-            <td style="background-color:#1e3120;padding:32px 40px;text-align:center;">
-              <img src="${SITE_URL}/logo.png" alt="Get Lucky Golf" width="120" height="130" style="display:inline-block;width:120px;height:auto;border:0;outline:none;text-decoration:none;" />
-              <p style="margin:12px 0 0;color:rgba(255,255,255,0.7);font-size:14px;font-family:'Inter',system-ui,sans-serif;">
-                Where amateur golfers win like the pros
-              </p>
-            </td>
-          </tr>
+  const site = siteUrl()
+  const tierRows = TIERS.map(([stake, win]) =>
+    `<tr>
+      <td style="padding:7px 0;border-bottom:1px solid #ebedea;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:15px;color:#345231;">Stake <strong>${stake}</strong></td>
+      <td align="right" style="padding:7px 0;border-bottom:1px solid #ebedea;font-family:'Arial Black',Impact,Arial,sans-serif;font-size:15px;color:#345231;">WIN ${win}</td>
+    </tr>`).join('')
 
-          <!-- Body -->
-          <tr>
-            <td style="padding:40px;">
-              <h2 style="margin:0 0 4px;color:#335231;font-size:22px;font-family:'Inter',system-ui,sans-serif;font-weight:700;">
-                Welcome to Get Lucky Golf, ${firstName}.
-              </h2>
-              <p style="margin:0 0 20px;color:#335231;font-size:18px;font-weight:600;font-family:'Inter',system-ui,sans-serif;">
-                You're officially in.
-              </p>
-              <p style="margin:0 0 16px;color:#2a2a2a;font-size:16px;line-height:1.6;font-family:'Inter',system-ui,sans-serif;">
-                Which means the next time you step onto a par-3 tee box, your swing could be worth up to <strong style="color:#335231;">R1,000,000</strong>.
-              </p>
-              <p style="margin:0 0 28px;color:#2a2a2a;font-size:16px;line-height:1.6;font-family:'Inter',system-ui,sans-serif;">
-                That's what Get Lucky is all about &ndash; turning an ordinary round of golf into a moment you'll never forget.
-              </p>
+  return emailShell({
+    title: 'Welcome to Get Lucky',
+    preheader: `${firstName}, you're in. Choose a par 3, bet on yourself, win up to R1 million.`,
+    body:
+      headline(`Welcome,<br/>${escapeHtml(firstName)}.`) +
+      paragraph('You’re in. Next time you stand on a par-3 tee, your swing could be worth up to <strong>R1 000 000</strong>.') +
+      paragraph('Choose a course. Pick your stake. Film the shot. Sink it and Indwe pays.') +
+      ctaButton('Play now', `${site}/select-course`) +
+      divider() +
+      paragraph('<strong>Entry tiers</strong>', { size: 14 }) +
+      `<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" style="margin:0 0 24px;">${tierRows}</table>`,
+    footerNote: 'You’re receiving this because you signed up to Get Lucky Golf.',
+  })
+}
 
-              <!-- CTA Button -->
-              <table cellpadding="0" cellspacing="0" style="margin:0 auto;">
-                <tr>
-                  <td style="background-color:#c9a94e;border-radius:8px;padding:14px 32px;">
-                    <a href="${process.env.NEXT_PUBLIC_SITE_URL ?? 'https://www.getluckygolf.co.za'}/home"
-                       style="color:#ffffff;text-decoration:none;font-size:16px;font-weight:700;display:inline-block;font-family:'Inter',system-ui,sans-serif;">
-                      Start Playing
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Tiers -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin:32px 0 0;border-top:1px solid #e8e8e8;padding-top:24px;">
-                <tr>
-                  <td style="color:#666;font-size:14px;padding-bottom:12px;font-family:'Inter',system-ui,sans-serif;">
-                    <strong style="color:#335231;">Entry tiers:</strong>
-                  </td>
-                </tr>
-                <tr>
-                  <td style="color:#2a2a2a;font-size:14px;line-height:2;font-family:'Inter',system-ui,sans-serif;">
-                    R50 &rarr; Win R25,000<br/>
-                    R100 &rarr; Win R60,000 <span style="color:#c9a94e;font-weight:600;font-size:12px;">MOST POPULAR</span><br/>
-                    R250 &rarr; Win R200,000<br/>
-                    R500 &rarr; Win R500,000<br/>
-                    R1,000 &rarr; Win R1,000,000
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color:#f5f0e1;padding:24px 40px;text-align:center;border-top:1px solid #e8e8e8;">
-              <p style="margin:0;color:#999;font-size:12px;line-height:1.6;font-family:'Inter',system-ui,sans-serif;">
-                Get Lucky Golf Club &mdash; Play smart, get lucky.<br/>
-                You're receiving this because you signed up at Get Lucky Golf.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+function buildWelcomeText(firstName: string): string {
+  return [
+    `Welcome, ${firstName}.`,
+    '',
+    'You’re in. Next time you stand on a par-3 tee, your swing could be worth up to R1 000 000.',
+    'Choose a course. Pick your stake. Film the shot. Sink it and Indwe pays.',
+    '',
+    `Play now: ${siteUrl()}/select-course`,
+    '',
+    'Entry tiers:',
+    ...TIERS.map(([stake, win]) => `  ${stake} → win ${win}`),
+    '',
+    'Get Lucky Golf · Proudly sponsored by Indwe Risk Services (FSP 3425).',
+  ].join('\n')
 }

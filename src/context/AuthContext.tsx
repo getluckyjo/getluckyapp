@@ -15,6 +15,7 @@ interface AuthContextValue {
   signInWithGoogle: (next?: string) => Promise<void>
   signInWithFacebook: (next?: string) => Promise<{ error: string | null }>
   signInWithMagicLink: (email: string) => Promise<{ error: string | null }>
+  verifyEmailCode: (email: string, code: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
 }
@@ -110,6 +111,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null }
   }
 
+  // The six-digit code from the same email. Scanner-proof and device-agnostic:
+  // it does not care which browser asked for it, unlike the PKCE link.
+  async function verifyEmailCode(email: string, code: string) {
+    const { error } = await supabase.auth.verifyOtp({ email, token: code, type: 'email' })
+    return { error: error?.message ?? null }
+  }
+
   async function signOut() {
     await supabase.auth.signOut()
   }
@@ -117,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, profile, loading,
-      signInWithGoogle, signInWithFacebook, signInWithMagicLink, signOut, refreshProfile,
+      signInWithGoogle, signInWithFacebook, signInWithMagicLink, verifyEmailCode, signOut, refreshProfile,
     }}>
       {children}
     </AuthContext.Provider>
