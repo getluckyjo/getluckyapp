@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
 import PwaChrome from '@/components/pwa/PwaChrome'
+import FontLoader from '@/components/pwa/FontLoader'
 import splash from '@/lib/pwa/splash.json'
+
+const GOOGLE_FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap'
 
 export const metadata: Metadata = {
   title: 'Get Lucky Golf — The Hole-in-One Challenge',
@@ -32,7 +35,6 @@ export const metadata: Metadata = {
     icon: [
       { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
       { url: '/icons/favicon-16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
     ],
     apple: [{ url: '/icons/apple-touch-icon-180.png', sizes: '180x180', type: 'image/png' }],
   },
@@ -59,13 +61,14 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* This is the App Router's root layout, so the stylesheet loads for
-            every page; the rule only knows pages/_document. */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
-          rel="stylesheet"
-        />
+        {/* The display face is on every screen's first paint; fetch it before the CSS asks. */}
+        <link rel="preload" href="/fonts/PosterGothicRoundATF-Heavy.otf" as="font" type="font/otf" crossOrigin="anonymous" />
+        {/* Body fonts from Google, loaded by <FontLoader/> after hydration so
+            the stylesheet never blocks first paint (display=swap covers the
+            gap); the noscript copy keeps it for browsers without JS. */}
+        <noscript>
+          <link href={GOOGLE_FONTS} rel="stylesheet" />
+        </noscript>
         {/* iOS launch screens, one per device size. Generated: npm run pwa:assets. */}
         {splash.map(s => (
           <link key={s.href} rel="apple-touch-startup-image" href={s.href} media={s.media} />
@@ -75,6 +78,7 @@ export default function RootLayout({
         <AuthProvider>
           {children}
           <PwaChrome />
+          <FontLoader href={GOOGLE_FONTS} />
         </AuthProvider>
       </body>
     </html>
