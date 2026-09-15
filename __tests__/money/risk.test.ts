@@ -225,7 +225,7 @@ describe('admin review discipline', () => {
     expect(await (await patch({ status: 'approved', reviewerNotes: NOTES, checklist: { ...CHECKLIST, flags_reviewed: false } })).json()).toMatchObject({ code: 'CHECKLIST_INCOMPLETE' })
     expect(await (await patch({ status: 'approved', reviewerNotes: 'ok', checklist: CHECKLIST })).json()).toMatchObject({ code: 'NOTES_REQUIRED' })
     expect(await (await patch({ status: 'rejected', reviewerNotes: 'no' })).json()).toMatchObject({ code: 'NOTES_REQUIRED' })
-    expect(v.status).toBe('under_review')
+    expect(v.status).toBe('documents_received')
     expect((await patch({ status: 'under_review' })).status).toBe(200)
     const ok = await patch({ status: 'approved', reviewerNotes: NOTES, checklist: CHECKLIST })
     expect(ok.status).toBe(200)
