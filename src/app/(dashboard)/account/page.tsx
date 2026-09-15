@@ -35,6 +35,11 @@ export default function AccountPage() {
   const [editHandicap, setEditHandicap]     = useState('')
   const [savingProfile, setSavingProfile]   = useState(false)
 
+  // Account deletion
+  type DeletionInfo = { canDelete: boolean; reason: string | null; message: string | null; activeBets: number }
+  const [deleteStep, setDeleteStep] = useState<'idle' | 'checking' | 'confirm' | 'working'>('idle')
+  const [deletion, setDeletion] = useState<DeletionInfo | null>(null)
+
   // Toast
   const [toast, setToast] = useState<string | null>(null)
   function showToast(msg: string) {
@@ -63,6 +68,35 @@ export default function AccountPage() {
     setSavingProfile(false)
     setEditingProfile(false)
     showToast('Profile updated')
+  }
+
+  async function openDelete() {
+    setDeleteStep('checking')
+    try {
+      const res = await fetch('/api/account')
+      if (!res.ok) throw new Error(String(res.status))
+      setDeletion(await res.json())
+      setDeleteStep('confirm')
+    } catch {
+      setDeleteStep('idle')
+      showToast('Could not check your account. Please try again.')
+    }
+  }
+
+  async function confirmDelete() {
+    setDeleteStep('working')
+    try {
+      const res = await fetch('/api/account', { method: 'DELETE' })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: string }
+        throw new Error(body.error ?? 'Your account could not be deleted. Nothing has been removed.')
+      }
+      await signOut()
+      router.replace('/splash')
+    } catch (err) {
+      setDeleteStep('confirm')
+      showToast(err instanceof Error ? err.message : 'Your account could not be deleted.')
+    }
   }
 
   function startEditing() {
@@ -245,6 +279,55 @@ export default function AccountPage() {
           >
             Sign out
           </button>
+
+          {/* ── Delete account ── */}
+          <section className="acct-card" style={{ marginTop: 14 }}>
+            {deleteStep === 'idle' || deleteStep === 'checking' ? (
+              <button type="button" className="acct-row acct-row--tap" onClick={openDelete} disabled={loading || !user || deleteStep === 'checking'}>
+                <span>
+                  <span className="acct-row-title">Delete account</span>
+                  <span className="acct-row-sub">Removes your profile, bets, footage and documents</span>
+                </span>
+                <span className="acct-row-end"><Chevron /></span>
+              </button>
+            ) : (
+              <div className="acct-form">
+                {deletion?.canDelete ? (
+                  <>
+                    {deletion.activeBets > 0 && (
+                      <p className="acct-row-sub" style={{ display: 'block', marginBottom: 10 }}>
+                        You have {deletion.activeBets} unplayed {deletion.activeBets === 1 ? 'challenge' : 'challenges'}. Deleting your account forfeits {deletion.activeBets === 1 ? 'it' : 'them'}; stakes are not refunded.
+                      </p>
+                    )}
+                    <p className="acct-row-sub" style={{ display: 'block', marginBottom: 14 }}>
+                      This removes your profile, your bets and your footage and documents. Payment records are kept without your name, as the law requires. This cannot be undone.
+                    </p>
+                  </>
+                ) : (
+                  <p className="acct-row-sub" style={{ display: 'block', marginBottom: 14 }}>
+                    {deletion?.message ?? 'This account cannot be deleted right now.'}{' '}
+                    <a href="mailto:support@getluckygolf.co.za" style={{ color: 'inherit', fontWeight: 700 }}>support@getluckygolf.co.za</a>
+                  </p>
+                )}
+                <div className="acct-form-actions">
+                  <button type="button" className="btn-tile" disabled={deleteStep === 'working'} onClick={() => setDeleteStep('idle')}>
+                    Keep my account
+                  </button>
+                  {deletion?.canDelete && (
+                    <button
+                      type="button"
+                      className="acct-signout"
+                      style={{ margin: 0, borderColor: '#c0392b', color: '#c0392b' }}
+                      disabled={deleteStep === 'working'}
+                      onClick={confirmDelete}
+                    >
+                      {deleteStep === 'working' ? 'Deleting…' : 'Delete permanently'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
         </div>
 
         <BottomTabBar active="account" />

@@ -41,6 +41,7 @@ export const RULES = {
   ageCheck:    { name: 'age_check',   perUser: 10,  perIp: 300,  windowSeconds: ONE_HOUR    } as RateRule,
   membership:  { name: 'membership',  perUser: 60,  perIp: null, windowSeconds: TEN_MINUTES } as RateRule,
   admin:       { name: 'admin',       perUser: 600, perIp: null, windowSeconds: TEN_MINUTES } as RateRule,
+  accountDelete: { name: 'account_delete', perUser: 5, perIp: 100, windowSeconds: ONE_HOUR } as RateRule,
   authConfirm: { name: 'auth_confirm', perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only
 } as const
 

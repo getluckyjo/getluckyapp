@@ -176,6 +176,7 @@ export interface Database {
           video_sha256: string | null
           video_bytes: number | null
           video_uploaded_at: string | null
+          footage_purged_at: string | null
           declared_result: 'miss' | 'win' | null
           declared_at: string | null
           expires_at: string
@@ -198,6 +199,7 @@ export interface Database {
           video_sha256?: string | null
           video_bytes?: number | null
           video_uploaded_at?: string | null
+          footage_purged_at?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -220,6 +222,7 @@ export interface Database {
           video_sha256?: string | null
           video_bytes?: number | null
           video_uploaded_at?: string | null
+          footage_purged_at?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -240,6 +243,7 @@ export interface Database {
           documents_received_at: string | null
           verified_at: string | null
           payout_initiated_at: string | null
+          documents_purged_at: string | null
           reviewer_notes: string | null
           reviewed_by: string | null
           updated_at: string | null
@@ -256,6 +260,7 @@ export interface Database {
           documents_received_at?: string | null
           verified_at?: string | null
           payout_initiated_at?: string | null
+          documents_purged_at?: string | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
           updated_at?: string | null
@@ -272,6 +277,7 @@ export interface Database {
           documents_received_at?: string | null
           verified_at?: string | null
           payout_initiated_at?: string | null
+          documents_purged_at?: string | null
           reviewer_notes?: string | null
           reviewed_by?: string | null
           updated_at?: string | null

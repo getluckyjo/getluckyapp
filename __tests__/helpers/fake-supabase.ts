@@ -47,6 +47,23 @@ const UNIQUE: Record<string, string[]> = {
 
 export class FakeDb {
   tables = new Map<string, Row[]>()
+  /** Storage objects by bucket, path → content. */
+  objects = new Map<string, Map<string, string>>()
+  /** Ids passed to auth.admin.deleteUser(), in order. */
+  deletedUsers: string[] = []
+
+  bucket(name: string): Map<string, string> {
+    if (!this.objects.has(name)) this.objects.set(name, new Map())
+    return this.objects.get(name)!
+  }
+
+  putObject(bucket: string, path: string, content = 'bytes'): void {
+    this.bucket(bucket).set(path, content)
+  }
+
+  objectPaths(bucket: string): string[] {
+    return [...this.bucket(bucket).keys()].sort()
+  }
 
   rows(table: string): Row[] {
     if (!this.tables.has(table)) this.tables.set(table, [])
@@ -93,7 +110,7 @@ export class Builder implements PromiseLike<Result> {
   eq(col: string, val: unknown) { this.filters.push(r => r[col] === val); return this }
   neq(col: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
   in(col: string, vals: unknown[]) { this.filters.push(r => vals.includes(r[col])); return this }
-  is(col: string, val: unknown) { this.filters.push(r => r[col] === val); return this }
+  is(col: string, val: unknown) { this.filters.push(r => (val === null ? r[col] == null : r[col] === val)); return this }
   not(col: string, _op: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
   gte(col: string, val: string) { this.filters.push(r => String(r[col]) >= val); return this }
   lte(col: string, val: string) { this.filters.push(r => String(r[col]) <= val); return this }
@@ -234,8 +251,12 @@ export interface FakeClientOptions {
   /** Force `.from(table)` to fail for a table, to simulate an outage or a missing migration. */
   failTable?: Record<string, PostgrestError>
   signedUploadUrl?: string | null
-  /** Objects `storage.from(bucket).download(path)` can return, keyed by path. */
+  /** Objects `storage.from(bucket).download(path)` can return, keyed by path (any bucket). Prefer db.putObject(). */
   storageObjects?: Record<string, string>
+  /** Make every `storage.from(bucket).remove()` fail with this message. */
+  storageRemoveError?: string
+  /** Make `auth.admin.deleteUser()` fail with this message. */
+  deleteUserError?: string
 }
 
 export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
@@ -326,10 +347,53 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
       async verifyOtp({ token_hash }: { token_hash: string }) {
         return token_hash === 'good-hash' ? { data: {}, error: null } : { data: null, error: { message: 'expired' } }
       },
+      admin: {
+        /** Mirrors the schema's cascades: profile and bets go (verifications with them); ledger rows keep their money and lose the person. */
+        async deleteUser(id: string) {
+          if (opts.deleteUserError) return { data: { user: null }, error: { message: opts.deleteUserError } }
+          db.deletedUsers.push(id)
+          const remove = (table: string, pred: (r: Row) => boolean) => {
+            const rows = db.rows(table)
+            const gone = rows.filter(pred)
+            for (const g of gone) rows.splice(rows.indexOf(g), 1)
+            return gone
+          }
+          remove('profiles', r => r.id === id)
+          const betIds = new Set(remove('bets', r => r.user_id === id).map(b => b.id))
+          remove('verifications', r => betIds.has(r.bet_id))
+          for (const p of db.rows('payfast_payments')) {
+            if (p.user_id === id) p.user_id = null
+            if (betIds.has(p.bet_id)) p.bet_id = null
+          }
+          return { data: { user: null }, error: null }
+        },
+      },
     },
     storage: {
-      from() {
+      from(bucket: string) {
+        const objects = db.bucket(bucket)
         return {
+          /** Direct children of `folder`: files carry an id, sub-folders come back with id null, like Supabase. */
+          async list(folder: string, o: { limit?: number; offset?: number } = {}) {
+            const prefix = folder.replace(/\/+$/, '') + '/'
+            const files = new Map<string, { name: string; id: string | null }>()
+            for (const path of objects.keys()) {
+              if (!path.startsWith(prefix)) continue
+              const rest = path.slice(prefix.length)
+              const slash = rest.indexOf('/')
+              if (slash === -1) files.set(rest, { name: rest, id: randomUUID() })
+              else if (!files.has(rest.slice(0, slash))) files.set(rest.slice(0, slash), { name: rest.slice(0, slash), id: null })
+            }
+            const all = [...files.values()].sort((a, b) => a.name.localeCompare(b.name))
+            const offset = o.offset ?? 0
+            return { data: all.slice(offset, offset + (o.limit ?? 100)), error: null }
+          },
+          async remove(paths: string[]) {
+            if (opts.storageRemoveError) return { data: null, error: { message: opts.storageRemoveError } }
+            const removed: { name: string }[] = []
+            for (const p of paths) if (objects.delete(p)) removed.push({ name: p })
+            return { data: removed, error: null }
+          },
           async createSignedUploadUrl(path: string) {
             if (opts.signedUploadUrl === null) return { data: null, error: { message: 'storage down' } }
             return { data: { signedUrl: opts.signedUploadUrl ?? `https://storage.example/upload/${path}`, path }, error: null }
@@ -338,7 +402,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
             return { data: { signedUrl: `https://storage.example/signed/${path}` }, error: null }
           },
           async download(path: string) {
-            const obj = opts.storageObjects?.[path]
+            const obj = objects.get(path) ?? opts.storageObjects?.[path]
             if (obj === undefined) return { data: null, error: { message: 'Object not found' } }
             return { data: new Blob([obj]), error: null }
           },

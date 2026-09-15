@@ -57,6 +57,8 @@ npm run test:staging         # Row Level Security probed as a real user
 | `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | all | source maps upload when the token is set |
 | `OPS_ALERT_EMAIL` | server | where money-path alerts are emailed |
 | `BET_WINDOW_HOURS` | server | play window after purchase, default 24 |
+| `CRON_SECRET` | server | Vercel sends it as the bearer token to `/api/cron/retention`; the sweep refuses to run without it |
+| `RETENTION_DAYS` | server | footage of misses and documents of rejected claims are purged after this many days, default 90 |
 
 A preview deployment refuses to start if it points at the production database
 or has PayFast in live mode (`src/instrumentation.ts`).
@@ -70,6 +72,8 @@ src/app/api/            route handlers; each validates with zod and fails throug
 src/lib/claims/         the claim state machine: the only place a bet or claim changes status
 src/lib/payfast/        PayFast configuration and address list
 src/lib/rate-limit.ts   Postgres-backed limiter
+src/lib/account/        account deletion: what goes, what stays, what blocks it
+src/lib/retention.ts    the nightly purge of footage and documents (vercel.json schedules it)
 src/lib/observability/  structured log + ops alerts (Sentry + email)
 src/lib/api/http.ts     parseBody / parseQuery / apiError
 supabase/migrations/    numbered, idempotent; apply in order (see each batch doc for timing)
