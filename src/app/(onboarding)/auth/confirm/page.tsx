@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import StepBar from '@/components/layout/StepBar'
+import { GolfBallIcon } from '@/components/icons'
 
 /**
  * The page a magic link opens. One tap confirms — the actual verification is
@@ -29,6 +30,7 @@ function ConfirmForm() {
         <AppHeader tone="light" />
         <div className="v2-body" style={{ paddingBottom: 'var(--space-2xl)' }}>
           <div className="v2-hero">
+            <span className="nf-ball" aria-hidden><GolfBallIcon size={44} /></span>
             <h1 className="v2-title">{copy.title}</h1>
             {tokenHash ? (
               <>
