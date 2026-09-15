@@ -128,16 +128,3 @@ export function GoogleIcon({ size = 22 }: { size?: number }) {
     </svg>
   )
 }
-
-/** Sign-in — Facebook "f" roundel (brand colours, not recolourable). */
-export function FacebookIcon({ size = 22 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden focusable="false">
-      <circle cx="12" cy="12" r="12" fill="#1877F2" />
-      <path
-        fill="#fff"
-        d="M16.67 15.47l.53-3.47h-3.33V9.75c0-.95.47-1.88 1.96-1.88h1.51V4.92s-1.37-.23-2.69-.23c-2.74 0-4.53 1.66-4.53 4.67V12H7.07v3.47h3.05V24a12.1 12.1 0 0 0 3.75 0v-8.53h2.8z"
-      />
-    </svg>
-  )
-}

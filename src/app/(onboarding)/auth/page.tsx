@@ -6,7 +6,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import StepBar from '@/components/layout/StepBar'
-import { GoogleIcon, FacebookIcon } from '@/components/icons'
+import { GoogleIcon } from '@/components/icons'
 import { useAuth } from '@/context/AuthContext'
 
 type Mode = 'idle' | 'email' | 'sent'
@@ -20,8 +20,8 @@ const ERROR_COPY: Record<string, string> = {
 
 /**
  * Sign in — "Sign In Page.png".
- * READY TO GET LUCKY?, the social-proof line, a lime SIGN IN (email), Google
- * and Facebook tiles, step 1 of 3, the legal line, tab bar.
+ * READY TO GET LUCKY?, the social-proof line, a lime SIGN IN (email), the
+ * Google tile, step 1 of 3, the legal line, tab bar.
  *
  * Email sign-in sends a branded email carrying a six-digit code and a button.
  * The code is entered right here, so it works even when the email is opened
@@ -30,12 +30,12 @@ const ERROR_COPY: Record<string, string> = {
 function AuthForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { signInWithGoogle, signInWithFacebook, signInWithMagicLink, verifyEmailCode, user } = useAuth()
+  const { signInWithGoogle, signInWithMagicLink, verifyEmailCode, user } = useAuth()
 
   const [mode, setMode] = useState<Mode>('idle')
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
-  const [busy, setBusy] = useState<null | 'google' | 'facebook' | 'email' | 'code'>(null)
+  const [busy, setBusy] = useState<null | 'google' | 'email' | 'code'>(null)
   const [error, setError] = useState<string | null>(null)
   const [resent, setResent] = useState(false)
 
@@ -54,16 +54,6 @@ function AuthForm() {
       await signInWithGoogle(next ?? undefined)
     } catch {
       setError('Google sign-in is unavailable right now. Please try again.')
-      setBusy(null)
-    }
-  }
-
-  async function handleFacebook() {
-    setError(null)
-    setBusy('facebook')
-    const { error: fbError } = await signInWithFacebook(next ?? undefined)
-    if (fbError) {
-      setError('Facebook sign-in is unavailable right now. Please use Google or email.')
       setBusy(null)
     }
   }
@@ -228,15 +218,6 @@ function AuthForm() {
                     >
                       <GoogleIcon size={22} />
                       {busy === 'google' ? 'Opening…' : 'Google'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-tile"
-                      onClick={handleFacebook}
-                      disabled={busy !== null}
-                    >
-                      <FacebookIcon size={22} />
-                      {busy === 'facebook' ? 'Opening…' : 'Facebook'}
                     </button>
                   </div>
                 </>

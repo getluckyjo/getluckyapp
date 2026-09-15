@@ -13,7 +13,6 @@ interface AuthContextValue {
   profile: Profile | null
   loading: boolean
   signInWithGoogle: (next?: string) => Promise<void>
-  signInWithFacebook: (next?: string) => Promise<{ error: string | null }>
   signInWithMagicLink: (email: string) => Promise<{ error: string | null }>
   verifyEmailCode: (email: string, code: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
@@ -90,17 +89,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  // Facebook is a V2 design addition. It needs the provider enabled in the
-  // Supabase dashboard; until then Supabase answers with an error, which the
-  // sign-in screen turns into a "use Google or email" message.
-  async function signInWithFacebook(next?: string) {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'facebook',
-      options: { redirectTo: callbackUrl(next) },
-    })
-    return { error: error?.message ?? null }
-  }
-
   async function signInWithMagicLink(email: string) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
@@ -125,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, profile, loading,
-      signInWithGoogle, signInWithFacebook, signInWithMagicLink, verifyEmailCode, signOut, refreshProfile,
+      signInWithGoogle, signInWithMagicLink, verifyEmailCode, signOut, refreshProfile,
     }}>
       {children}
     </AuthContext.Provider>
