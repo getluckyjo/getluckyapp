@@ -14,7 +14,7 @@ import { useBet } from '@/context/BetContext'
  */
 export default function ConfirmPage() {
   const router = useRouter()
-  const { videoBlob, betId, declareResult, uploadStatus, uploadProgress, startBackgroundUpload } = useBet()
+  const { videoBlob, betId, selectedCourse, selectedHole, declareResult, uploadStatus, uploadProgress, startBackgroundUpload } = useBet()
   const videoRef = useRef<HTMLVideoElement>(null)
   const [analysing, setAnalysing] = useState(true)
 
@@ -73,6 +73,9 @@ export default function ConfirmPage() {
 
         <div className="vf-scroll" style={{ paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
           <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Did it\ngo in?'}</h1>
+          {selectedCourse && selectedHole && (
+            <p className="cf-meta">{selectedCourse.name} · Hole {selectedHole.holeNumber} · {selectedHole.distanceMetres}m</p>
+          )}
           <p className="vf-sub">Watch the replay and tell us straight. A claimed hole-in-one goes through full verification.</p>
 
           <div className="cf-video">
@@ -90,25 +93,27 @@ export default function ConfirmPage() {
               <div className="cf-video-empty" />
             )}
 
-            {saveChip && (
-              <button
-                type="button"
-                className={`cf-chip cf-chip--${saveChip.tone}`}
-                disabled={saveChip.tone !== 'error'}
-                onClick={() => {
-                  if (saveChip.tone === 'error' && videoBlob && betId) {
-                    startBackgroundUpload(videoBlob, videoBlob.type || 'video/webm', betId)
-                  }
-                }}
-              >
-                {saveChip.tone === 'busy' && <span className="cf-spinner" aria-hidden />}
-                {saveChip.label}
-              </button>
-            )}
-            <span className={`cf-chip cf-chip--right${analysing ? ' cf-chip--busy' : ' cf-chip--ok'}`}>
-              {analysing && <span className="cf-spinner" aria-hidden />}
-              {analysing ? 'Checking footage' : 'Footage received'}
-            </span>
+            <div className="cf-chips">
+              {saveChip ? (
+                <button
+                  type="button"
+                  className={`cf-chip cf-chip--${saveChip.tone}`}
+                  disabled={saveChip.tone !== 'error'}
+                  onClick={() => {
+                    if (saveChip.tone === 'error' && videoBlob && betId) {
+                      startBackgroundUpload(videoBlob, videoBlob.type || 'video/webm', betId)
+                    }
+                  }}
+                >
+                  {saveChip.tone === 'busy' && <span className="cf-spinner" aria-hidden />}
+                  {saveChip.label}
+                </button>
+              ) : <span />}
+              <span className={`cf-chip${analysing ? ' cf-chip--busy' : ' cf-chip--ok'}`}>
+                {analysing && <span className="cf-spinner" aria-hidden />}
+                {analysing ? 'Checking footage' : 'Footage received'}
+              </span>
+            </div>
           </div>
 
           <div className="cf-actions">
