@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import {
   OPEN_VERIFICATION_STATUSES, ClaimError, assertNotSuspended, assertOpen, claimErrorResponse, transitionBet,
 } from '@/lib/claims/state-machine'
@@ -76,6 +77,8 @@ export async function POST(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.claim, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
     // Ownership: RLS only shows the caller their own bets.
     const { data: bet } = await supabase

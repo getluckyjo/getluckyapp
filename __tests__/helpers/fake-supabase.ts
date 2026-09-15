@@ -240,6 +240,22 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
         const p = db.find('profiles', r => r.id === user_id)
         if (p) p.total_attempts = Number(p.total_attempts ?? 0) + 1
       }
+      if (fn === 'rate_limit_hit') {
+        const { p_key, p_limit, p_window_seconds } = args as { p_key: string; p_limit: number; p_window_seconds: number }
+        const now = Date.now()
+        const rows = db.rows('rate_limits')
+        let row = rows.find(r => r.key === p_key)
+        if (!row || Number(row.window_start) + p_window_seconds * 1000 <= now) {
+          if (row) rows.splice(rows.indexOf(row), 1)
+          row = { key: p_key, count: 0, window_start: now }
+          rows.push(row)
+        }
+        row.count = Number(row.count) + 1
+        return {
+          data: [{ allowed: Number(row.count) <= p_limit, remaining: Math.max(p_limit - Number(row.count), 0), reset_at: new Date(Number(row.window_start) + p_window_seconds * 1000).toISOString() }],
+          error: null,
+        }
+      }
       return { data: null, error: null }
     },
     auth: {

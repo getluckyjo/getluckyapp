@@ -8,6 +8,7 @@ import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { BET_TIERS } from '@/lib/tiers'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 // ---------------------------------------------------------------------------
 // PayFast-mandated parameter order for signature generation
@@ -67,6 +68,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
     await assertNotSuspended(supabase, user.id)
+    const limited = await enforceRateLimit(RULES.checkout, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
     const body = await request.json().catch(() => ({})) as { tier?: unknown; userName?: unknown; courseId?: unknown; holeId?: unknown }
     const tier = typeof body.tier === 'string' ? body.tier : ''

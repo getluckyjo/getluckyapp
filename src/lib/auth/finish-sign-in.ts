@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { log } from '@/lib/observability/log'
+import { sendWelcomeEmail } from '@/lib/email/welcome'
 
 /**
  * Where a sign-in is allowed to land. Anything else falls back to /welcome so a
@@ -46,12 +47,17 @@ export async function finishSignIn(
   await supabase.from('profiles').upsert({ id: user.id, onboarding_done: true })
 
   if (isNewUser && user.email) {
+    // Awaited: a fire-and-forget fetch inside a serverless function is killed
+    // when the response goes out, which is why welcome emails were not
+    // arriving. One-time cost of a few hundred ms on first sign-in.
     const name = user.user_metadata?.full_name ?? user.user_metadata?.name
-    fetch(`${origin}/api/email/welcome`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: user.email, name }),
-    }).catch(err => log.error('auth.welcome_email_failed', err, { path: 'auth', user_id: user.id }))
+    try {
+      const sent = await sendWelcomeEmail({ email: user.email, name })
+      if (sent.ok) log.info('auth.welcome_email_sent', { user_id: user.id, resend_id: sent.id })
+      else log.error('auth.welcome_email_failed', sent.error, { path: 'auth', user_id: user.id })
+    } catch (err) {
+      log.error('auth.welcome_email_failed', err, { path: 'auth', user_id: user.id })
+    }
   }
 
   if (!profile?.age_verified_at) {

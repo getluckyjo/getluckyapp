@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { RULES, enforceRateLimit } from '@/lib/rate-limit'
 
 // ---------------------------------------------------------------------------
 // GET /api/membership/status
@@ -34,6 +35,8 @@ export async function GET() {
     if (!user?.email) {
       return NextResponse.json(notMember)
     }
+    const limited = await enforceRateLimit(RULES.membership, { userId: user.id })
+    if (limited) return limited
 
     let admin
     try {

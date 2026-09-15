@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { assertNotSuspended, assertOpen, claimErrorResponse, transitionBet } from '@/lib/claims/state-machine'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 /**
  * PATCH /api/bets/[betId]
@@ -32,6 +33,8 @@ export async function PATCH(
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.claim, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
     // RLS shows the caller only their own bets: this is the ownership check.
     const { data: bet } = await supabase

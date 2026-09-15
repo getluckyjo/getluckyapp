@@ -7,6 +7,7 @@ import { assertNotSuspended, claimErrorResponse, computeExpiresAt } from '@/lib/
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.betCreate, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
     await assertNotSuspended(supabase, user.id)
 

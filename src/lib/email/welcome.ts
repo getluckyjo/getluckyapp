@@ -1,40 +1,14 @@
+/**
+ * The welcome email, sent once when a profile is first completed.
+ *
+ * Used to be an unauthenticated POST route that anyone on the internet
+ * could point at any address (AUDIT.md B.8). Now it is a function called
+ * from the sign-in completion with the session's own email.
+ */
 import { resend } from '@/lib/resend'
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
 import { emailShell, headline, paragraph, ctaButton, divider, escapeHtml, siteUrl } from '@/lib/email/layout'
 
 const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS ?? 'Get Lucky Golf <noreply@getluckygolf.co.za>'
-
-export async function POST(request: NextRequest) {
-  try {
-    const { email, name } = await request.json()
-
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
-    }
-
-    const firstName = typeof name === 'string' && name.trim() ? name.trim().split(' ')[0] : 'Golfer'
-
-    const { data, error } = await resend.emails.send({
-      from: FROM_ADDRESS,
-      to: email,
-      subject: 'Welcome to Get Lucky. One shot, R1 million.',
-      html: buildWelcomeHtml(firstName),
-      text: buildWelcomeText(firstName),
-    })
-
-    if (error) {
-      console.error('[welcome-email] Resend error:', error)
-      return NextResponse.json({ error: 'Failed to send email' }, { status: 500 })
-    }
-
-    console.log('[welcome-email] Sent to', email, '— id:', data?.id)
-    return NextResponse.json({ success: true, id: data?.id })
-  } catch (err) {
-    console.error('[welcome-email] Unexpected error:', err)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
-  }
-}
 
 const TIERS = [
   ['R50', 'R25 000'],
@@ -45,7 +19,27 @@ const TIERS = [
   ['R1 000', 'R1 000 000'],
 ] as const
 
-function buildWelcomeHtml(firstName: string): string {
+export interface WelcomeInput {
+  email: string
+  name?: string | null
+}
+
+export type SendResult = { ok: true; id: string | null } | { ok: false; error: string }
+
+export async function sendWelcomeEmail({ email, name }: WelcomeInput): Promise<SendResult> {
+  const firstName = typeof name === 'string' && name.trim() ? name.trim().split(' ')[0] : 'Golfer'
+  const { data, error } = await resend.emails.send({
+    from: FROM_ADDRESS,
+    to: email,
+    subject: 'Welcome to Get Lucky. One shot, R1 million.',
+    html: buildWelcomeHtml(firstName),
+    text: buildWelcomeText(firstName),
+  })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, id: data?.id ?? null }
+}
+
+export function buildWelcomeHtml(firstName: string): string {
   const site = siteUrl()
   const tierRows = TIERS.map(([stake, win]) =>
     `<tr>
@@ -68,7 +62,7 @@ function buildWelcomeHtml(firstName: string): string {
   })
 }
 
-function buildWelcomeText(firstName: string): string {
+export function buildWelcomeText(firstName: string): string {
   return [
     `Welcome, ${firstName}.`,
     '',

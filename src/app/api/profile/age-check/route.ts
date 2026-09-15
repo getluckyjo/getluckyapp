@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 /**
  * POST /api/profile/age-check
@@ -20,6 +21,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.ageCheck, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
     const body = await request.json().catch(() => null) as { dateOfBirth?: unknown; consent?: unknown } | null
     const dob = typeof body?.dateOfBirth === 'string' ? body.dateOfBirth.trim() : ''

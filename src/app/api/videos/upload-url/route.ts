@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { assertOpen, claimErrorResponse } from '@/lib/claims/state-machine'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 /**
  * POST /api/videos/upload-url
@@ -29,6 +30,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.upload, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
     // Verify bet belongs to the current user (prevent IDOR)
     const { data: bet } = await supabase

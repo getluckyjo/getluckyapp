@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
+import { RULES, enforceRateLimit } from '@/lib/rate-limit'
 
 const MOCK_ADMIN = {
   user: { id: 'mock-admin-user', email: 'admin@getlucky.golf' },
@@ -55,6 +56,11 @@ export async function requireAdmin() {
         isMock: false,
         error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }),
       }
+    }
+
+    const limited = await enforceRateLimit(RULES.admin, { userId: user.id })
+    if (limited) {
+      return { user: null, adminClient: null, isMock: false, error: limited }
     }
 
     return {

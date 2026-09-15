@@ -12,22 +12,28 @@ import { GET as callback } from '@/app/(onboarding)/auth/callback/route'
 import { POST as verify, GET as verifyGet } from '@/app/(onboarding)/auth/confirm/verify/route'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
+const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
+const resendMock = vi.hoisted(() => ({ resend: { emails: { send: vi.fn() } } }))
 vi.mock('@/lib/supabase/server', () => serverClient)
+vi.mock('@/lib/supabase/admin', () => adminClient)
+vi.mock('@/lib/resend', () => resendMock)
 
 const ORIGIN = 'https://www.getluckyholeinone.com'
 let db: FakeDb
-let fetchSpy: ReturnType<typeof vi.fn>
 
 const location = (res: Response) => res.headers.get('location')
+const sendSpy = resendMock.resend.emails.send
 
 beforeEach(() => {
   db = new FakeDb()
   serverClient.createClient.mockReset()
-  fetchSpy = vi.fn(async () => new Response('{}'))
-  vi.stubGlobal('fetch', fetchSpy)
+  adminClient.createAdminClient.mockImplementation(() => createFakeClient(db))
+  sendSpy.mockReset()
+  sendSpy.mockResolvedValue({ data: { id: 'email_123' }, error: null })
   vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'log').mockImplementation(() => {})
 })
-afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(() => { vi.restoreAllMocks() })
 
 describe('safeNext', () => {
   it('allows only the listed in-app paths and falls back to /welcome', () => {
@@ -44,23 +50,31 @@ describe('finishSignIn', () => {
     expect(location(res)).toBe(`${ORIGIN}/auth?error=no_session`)
   })
 
-  it('first-timer: marks onboarding done, sends the welcome email, then goes to the age gate', async () => {
+  it('first-timer: marks onboarding done, sends the welcome email to the session\'s own address, then goes to the age gate', async () => {
     const client = createFakeClient(db, { user: USER_A })
     const res = await finishSignIn(client as never, ORIGIN, '/home')
 
     expect(location(res)).toBe(`${ORIGIN}/age-check`)
     expect(db.find('profiles', p => p.id === USER_A.id)?.onboarding_done).toBe(true)
-    expect(fetchSpy).toHaveBeenCalledOnce()
-    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit]
-    expect(url).toBe(`${ORIGIN}/api/email/welcome`)
-    expect(JSON.parse(init.body as string)).toEqual({ email: USER_A.email, name: 'Alice Ace' })
+    expect(sendSpy).toHaveBeenCalledOnce()
+    const [msg] = sendSpy.mock.calls[0] as [{ to: string; subject: string; html: string; text: string }]
+    expect(msg.to).toBe(USER_A.email)
+    expect(msg.subject).toMatch(/Welcome/)
+    expect(msg.html).toContain('Alice')
+    expect(msg.text).toContain('Alice')
+  })
+
+  it('a welcome email failure is logged and does not block sign-in', async () => {
+    sendSpy.mockResolvedValue({ data: null, error: { message: 'Resend down' } })
+    const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/home')
+    expect(location(res)).toBe(`${ORIGIN}/age-check`)
   })
 
   it('returning user without age verification is still sent to the age gate, no welcome email', async () => {
     db.seed('profiles', { id: USER_A.id, onboarding_done: true, age_verified_at: null })
     const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/select-course')
     expect(location(res)).toBe(`${ORIGIN}/age-check`)
-    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(sendSpy).not.toHaveBeenCalled()
   })
 
   it('age-verified returning user lands on the requested safe path', async () => {

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
+import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 
 /**
  * POST /api/videos/uploaded
@@ -27,6 +28,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    const limited = await enforceRateLimit(RULES.upload, { userId: user.id, ip: clientIp(request) })
+    if (limited) return limited
 
     const { data: bet } = await supabase
       .from('bets')
