@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
+import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
 
 type Tab = 'biggest' | 'recent'
@@ -68,10 +69,10 @@ export default function LeaderboardPage() {
   return (
     <PhoneFrame statusTheme="dark" hideSponsor>
       <div className="screen-leaderboard">
-        {/* Header */}
-        <header className="leaderboard-header">
-          <h1 className="leaderboard-title"><span aria-hidden="true">🏆 </span>Winners</h1>
-          <div className="leaderboard-subtitle">
+        <AppHeader tone="light" />
+        <header className="page-head" style={{ display: 'block' }}>
+          <h1 className="page-title">Winners</h1>
+          <div className="page-sub">
             R{totalPaidOut.toLocaleString('en-ZA')} paid out to date
           </div>
         </header>

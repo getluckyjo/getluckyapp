@@ -29,6 +29,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   userScalable: true,
+  // Lets the page extend under the notch and home indicator on iOS so the
+  // env(safe-area-inset-*) paddings on the header and tab bar take effect.
+  viewportFit: 'cover',
   themeColor: '#345231',
 }
 

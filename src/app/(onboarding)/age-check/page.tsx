@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 
@@ -104,10 +105,8 @@ export default function AgeCheckPage() {
   return (
     <PhoneFrame statusTheme="dark">
       <div className="screen-payment">
-        <div style={{ textAlign: 'center', padding: 'var(--space-2xl) var(--page-px) 0' }}>
-          <img src="/brand/logo-lockup.svg" alt="Get Lucky Hole-in-1 Challenge" className="logo-header-dark" style={{ width: "clamp(96px, 28vw, 116px)" }} />
-        </div>
-        <div className="signup-title-area" style={{ padding: 'var(--space-md) var(--page-px) var(--space-sm)' }}>
+        <AppHeader tone="light" />
+        <div className="signup-title-area" style={{ padding: 'clamp(8px, 2vh, 20px) var(--page-px) var(--space-md)' }}>
           <h3 className="signup-title">One quick check</h3>
           <p className="signup-sub">You must be 18+ and a South African resident to play for real money.</p>
         </div>
