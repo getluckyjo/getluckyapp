@@ -2,18 +2,40 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
+import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
 import { useAuth } from '@/context/AuthContext'
 
 type LoadingStep = 'idle' | 'opening'
 
+function formatRand(n: number) {
+  return `R${n.toLocaleString('en-ZA').replace(/,/g, ' ')}`
+}
+
+/** Short prize label for the badge: R25K, R100K, R1M. */
+function prizeShort(win: number) {
+  if (win >= 1_000_000) return 'R1M'
+  if (win >= 1_000) return `R${Math.round(win / 1000)}K`
+  return `R${win}`
+}
+
+/**
+ * Choose stake — the "committing money" screen, in the V2 system.
+ *
+ * Same surface and rhythm as Select Course: display title, the course line,
+ * one white card per tier with the stake in display type and the prize in a
+ * lime badge. Tapping a card opens the confirm sheet above the tab bar with
+ * the lime PAY & PLAY button; that button hands off to PayFast exactly as
+ * before (signed fields from /api/payments/payfast, session saved to
+ * localStorage for the return leg, hidden-form POST).
+ */
 export default function ChooseStakePage() {
   const router = useRouter()
   const { selectedCourse, selectedHole, selectTier } = useBet()
   const { user, profile } = useAuth()
-  const [selected, setSelected]     = useState<BetTier>('tier_2')
+  const [selected, setSelected]     = useState<BetTier | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [step, setStep]             = useState<LoadingStep>('idle')
   const [errorMsg, setErrorMsg]     = useState('')
@@ -28,17 +50,15 @@ export default function ChooseStakePage() {
     }
   }, [selectedCourse, selectedHole, router])
 
-  const subtitle = selectedCourse
-    ? `${selectedCourse.name} · Hole ${selectedHole?.holeNumber} · Par ${selectedHole?.par ?? 3} · ${selectedHole?.distanceMetres}m`
-    : 'Select your stake to play'
-
   function handleSelectTier(tier: BetTier) {
+    if (loading) return
     setSelected(tier)
     setErrorMsg('')
     setConfirming(true)
   }
 
   async function handleConfirmPayment() {
+    if (!selected) return
     setStep('opening')
     setErrorMsg('')
     selectTier(selected)
@@ -100,212 +120,118 @@ export default function ChooseStakePage() {
   }
 
   return (
-    <PhoneFrame statusTheme="light">
-      <div className="screen-bet">
-        <div style={{ position: 'absolute', top: 60, left: 'var(--page-px)', zIndex: 10 }}>
-          <button
-            onClick={() => !loading && router.back()}
-            disabled={loading}
-            style={{
-              width: 36, height: 36, background: 'rgba(255,255,255,0.1)',
-              border: 'none', borderRadius: 'var(--radius-sm)', color: 'white', fontSize: 'var(--text-lg)',
-              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.5 : 1,
-            }}
-          >
-            ←
-          </button>
-        </div>
-        <div className="bet-header" style={{ paddingTop: 60 }}>
-          <h3 className="bet-title">Back Yourself</h3>
-          <p className="bet-subtitle">{subtitle}</p>
-        </div>
-        {/* Trust banner */}
-        <div style={{
-          margin: '0 var(--page-px) var(--space-sm)',
-          padding: '12px 16px',
-          background: 'rgba(255,255,255,0.06)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 'var(--radius-md)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14,
-        }}>
-          {/* PayFast */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg width="16" height="18" viewBox="0 0 14 16" fill="none" style={{ color: 'var(--gold)', flexShrink: 0 }}>
-              <rect x="1" y="7" width="12" height="8" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <path d="M4 7V5a3 3 0 1 1 6 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-            </svg>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>PayFast</div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', lineHeight: 1.2 }}>Secure payments</div>
-            </div>
-          </div>
+    <PhoneFrame statusTheme="dark">
+      <div className="v2-screen">
+        <AppHeader tone="light" />
 
-          <div style={{ width: 1, height: 28, background: 'rgba(255,255,255,0.12)' }} />
-
-          {/* Indwe */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ color: 'var(--gold)', flexShrink: 0 }}>
-              <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" fill="currentColor" opacity="0.2"/>
-              <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-              <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            </svg>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: '#fff', lineHeight: 1.2 }}>Indwe Insurance</div>
-              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', lineHeight: 1.2 }}>Prizes fully insured (FSP 3425)</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bet-options">
-          {BET_TIERS.map(tier => (
-            <div
-              key={tier.tier}
-              className={`bet-card${selected === tier.tier ? ' selected' : ''}`}
-              onClick={() => !loading && handleSelectTier(tier.tier)}
-              style={{ opacity: loading ? 0.6 : 1, pointerEvents: loading ? 'none' : 'auto' }}
-            >
-              <div className="bet-stake">
-                <div className="bet-stake-amount">R{tier.stakeZAR.toLocaleString('en-ZA')}</div>
-                <div className="bet-stake-label">Stake</div>
-              </div>
-              <div className="bet-arrow">→</div>
-              <div className="bet-multiplier">{tier.multiplier}×</div>
-              <div className="bet-win">
-                <div className="bet-win-label">Win</div>
-                <div className="bet-win-amount">{tier.winZAR >= 1_000_000 ? 'R1 Mil' : tier.winZAR >= 1_000 ? `R${Math.round(tier.winZAR / 1000)}K` : `R${tier.winZAR}`}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="bet-footer">
-          {errorMsg && (
-            <div style={{ fontSize: 'var(--text-sm)', color: '#ff6b6b', marginBottom: 'var(--space-xs)', textAlign: 'center' }}>
-              Payment failed. Tap a stake to try again.
-            </div>
+        <div className="cs-head">
+          <h1 className="v2-title cs-title" style={{ marginBottom: 8 }}>{'Choose\nyour stake'}</h1>
+          {selectedCourse && selectedHole && (
+            <p className="stake-course">
+              {selectedCourse.name} <i>|</i> Hole {selectedHole.holeNumber} <i>|</i> Par {selectedHole.par} <i>|</i> {selectedHole.distanceMetres}m
+              <button type="button" className="stake-change" onClick={() => router.push('/select-course')}>Change</button>
+            </p>
           )}
         </div>
 
-        {/* ── Confirmation overlay ─────────────────────────────────── */}
-        {confirming && activeTier && (
-          <>
-            <div
-              style={{
-                position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)',
-                zIndex: 900, transition: 'opacity 0.2s',
-              }}
-              onClick={() => !loading && setConfirming(false)}
-            />
-            <div
-              style={{
-                position: 'fixed', bottom: 0, left: 0, right: 0,
-                background: '#fff', borderRadius: '20px 20px 0 0',
-                padding: '28px 24px max(env(safe-area-inset-bottom, 16px), 24px)',
-                zIndex: 901, maxWidth: 500, margin: '0 auto',
-                boxShadow: '0 -4px 30px rgba(0,0,0,0.15)',
-              }}
-            >
-              <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: 'var(--text-xl)', color: 'var(--green-800)', margin: '0 0 20px', textAlign: 'center' }}>
-                Confirm Your Entry
-              </h3>
+        <div className={`cs-list stake-list${confirming ? ' cs-list--sheet-open' : ''}`} aria-label="Stake tiers">
+          {BET_TIERS.map((tier, i) => {
+            const isSelected = selected === tier.tier
+            return (
+              <button
+                key={tier.tier}
+                type="button"
+                className={`stake-card${isSelected ? ' is-selected' : ''}`}
+                style={{ animationDelay: `${i * 40}ms` }}
+                onClick={() => handleSelectTier(tier.tier)}
+                aria-pressed={isSelected}
+                disabled={loading}
+              >
+                <span className="stake-amount">
+                  {formatRand(tier.stakeZAR)}
+                  <small>stake</small>
+                </span>
+                <span className="stake-mult">{tier.multiplier}&times;</span>
+                <span className="stake-win">
+                  <small>win</small>
+                  {prizeShort(tier.winZAR)}
+                </span>
+              </button>
+            )
+          })}
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#666' }}>
-                  <span>Course</span>
-                  <span style={{ color: '#222', fontWeight: 600 }}>{selectedCourse?.name}</span>
+          <p className="stake-trust">
+            <LockIcon /> Secure checkout via PayFast
+            <span className="stake-trust-sep">&middot;</span>
+            <ShieldIcon /> Prizes insured by Indwe (FSP 3425)
+          </p>
+          {errorMsg && !confirming && (
+            <div className="auth-error" role="alert">Payment didn&apos;t start. Tap a stake to try again.</div>
+          )}
+        </div>
+
+        {confirming && activeTier && selectedCourse && selectedHole && (
+          <>
+            <div className="stake-backdrop" onClick={() => !loading && setConfirming(false)} />
+            <div className="cs-sheet stake-sheet" role="dialog" aria-modal="true" aria-label="Confirm your entry">
+              <div className="cs-sheet-top">
+                <div>
+                  <div className="stake-sheet-title">Confirm your entry</div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#666' }}>
-                  <span>Hole</span>
-                  <span style={{ color: '#222', fontWeight: 600 }}>Hole {selectedHole?.holeNumber} · Par {selectedHole?.par ?? 3}</span>
-                </div>
-                <div style={{ height: 1, background: '#eee' }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#666' }}>
-                  <span>Entry stake</span>
-                  <span style={{ color: '#222', fontWeight: 600 }}>R{activeTier.stakeZAR.toLocaleString('en-ZA')}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 'var(--text-sm)', color: '#666' }}>
-                  <span>Potential win</span>
-                  <span style={{ color: 'var(--green-700)', fontWeight: 700, fontSize: 'var(--text-base)' }}>
-                    R{activeTier.winZAR.toLocaleString('en-ZA')}
-                  </span>
-                </div>
+                {!loading && (
+                  <button type="button" className="cs-sheet-close" aria-label="Cancel" onClick={() => setConfirming(false)}>×</button>
+                )}
               </div>
 
+              <dl className="stake-rows">
+                <div><dt>Course</dt><dd>{selectedCourse.name}</dd></div>
+                <div><dt>Hole</dt><dd>Hole {selectedHole.holeNumber} · Par {selectedHole.par} · {selectedHole.distanceMetres}m</dd></div>
+                <div><dt>Your stake</dt><dd>{formatRand(activeTier.stakeZAR)}</dd></div>
+                <div className="stake-rows-win"><dt>You could win</dt><dd>{formatRand(activeTier.winZAR)}</dd></div>
+              </dl>
+
               {errorMsg && (
-                <div style={{ fontSize: 'var(--text-sm)', color: '#ff6b6b', marginBottom: 12, textAlign: 'center' }}>
-                  {errorMsg}
-                </div>
+                <div className="auth-error" role="alert" style={{ marginBottom: 12 }}>{errorMsg}</div>
               )}
 
               <button
-                className="btn-gold"
+                type="button"
+                className="btn-lime btn-lime--block"
                 onClick={handleConfirmPayment}
                 disabled={loading}
-                style={{ width: '100%', padding: '16px', fontSize: 'var(--text-base)', fontWeight: 700, opacity: loading ? 0.8 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
               >
-                <svg width="14" height="16" viewBox="0 0 14 16" fill="none" style={{ flexShrink: 0 }}>
-                  <rect x="1" y="7" width="12" height="8" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                  <path d="M4 7V5a3 3 0 1 1 6 0v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-                </svg>
-                {loading ? 'Redirecting to payment...' : `Pay R${activeTier.stakeZAR.toLocaleString('en-ZA')} & Play`}
+                <LockIcon />
+                {loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
               </button>
 
-              {/* Trust signals */}
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
-                marginTop: 14, paddingTop: 14, borderTop: '1px solid #f0ebe0',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: '#4a9d5b' }}>
-                    <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" fill="currentColor" opacity="0.15"/>
-                    <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                    <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  </svg>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#4a9d5b' }}>Secure checkout</span>
-                </div>
-                <div style={{ width: 1, height: 14, background: '#e0dbd0' }} />
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ color: '#2d6a3f' }}>
-                    <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" fill="currentColor" opacity="0.15"/>
-                    <path d="M12 2L3 7v5c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-                  </svg>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: '#2d6a3f' }}>Insured by Indwe</span>
-                </div>
-              </div>
-
-              <div style={{ fontSize: 10, color: '#aaa', textAlign: 'center', marginTop: 10 }}>
-                Secure payment via PayFast · Prizes fully insured (FSP 3425)
-                <br />
-                <span
-                  onClick={() => router.push('/terms')}
-                  style={{ textDecoration: 'underline', cursor: 'pointer' }}
-                >
-                  Terms &amp; Conditions
-                </span>
-                {' · '}
-                <span
-                  onClick={() => router.push('/privacy')}
-                  style={{ textDecoration: 'underline', cursor: 'pointer' }}
-                >
-                  Privacy Policy
-                </span>
-              </div>
-
-              {!loading && (
-                <button
-                  onClick={() => setConfirming(false)}
-                  style={{
-                    width: '100%', padding: '10px', marginTop: 8,
-                    background: 'none', border: 'none', color: '#999',
-                    fontSize: 'var(--text-sm)', cursor: 'pointer',
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
+              <p className="stake-sheet-legal">
+                Secure payment via PayFast. Prizes fully insured by Indwe Risk Services (FSP 3425).{' '}
+                <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
+              </p>
             </div>
           </>
         )}
+
+        <BottomTabBar active="play" />
       </div>
     </PhoneFrame>
+  )
+}
+
+function LockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="4" y="10" width="16" height="11" rx="2.5" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </svg>
+  )
+}
+
+function ShieldIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 3 4 6.5v5c0 4.6 3.2 8.9 8 10 4.8-1.1 8-5.4 8-10v-5L12 3z" />
+      <path d="m9 12 2 2 4-4" />
+    </svg>
   )
 }

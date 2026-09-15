@@ -3,23 +3,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
+import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS } from '@/context/BetContext'
 
 type StepStatus = 'completed' | 'active' | 'pending'
 
 interface VerifyStep {
   id: string
-  icon: string
   title: string
   desc: string
   status: StepStatus
 }
 
 const INITIAL_STEPS: VerifyStep[] = [
-  { id: 'footage', icon: '🎥', title: 'Footage Received', desc: 'Video uploaded successfully', status: 'completed' },
-  { id: 'documents', icon: '📄', title: 'Documents Received', desc: 'Certificate & affidavit under review', status: 'active' },
-  { id: 'verified', icon: '✅', title: 'Shot Verified', desc: 'Manual review by our team', status: 'pending' },
-  { id: 'payout', icon: '💰', title: 'Payout Initiated', desc: 'Funds transferred to your account', status: 'pending' },
+  { id: 'footage',   title: 'Footage received',   desc: 'Your video is safely uploaded.',              status: 'completed' },
+  { id: 'documents', title: 'Documents received', desc: 'Certificate and affidavit are with us.',       status: 'active' },
+  { id: 'verified',  title: 'Shot verified',      desc: 'Reviewed by our team and the insurer.',        status: 'pending' },
+  { id: 'payout',    title: 'Prize paid',         desc: 'Funds transferred to your account.',           status: 'pending' },
 ]
 
 const STATUS_TO_STEPS: Record<string, number> = {
@@ -37,6 +38,12 @@ function applyProgress(steps: VerifyStep[], activeIndex: number): VerifyStep[] {
   }))
 }
 
+/**
+ * Verify — "coming back" after a claim, in the V2 system.
+ * Header, CLAIM UNDER REVIEW, a green prize card with the amount in lime,
+ * the four-step timeline, and a lime button home. Polling behaviour is
+ * unchanged.
+ */
 export default function VerifyPage() {
   const router = useRouter()
   const { selectedTier, betId, resetSession } = useBet()
@@ -103,38 +110,49 @@ export default function VerifyPage() {
 
   if (!betId) return null
 
+  const doneCount = steps.filter(s => s.status === 'completed').length
+
   return (
     <PhoneFrame statusTheme="dark">
-      <div className="screen-verify">
-        <div className="verify-animation">
-          <div className="verify-ring" />
-          <div className="verify-icon">🏌️</div>
-        </div>
-        <div className="verify-title">Claim Under Review</div>
-        <div className="verify-desc">
-          Our team is verifying your hole-in-one. You'll receive a notification when it's confirmed.
-        </div>
-        <div className="verify-timeline">
-          {steps.map(step => (
-            <div key={step.id} className={`verify-step ${step.status}`}>
-              <div className="verify-step-dot">{step.status === 'completed' ? '✓' : step.icon}</div>
-              <div className="verify-step-content">
-                <h5>{step.title}</h5>
-                <p>{step.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="verify-payout">
-          <div className="verify-payout-label">Pending Prize</div>
-          <div className="verify-payout-amount">R{tierData.winZAR.toLocaleString('en-ZA')}</div>
-          <div className="verify-payout-eta">Expected by {payoutEta}</div>
-        </div>
-        <div style={{ width: 'calc(100% - 48px)', paddingBottom: 20 }}>
-          <button className="btn-share" onClick={handleHome}>
-            🏠 Back to Home
+      <div className="v2-screen">
+        <AppHeader tone="light" />
+
+        <div className="vf-scroll">
+          <h1 className="v2-title" style={{ marginBottom: 10 }}>{'Claim\nunder review'}</h1>
+          <p className="vf-sub">
+            Our team is verifying your hole-in-one. We&apos;ll let you know the moment it&apos;s confirmed.
+          </p>
+
+          <div className="vf-prize">
+            <div className="vf-prize-label">Pending prize</div>
+            <div className="vf-prize-amount">R{tierData.winZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}</div>
+            <div className="vf-prize-eta">Expected by {payoutEta}</div>
+          </div>
+
+          <ol className="vf-steps" aria-label={`${doneCount} of ${steps.length} steps complete`}>
+            {steps.map((step, i) => (
+              <li key={step.id} className={`vf-step is-${step.status}`}>
+                <span className="vf-step-dot" aria-hidden>
+                  {step.status === 'completed' ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5 9-10" /></svg>
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span className="vf-step-text">
+                  <span className="vf-step-title">{step.title}</span>
+                  <span className="vf-step-desc">{step.desc}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+
+          <button type="button" className="btn-lime btn-lime--block" onClick={handleHome}>
+            Back to home
           </button>
         </div>
+
+        <BottomTabBar active="play" />
       </div>
     </PhoneFrame>
   )

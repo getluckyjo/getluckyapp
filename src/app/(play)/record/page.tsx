@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import { GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 
 const MAX_SECONDS = 120 // 2 minutes max
@@ -34,9 +35,6 @@ export default function RecordPage() {
     ? `Hole ${selectedHole.holeNumber} · Par ${selectedHole.par} · ${selectedHole.distanceMetres}m`
     : ''
   const courseName = selectedCourse?.name ?? ''
-
-  // Don't render until we know we have valid state
-  if (!selectedCourse || !selectedHole) return null
 
   function formatTime(s: number) {
     const m = Math.floor(s / 60).toString().padStart(2, '0')
@@ -179,163 +177,89 @@ export default function RecordPage() {
     router.push('/choose-stake')
   }
 
+  const overlayCopy = {
+    unsupported: {
+      title: 'No camera\nfound',
+      body: 'This device has no camera, or the browser can\u2019t reach it. Try the phone you play from.',
+      cta: null,
+    },
+    denied: {
+      title: 'Camera\nblocked',
+      body: 'Allow camera access in your browser settings, then tap below to try again.',
+      cta: 'Try again',
+    },
+    prompt: {
+      title: 'Camera\naccess',
+      body: 'We need the camera to film your shot. Tap below and allow access when asked.',
+      cta: 'Enable camera',
+    },
+    checking: { title: 'One\nmoment', body: 'Asking for camera access\u2026', cta: null },
+    granted:  { title: '', body: '', cta: null },
+  }[permissionState]
+
+  // Don't render until we know we have valid state. Sits after every hook so
+  // the hook order is identical on every render.
+  if (!selectedCourse || !selectedHole) return null
+
   return (
     <PhoneFrame statusTheme="light" showStatus={false}>
-      <div className="screen-record">
+      <div className="rec">
         {/* Live camera feed */}
         {!cameraError ? (
-          <video
-            ref={videoRef}
-            muted
-            playsInline
-            style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', zIndex: 0,
-            }}
-          />
+          <video ref={videoRef} muted playsInline className="rec-video" />
         ) : (
-          <div className="record-course-bg" />
+          <div className="rec-fallback" />
         )}
+        <div className="rec-scrim" aria-hidden />
+        <div className="rec-grid" aria-hidden />
 
-        <div className="record-viewfinder" />
-        <div className="record-grid" />
-
-        <button
-          onClick={handleCancel}
-          style={{
-            position: 'absolute', top: 'var(--page-px)', left: 'var(--page-px)', zIndex: 10,
-            width: 44, height: 44, background: 'rgba(255,255,255,0.15)',
-            border: 'none', borderRadius: '50%', color: 'white',
-            fontSize: 'var(--text-md)', cursor: 'pointer',
-          }}
-        >
-          ✕
-        </button>
+        {/* Top row: close, REC/READY + timer, brand sticker */}
+        <div className="rec-top">
+          <button type="button" className="rec-close" aria-label="Cancel and go back" onClick={handleCancel}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M6 6l12 12M18 6 6 18" /></svg>
+          </button>
+          <div className={`rec-status${isRecording ? ' is-recording' : ''}`} aria-live="polite">
+            <span className="rec-dot" aria-hidden />
+            {isRecording ? 'Rec' : 'Ready'}
+            <span className="rec-timer">{formatTime(seconds)}</span>
+          </div>
+          <img src="/brand/logo-corner.svg" alt="Get Lucky" className="rec-sticker" draggable={false} />
+        </div>
 
         {/* Camera permission overlay */}
         {cameraError && (
-          <div style={{
-            position: 'absolute', inset: 0, zIndex: 20,
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-            background: 'rgba(0,0,0,0.85)', padding: '0 32px', textAlign: 'center',
-          }}>
-            <div style={{
-              width: 64, height: 64, borderRadius: '50%',
-              background: 'rgba(255,255,255,0.1)', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', marginBottom: 20,
-              fontSize: 28,
-            }}>
-              {permissionState === 'unsupported' ? '📵' : '📷'}
-            </div>
-
-            {permissionState === 'unsupported' ? (
-              <>
-                <div style={{ color: 'white', fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 8 }}>
-                  Camera Not Available
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--text-body)', lineHeight: 1.5, marginBottom: 24 }}>
-                  Your device does not have a camera or your browser doesn&apos;t support camera access.
-                </div>
-              </>
-            ) : permissionState === 'denied' ? (
-              <>
-                <div style={{ color: 'white', fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 8 }}>
-                  Camera Access Blocked
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--text-body)', lineHeight: 1.5, marginBottom: 24 }}>
-                  Camera permission was denied. To record your shot, please enable camera access in your browser settings, then tap the button below.
-                </div>
-                <button
-                  onClick={requestCamera}
-                  style={{
-                    background: 'var(--color-gold)', color: 'var(--color-green-dark)',
-                    border: 'none', borderRadius: 12, padding: '14px 32px',
-                    fontSize: 'var(--text-body)', fontWeight: 700, cursor: 'pointer',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Try Again
-                </button>
-              </>
-            ) : permissionState === 'prompt' ? (
-              <>
-                <div style={{ color: 'white', fontSize: 'var(--text-lg)', fontWeight: 700, marginBottom: 8 }}>
-                  Camera Access Required
-                </div>
-                <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--text-body)', lineHeight: 1.5, marginBottom: 24 }}>
-                  We need camera access to record your hole-in-one attempt. Tap below and allow camera access when prompted.
-                </div>
-                <button
-                  onClick={requestCamera}
-                  style={{
-                    background: 'var(--color-gold)', color: 'var(--color-green-dark)',
-                    border: 'none', borderRadius: 12, padding: '14px 32px',
-                    fontSize: 'var(--text-body)', fontWeight: 700, cursor: 'pointer',
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  Enable Camera
-                </button>
-              </>
-            ) : (
-              /* checking state */
-              <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 'var(--text-body)' }}>
-                Requesting camera access...
-              </div>
+          <div className="rec-overlay">
+            <h2 className="v2-title rec-overlay-title">{overlayCopy.title}</h2>
+            <p className="rec-overlay-body">{overlayCopy.body}</p>
+            {overlayCopy.cta && (
+              <button type="button" className="btn-lime" onClick={requestCamera}>{overlayCopy.cta}</button>
             )}
-
-            <button
-              onClick={handleCancel}
-              style={{
-                marginTop: 16, background: 'none', border: 'none',
-                color: 'rgba(255,255,255,0.5)', fontSize: 'var(--text-sm)',
-                cursor: 'pointer', textDecoration: 'underline',
-              }}
-            >
-              Go Back
-            </button>
+            <button type="button" className="rec-overlay-back" onClick={handleCancel}>Go back</button>
           </div>
         )}
 
-        <div className="record-top-bar">
-          <div className="record-live-badge">
-            <div className="record-live-dot" style={{ opacity: isRecording ? 1 : 0 }} />
-            {isRecording ? 'REC' : 'READY'}
-          </div>
-          <div className="record-timer">{formatTime(seconds)}</div>
-        </div>
+        {/* Hole + course, then the record control */}
+        <div className="rec-bottom">
+          <div className="rec-hole">{holeLabel}</div>
+          <div className="rec-course">{courseName}</div>
 
-        <div className="record-challenge-info">
-          <div className="record-hole-label">{holeLabel}</div>
-          <div className="record-course-name">{courseName}</div>
-        </div>
+          {!isRecording && cameraReady && !cameraError && (
+            <div className="rec-hint">Tap the ball to start recording</div>
+          )}
+          {isRecording && (
+            <div className="rec-hint rec-hint--live">Recording. Tap to stop when the ball lands.</div>
+          )}
 
-        {/* Tap-to-record hint — shown only when idle and ready */}
-        {!isRecording && cameraReady && (
-          <div style={{
-            position: 'absolute', bottom: 138, left: 0, right: 0,
-            textAlign: 'center', zIndex: 10,
-          }}>
-            <div style={{
-              display: 'inline-block',
-              background: 'rgba(0,0,0,0.45)',
-              color: 'rgba(255,255,255,0.9)',
-              fontSize: 'var(--text-body)', fontWeight: 600,
-              padding: '6px 18px', borderRadius: 20,
-              letterSpacing: '0.02em',
-            }}>
-              Tap ● to start recording
-            </div>
-          </div>
-        )}
-
-        <div className="record-controls">
           <button
-            className={`record-btn-main${isRecording ? ' recording' : ''}`}
+            type="button"
+            className={`rec-button${isRecording ? ' is-recording' : ''}`}
             onClick={isRecording ? stopRecording : startRecording}
             disabled={!cameraReady || cameraError}
+            aria-label={isRecording ? 'Stop recording' : 'Start recording'}
           >
-            <div className="record-btn-main-inner" />
+            <span className="rec-button-disc">
+              {isRecording ? <span className="rec-button-stop" /> : <GolfBallIcon size={44} />}
+            </span>
           </button>
         </div>
       </div>
