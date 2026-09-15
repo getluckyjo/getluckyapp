@@ -12,19 +12,31 @@ import { createSerwistRoute } from '@serwist/turbopack'
 export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } = createSerwistRoute({
   swSrc: 'src/app/sw.ts',
   useNativeEsbuild: true,
-  // Relative to the working directory. `.next/...` entries are rewritten to
-  // /_next/... and `public/...` entries to / by the package.
-  globDirectory: '.',
-  globPatterns: [
-    '.next/static/chunks/**/*.{js,css}',
-    '.next/static/css/**/*.css',
-    '.next/static/media/**/*.{woff2,woff,otf,ttf}',
-    'public/fonts/*.otf',
-    'public/brand/logo-corner.svg',
-    'public/brand/logo-lockup.svg',
-    'public/icons/icon-192.png',
+  // The glob patterns are left at the package defaults on purpose: they are
+  // built from the Next config's resolved `distDir`, which Vercel changes at
+  // build time (a hard-coded `.next/static/...` matched nothing there and the
+  // worker shipped with five entries). Defaults cover `<distDir>/static/**`
+  // and `public/**`; the ignores below keep the install small: no source
+  // maps, no marketing photos, no launch images, no stray root files.
+  globIgnores: [
+    '**/*.map',
+    '**/static/development/**',
+    '**/*.hot-update.*',
+    'public/marketing/**',
+    'public/splash/**',
+    'public/icons/**',
+    'public/GLG_Indwe_FSP_Banner.png',
+    'public/apple-icon.png',
+    'public/favicon.png',
+    'public/logo.png',
+    'public/logo.svg',
+    'public/brand/logo-lockup.png',
+    'public/file.svg',
+    'public/globe.svg',
+    'public/next.svg',
+    'public/vercel.svg',
+    'public/window.svg',
   ],
-  globIgnores: ['**/*.map', '.next/static/development/**', '.next/static/chunks/**/*.hot-update.*'],
   dontCacheBustURLsMatching: /^\/_next\/static\//,
   maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
   // The offline fallback page is rendered by Next, not a file on disk, so it
