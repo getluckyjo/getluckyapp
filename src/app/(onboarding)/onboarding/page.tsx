@@ -3,107 +3,53 @@
 import { useState, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import { Video, ShieldCheck, Star } from 'lucide-react'
 import PhoneFrame from '@/components/layout/PhoneFrame'
-import {
-  Smartphone,
-  Video,
-  MapPin,
-  ShieldCheck,
-  FileCheck2,
-  Trophy,
-  CircleDollarSign,
-  Star,
-  BadgeCheck,
-} from 'lucide-react'
+import StepBar from '@/components/layout/StepBar'
+import { GolfBallIcon } from '@/components/icons'
+import { useAuth } from '@/context/AuthContext'
 
 /* ── Slide data ── */
 const slides = [
   {
-    step: 'Step 1 of 4',
-    icon: 'target' as const,
+    icon: 'ball' as const,
     bg: '/marketing/courses/st-francis-links.jpg',
-    bgAlt: 'St Francis Links',
-    title: 'Your Hole-in-One\nCould Pay R1M.',
-    text: 'Pick any par-3 at 100+ South African courses. Stake from R50 to R1 000 — land the shot, win up to R1 million.',
+    position: '50% 70%',
+    title: 'Your hole\u2011in\u2011one\ncould pay R1M.',
+    text: 'Pick any par 3 at 100+ South African courses. Stake from R50 to R1 000. Land the shot, win up to R1 million.',
     cta: 'Next',
   },
   {
-    step: 'Step 2 of 4',
-    icon: 'phone' as const,
+    icon: 'video' as const,
     bg: '/marketing/courses/metropolitan.jpg',
-    bgAlt: 'Metropolitan Golf Club',
-    title: 'Film It.\nSwing It.\nWin It.',
-    text: 'Choose your course, select your stake, and hit record before you swing. Three taps and you\'re playing for the big prize.',
+    position: '50% 60%',
+    title: 'Film it.\nSwing it.\nWin it.',
+    text: 'Choose your course, pick your stake, and hit record before you swing. Three taps and you\'re playing for the big prize.',
     cta: 'Next',
   },
   {
-    step: 'Step 3 of 4',
     icon: 'shield' as const,
     bg: '/marketing/courses/zimbali.jpg',
-    bgAlt: 'Zimbali Country Club',
-    title: 'Every Prize\nFully Insured.',
+    position: '62% 100%',
+    title: 'Every prize\nfully insured.',
     text: 'Prizes underwritten by Indwe Risk Services (FSP 3425). Payments secured by PayFast. Your win is guaranteed.',
     cta: 'Next',
   },
   {
-    step: 'Step 4 of 4',
-    icon: 'club' as const,
+    icon: 'star' as const,
     bg: '/marketing/courses/paarl.jpg',
-    bgAlt: 'Paarl Golf Club',
+    position: '50% 65%',
     title: 'Join the\nGet Lucky Club.',
-    text: 'Become a member for status, member-only perks and insured prizes — from R149/month. Optional, and you can join anytime from your account.',
-    cta: 'Get Started',
+    text: 'Status, member-only perks and insured prizes from R149/month. Optional, and you can join any time from your account.',
+    cta: 'Get started',
   },
 ]
 
-/* ── Icon compositions ── */
-const mainIcon = { stroke: 'rgba(255,255,255,0.95)', strokeWidth: 1.5 }
-const subIcon = { stroke: 'rgba(255,255,255,0.45)', strokeWidth: 1.2 }
-
-function GolferSwing({ size = 52 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 256 256" fill="rgba(255,255,255,0.95)" xmlns="http://www.w3.org/2000/svg">
-      <path d="M106.8,44.9c-10.3,0-18.7,8.2-18.7,18.4c0,10.2,8.3,18.4,18.7,18.4c10.3,0,18.6-8.2,18.6-18.4C125.4,53.1,117,44.9,106.8,44.9z"/>
-      <path d="M201.3,81.2c-0.7-4-3.9-6.2-4.1-6.4L87.6,2.7L77.5,17.4c-1.9,2.9-1.1,6.8,1.8,8.7c2.9,1.9,6.8,1.1,8.7-1.8l5.9-8.5l88.9,58.7L110,87.6c-5.2,0.9-8.9,6-7.7,11.1l15.8,61.3l-51.3,76.9c-3.1,5.2-1.2,12,4.1,15c5.4,3,12.1,1.2,15.2-4.1c0,0,53.5-80.4,53.7-81c0,0,2.8,11.2,2.8,11.2l-8,60.3c-1,6,3.1,11.6,9.1,12.6c6.1,1,11.8-3,12.8-9l8.3-62.1c0.3-1.6-0.1-5.1-0.4-6.6l-18.3-72.7l47.6-8.6C198.7,91.2,202.2,86.3,201.3,81.2z"/>
-    </svg>
-  )
-}
-
-function SlideIllustration({ type }: { type: 'target' | 'phone' | 'shield' | 'club' }) {
-  if (type === 'target') {
-    return (
-      <div className="onboard-icon-group">
-        <GolferSwing size={52} />
-        <span className="orbit orbit-tl"><CircleDollarSign size={20} {...subIcon} /></span>
-        <span className="orbit orbit-br"><Trophy size={18} {...subIcon} /></span>
-      </div>
-    )
-  }
-  if (type === 'phone') {
-    return (
-      <div className="onboard-icon-group">
-        <Smartphone size={52} {...mainIcon} />
-        <span className="orbit orbit-tr"><Video size={20} {...subIcon} /></span>
-        <span className="orbit orbit-bl"><MapPin size={18} {...subIcon} /></span>
-      </div>
-    )
-  }
-  if (type === 'club') {
-    return (
-      <div className="onboard-icon-group">
-        <Star size={52} {...mainIcon} />
-        <span className="orbit orbit-tr"><BadgeCheck size={20} {...subIcon} /></span>
-        <span className="orbit orbit-bl"><Trophy size={18} {...subIcon} /></span>
-      </div>
-    )
-  }
-  return (
-    <div className="onboard-icon-group">
-      <ShieldCheck size={52} {...mainIcon} />
-      <span className="orbit orbit-tl"><FileCheck2 size={20} {...subIcon} /></span>
-      <span className="orbit orbit-br"><Trophy size={18} {...subIcon} /></span>
-    </div>
-  )
+function SlideIcon({ type }: { type: (typeof slides)[number]['icon'] }) {
+  if (type === 'ball') return <GolfBallIcon size={34} />
+  if (type === 'video') return <Video size={30} strokeWidth={2.2} />
+  if (type === 'shield') return <ShieldCheck size={32} strokeWidth={2.2} />
+  return <Star size={30} strokeWidth={2.2} />
 }
 
 /* ── Swipe hook ── */
@@ -132,81 +78,96 @@ function useSwipe(onLeft: () => void, onRight: () => void) {
   return { onTouchStart, onTouchEnd }
 }
 
-/* ── Page ── */
+/**
+ * How it works — four beats on full-bleed course photos in the V2 system:
+ * a four-segment step bar and Skip up top, a lime icon disc, the display
+ * headline, one line of copy, and NEXT. Swipe or tap the dots to move.
+ * Reached from the splash before sign-in and from the menu afterwards, so
+ * the last button lands wherever makes sense for who's looking.
+ */
 export default function OnboardingPage() {
   const router = useRouter()
+  const { user } = useAuth()
   const [current, setCurrent] = useState(0)
   const [slideDir, setSlideDir] = useState<'left' | 'right'>('left')
 
+  function finish() {
+    try { localStorage.setItem('onboarding_seen', 'true') } catch { /* private mode */ }
+    router.push(user ? '/home' : '/auth')
+  }
+
+  function goTo(i: number) {
+    setSlideDir(i > current ? 'left' : 'right')
+    setCurrent(i)
+  }
+
   function goNext() {
-    if (current < slides.length - 1) {
-      setSlideDir('left')
-      setCurrent(current + 1)
-    } else {
-      finish()
-    }
+    if (current < slides.length - 1) goTo(current + 1)
+    else finish()
   }
 
   function goPrev() {
-    if (current > 0) {
-      setSlideDir('right')
-      setCurrent(current - 1)
-    }
-  }
-
-  function finish() {
-    localStorage.setItem('onboarding_seen', 'true')
-    router.push('/auth')
+    if (current > 0) goTo(current - 1)
   }
 
   const swipe = useSwipe(goNext, goPrev)
   const slide = slides[current]
+  const isLast = current === slides.length - 1
 
   return (
     <PhoneFrame statusTheme="light">
-      <div className="screen-onboard" {...swipe}>
-        {/* Hero section */}
-        <div className="onboard-hero">
-          <Image
-            key={slide.bg}
-            src={slide.bg}
-            alt={slide.bgAlt}
-            fill
-            priority
-            sizes="430px"
-            className="onboard-hero-photo"
-          />
-          <div className="onboard-hero-overlay" aria-hidden />
-          <SlideIllustration type={slide.icon} />
-          <button className="onboard-skip" onClick={finish}>
-            Skip
+      <div className="v2-screen v2-screen--photo ob-screen" {...swipe}>
+        <Image
+          key={slide.bg}
+          src={slide.bg}
+          alt=""
+          fill
+          priority
+          sizes="480px"
+          className="v2-photo ob-photo"
+          style={{ objectPosition: slide.position }}
+        />
+        <div
+          className="v2-photo-scrim"
+          aria-hidden
+          style={{ background: 'linear-gradient(180deg, rgba(20,38,25,0.55) 0%, rgba(20,38,25,0.3) 40%, rgba(20,38,25,0.78) 100%)' }}
+        />
+
+        <div className="ob-top">
+          <StepBar step={current + 1} total={slides.length} tone="dark" />
+          <button type="button" className="ob-skip" onClick={finish}>
+            {isLast ? 'Close' : 'Skip'}
           </button>
         </div>
 
-        {/* Content card */}
-        <div className="onboard-body" key={current} data-dir={slideDir}>
-          <div className="onboard-step">{slide.step}</div>
-          <h3 className="onboard-title" style={{ whiteSpace: 'pre-line' }}>
-            {slide.title}
-          </h3>
-          <p className="onboard-text">{slide.text}</p>
+        <div className="v2-body ob-body">
+          <div className="v2-hero ob-slide" key={current} data-dir={slideDir}>
+            <span className="ob-icon" aria-hidden><SlideIcon type={slide.icon} /></span>
+            <span className="ob-step">How it works · {current + 1} of {slides.length}</span>
+            <h1 className="v2-title">{slide.title}</h1>
+            <p className="v2-sub ob-text">{slide.text}</p>
+            <button type="button" className="btn-lime" onClick={goNext}>
+              {slide.cta}
+            </button>
+          </div>
 
-          <div className="onboard-footer">
-            <div className="onboard-dots">
+          <div className="ob-foot">
+            <div className="ob-dots" role="tablist" aria-label="Slides">
               {slides.map((_, i) => (
-                <span
+                <button
                   key={i}
-                  className={i === current ? 'active' : ''}
-                  onClick={() => {
-                    setSlideDir(i > current ? 'left' : 'right')
-                    setCurrent(i)
-                  }}
+                  type="button"
+                  role="tab"
+                  aria-selected={i === current}
+                  aria-label={`Slide ${i + 1}`}
+                  className={i === current ? 'active' : undefined}
+                  onClick={() => goTo(i)}
                 />
               ))}
             </div>
-            <button className="btn-primary" onClick={goNext}>
-              {slide.cta}
-            </button>
+            {current > 0 && (
+              <button type="button" className="ob-back" onClick={goPrev}>Back</button>
+            )}
           </div>
         </div>
       </div>
