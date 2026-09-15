@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { useAuth } from '@/context/AuthContext'
 
 /**
  * Burger-menu drawer. The tab bar carries the five main surfaces; this holds
  * everything the V2 designs took off the tab bar and the home screen — bet
- * history, how it works, membership, legal — plus sign in / sign out.
+ * history, how it works, membership, legal — plus who's signed in.
+ * The page you're on is picked out in lime.
  */
 const PRIMARY = [
   { label: 'Home',        path: '/home' },
@@ -20,14 +21,21 @@ const PRIMARY = [
 
 const SECONDARY = [
   { label: 'How it works',     path: '/onboarding' },
-  { label: 'Terms of service', path: '/terms' },
+  { label: 'Terms & conditions', path: '/terms' },
   { label: 'Privacy policy',   path: '/privacy' },
   { label: 'Responsible play', path: '/responsible-play' },
 ]
 
+function getInitials(name: string | null | undefined, email: string | null | undefined) {
+  if (name) return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2)
+  if (email) return email[0].toUpperCase()
+  return 'GL'
+}
+
 export default function AppMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter()
-  const { user, signOut } = useAuth()
+  const pathname = usePathname()
+  const { user, profile, signOut } = useAuth()
 
   useEffect(() => {
     if (!open) return
@@ -45,6 +53,9 @@ export default function AppMenu({ open, onClose }: { open: boolean; onClose: () 
     router.push(path)
   }
 
+  const displayName = profile?.name ?? user?.user_metadata?.full_name ?? null
+  const isCurrent = (path: string) => pathname === path || (path !== '/home' && pathname?.startsWith(path + '/'))
+
   return (
     <div className="app-menu-backdrop" onClick={onClose}>
       <aside
@@ -57,13 +68,21 @@ export default function AppMenu({ open, onClose }: { open: boolean; onClose: () 
         <div className="app-menu-top">
           <img src="/brand/logo-corner.svg" alt="Get Lucky" className="app-menu-logo" draggable={false} />
           <button type="button" className="app-menu-close" aria-label="Close menu" onClick={onClose}>
-            ×
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden>
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
           </button>
         </div>
 
         <nav className="app-menu-primary" aria-label="Menu">
           {PRIMARY.map(item => (
-            <button key={item.path} type="button" onClick={() => go(item.path)}>
+            <button
+              key={item.path}
+              type="button"
+              className={isCurrent(item.path) ? 'is-current' : undefined}
+              aria-current={isCurrent(item.path) ? 'page' : undefined}
+              onClick={() => go(item.path)}
+            >
               {item.label}
             </button>
           ))}
@@ -71,7 +90,13 @@ export default function AppMenu({ open, onClose }: { open: boolean; onClose: () 
 
         <nav className="app-menu-secondary" aria-label="More">
           {SECONDARY.map(item => (
-            <button key={item.path} type="button" onClick={() => go(item.path)}>
+            <button
+              key={item.path}
+              type="button"
+              className={isCurrent(item.path) ? 'is-current' : undefined}
+              aria-current={isCurrent(item.path) ? 'page' : undefined}
+              onClick={() => go(item.path)}
+            >
               {item.label}
             </button>
           ))}
@@ -80,7 +105,13 @@ export default function AppMenu({ open, onClose }: { open: boolean; onClose: () 
         <div className="app-menu-foot">
           {user ? (
             <>
-              <div className="app-menu-user">{user.email}</div>
+              <button type="button" className="app-menu-user" onClick={() => go('/account')}>
+                <span className="app-menu-avatar" aria-hidden>{getInitials(displayName, user.email)}</span>
+                <span className="app-menu-user-text">
+                  <span className="app-menu-user-name">{displayName ?? 'Golfer'}</span>
+                  <span className="app-menu-user-email">{user.email}</span>
+                </span>
+              </button>
               <button
                 type="button"
                 className="app-menu-signout"
@@ -94,9 +125,14 @@ export default function AppMenu({ open, onClose }: { open: boolean; onClose: () 
               </button>
             </>
           ) : (
-            <button type="button" className="btn-lime" onClick={() => go('/auth')}>
-              Sign in
-            </button>
+            <>
+              <button type="button" className="btn-lime" onClick={() => go('/auth')}>
+                Sign in
+              </button>
+              <p className="app-menu-hint">
+                New here? <button type="button" onClick={() => go('/onboarding')}>See how it works</button>
+              </p>
+            </>
           )}
         </div>
       </aside>
