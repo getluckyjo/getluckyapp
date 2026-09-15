@@ -124,3 +124,36 @@ export async function betsForVerifications(admin: SupabaseClient, rows: Pick<Ver
 }
 
 export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, status, declared_result, declared_at, video_url, payment_intent_id, created_at'
+
+/**
+ * A search term safe to embed in a PostgREST `.or()` filter string: the
+ * grammar uses `,` `(` `)` and `.` as delimiters and `*` as the wildcard.
+ */
+export function orSearchTerm(raw: string): string {
+  return raw.replace(/[,().*%\\"']/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 100)
+}
+
+export interface AdminTotals {
+  total_revenue_cents: number
+  total_payout_cents: number
+  total_bets: number
+  active_bets: number
+  pending_claims: number
+  total_users: number
+}
+
+/** Dashboard totals from the SQL aggregate (migration 010), coerced to numbers. */
+export async function adminTotals(admin: SupabaseClient): Promise<AdminTotals> {
+  const { data, error } = await admin.rpc('admin_totals')
+  if (error) throw error
+  const t = (data ?? {}) as Record<string, unknown>
+  const n = (k: string) => Number(t[k] ?? 0)
+  return {
+    total_revenue_cents: n('total_revenue_cents'),
+    total_payout_cents: n('total_payout_cents'),
+    total_bets: n('total_bets'),
+    active_bets: n('active_bets'),
+    pending_claims: n('pending_claims'),
+    total_users: n('total_users'),
+  }
+}

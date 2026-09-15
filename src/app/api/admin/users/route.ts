@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseQuery, pagination, boolString, searchTerm } from '@/lib/api/http'
+import { orSearchTerm } from '@/lib/admin/data'
 import type { AdminUserRecord, PaginatedResponse } from '@/types/admin'
 
 const Query = pagination.extend({
@@ -8,7 +9,7 @@ const Query = pagination.extend({
   suspended: boolString.optional(),
 })
 
-interface ProfileRow { id: string; name: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; suspended_reason: string | null; created_at: string }
+interface ProfileRow { id: string; name: string | null; email: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; suspended_reason: string | null; created_at: string }
 interface BetTotals { user_id: string; stake_pence: number | null; potential_win_pence: number | null; status: string }
 
 export async function GET(request: Request) {
@@ -19,9 +20,14 @@ export async function GET(request: Request) {
   const { search, suspended, page, limit } = q.data
 
   try {
-    let query = auth.adminClient.from('profiles').select('id, name, handicap, total_attempts, payment_method, is_admin, suspended_at, suspended_reason, created_at', { count: 'exact' })
+    let query = auth.adminClient.from('profiles').select('id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, suspended_reason, created_at', { count: 'exact' })
     if (suspended === true) query = query.not('suspended_at', 'is', null)
     if (suspended === false) query = query.is('suspended_at', null)
+    if (search) {
+      // In the query, so the count and the pages are right.
+      const s = orSearchTerm(search)
+      query = query.or(`name.ilike.*${s}*,email.ilike.*${s}*`)
+    }
     query = query.order('created_at', { ascending: false })
     const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
@@ -43,10 +49,10 @@ export async function GET(request: Request) {
       totals.set(b.user_id, t)
     }
 
-    let records: AdminUserRecord[] = profiles.map(p => ({
+    const records: AdminUserRecord[] = profiles.map(p => ({
       id: p.id,
       name: p.name,
-      email: '', // auth.users is not readable here; Batch 6 surfaces it
+      email: p.email ?? '',
       handicap: p.handicap,
       totalAttempts: p.total_attempts ?? 0,
       totalStaked: totals.get(p.id)?.staked ?? 0,
@@ -57,11 +63,6 @@ export async function GET(request: Request) {
       suspendedReason: p.suspended_reason,
       createdAt: p.created_at,
     }))
-
-    if (search) {
-      const s = search.toLowerCase()
-      records = records.filter(u => (u.name?.toLowerCase() ?? '').includes(s) || u.email.toLowerCase().includes(s))
-    }
 
     const total = count ?? records.length
     const resp: PaginatedResponse<AdminUserRecord> = { data: records, total, page, limit, totalPages: Math.ceil(total / limit) }

@@ -101,6 +101,28 @@ export class Builder implements PromiseLike<Result> {
     const needle = val.replace(/%/g, '').toLowerCase()
     this.filters.push(r => String(r[col] ?? '').toLowerCase().includes(needle)); return this
   }
+  /** PostgREST `.or('a.eq.1,b.in.(x,y),c.ilike.*z*')` — enough of the grammar for the routes. */
+  or(expr: string) {
+    const parts: string[] = []
+    let depth = 0, cur = ''
+    for (const ch of expr) {
+      if (ch === '(') depth++
+      if (ch === ')') depth--
+      if (ch === ',' && depth === 0) { parts.push(cur); cur = '' } else cur += ch
+    }
+    if (cur) parts.push(cur)
+    const conds: Filter[] = parts.map(p => {
+      const m = /^([a-z_]+)\.(eq|in|ilike)\.([^]*)$/.exec(p.trim())
+      if (!m) throw new Error(`fake or(): cannot parse "${p}"`)
+      const [, col, op, val] = m
+      if (op === 'eq') return r => String(r[col]) === val
+      if (op === 'in') { const set = new Set(val.slice(1, -1).split(',')); return r => set.has(String(r[col])) }
+      const needle = val.replace(/[*%]/g, '').toLowerCase()
+      return r => String(r[col] ?? '').toLowerCase().includes(needle)
+    })
+    this.filters.push(r => conds.some(c => c(r)))
+    return this
+  }
   order(col: string, opts?: { ascending?: boolean }) { this.orderBy = { col, asc: opts?.ascending !== false }; return this }
   limit(n: number) { this.limitN = n; return this }
   range(a: number, b: number) { this.rangeN = [a, b]; return this }
@@ -111,7 +133,9 @@ export class Builder implements PromiseLike<Result> {
     let rows = this.db.rows(this.table).filter(r => this.filters.every(f => f(r)))
     if (this.orderBy) {
       const { col, asc } = this.orderBy
-      rows = [...rows].sort((a, b) => (String(a[col]) < String(b[col]) ? -1 : 1) * (asc ? 1 : -1))
+      const cmp = (x: unknown, y: unknown) =>
+        typeof x === 'number' && typeof y === 'number' ? x - y : String(x) < String(y) ? -1 : String(x) > String(y) ? 1 : 0
+      rows = [...rows].sort((a, b) => cmp(a[col], b[col]) * (asc ? 1 : -1))
     }
     if (this.rangeN) rows = rows.slice(this.rangeN[0], this.rangeN[1] + 1)
     if (this.limitN != null) rows = rows.slice(0, this.limitN)
@@ -225,7 +249,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           then: (res: (v: Result) => unknown) => Promise.resolve({ data: null, error: fail }).then(res),
         }
         const proxy: Record<string, unknown> = {}
-        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'is', 'not', 'gte', 'lte', 'ilike', 'order', 'limit', 'range', 'maybeSingle', 'single']) {
+        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'is', 'not', 'gte', 'lte', 'ilike', 'or', 'order', 'limit', 'range', 'maybeSingle', 'single']) {
           proxy[m] = () => proxy
         }
         proxy.then = failing.then
@@ -239,6 +263,37 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
         const { user_id } = args as { user_id: string }
         const p = db.find('profiles', r => r.id === user_id)
         if (p) p.total_attempts = Number(p.total_attempts ?? 0) + 1
+      }
+      if (fn === 'admin_totals') {
+        const bets = db.rows('bets')
+        return { data: {
+          total_revenue_cents: bets.reduce((s, b) => s + Number(b.stake_pence ?? 0), 0),
+          total_payout_cents: bets.filter(b => b.status === 'paid').reduce((s, b) => s + Number(b.potential_win_pence ?? 0), 0),
+          total_bets: bets.length,
+          active_bets: bets.filter(b => b.status === 'active').length,
+          pending_claims: db.rows('verifications').filter(v => ['pending', 'documents_received', 'under_review'].includes(String(v.status))).length,
+          total_users: db.rows('profiles').length,
+        }, error: null }
+      }
+      if (fn === 'admin_revenue_by_tier') {
+        const byTier = new Map<string, { tier: string; bet_count: number; revenue_cents: number; payout_cents: number }>()
+        for (const b of db.rows('bets')) {
+          const t = byTier.get(String(b.tier)) ?? { tier: String(b.tier), bet_count: 0, revenue_cents: 0, payout_cents: 0 }
+          t.bet_count++; t.revenue_cents += Number(b.stake_pence ?? 0)
+          if (b.status === 'paid') t.payout_cents += Number(b.potential_win_pence ?? 0)
+          byTier.set(t.tier, t)
+        }
+        return { data: [...byTier.values()], error: null }
+      }
+      if (fn === 'admin_revenue_by_course') {
+        const byCourse = new Map<string, { course_id: string; course_name: string; bet_count: number; revenue_cents: number }>()
+        for (const b of db.rows('bets')) {
+          const id = String(b.course_id)
+          const c = byCourse.get(id) ?? { course_id: id, course_name: String(db.find('courses', r => r.id === id)?.name ?? 'Unknown'), bet_count: 0, revenue_cents: 0 }
+          c.bet_count++; c.revenue_cents += Number(b.stake_pence ?? 0)
+          byCourse.set(id, c)
+        }
+        return { data: [...byCourse.values()].sort((a, b) => b.revenue_cents - a.revenue_cents), error: null }
       }
       if (fn === 'rate_limit_hit') {
         const { p_key, p_limit, p_window_seconds } = args as { p_key: string; p_limit: number; p_window_seconds: number }

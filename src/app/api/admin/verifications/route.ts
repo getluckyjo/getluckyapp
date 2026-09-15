@@ -13,37 +13,58 @@ const Query = pagination.extend({
   sort: z.enum(['oldest', 'newest', 'highest']).default('oldest'),
 })
 
+/** Only bets in these states can have a verification at all. */
+const CLAIMED_STATES = ['claimed', 'verified', 'paid']
+
 export async function GET(request: Request) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const q = parseQuery(request.url, Query)
   if (!q.ok) return q.response
   const { status, tier, sort, page, limit } = q.data
+  const admin = auth.adminClient
+  const offset = (page - 1) * limit
 
   try {
-    let query = auth.adminClient.from('verifications').select('*', { count: 'exact' })
-    if (status) query = query.eq('status', status)
-    query = query.order('created_at', { ascending: sort !== 'newest' })
-    const offset = (page - 1) * limit
-    query = query.range(offset, offset + limit - 1)
+    let rows: VerificationRowLike[]
+    let total: number
 
-    const { data, count, error } = await query
-    if (error) throw error
-    const rows = (data ?? []) as VerificationRowLike[]
+    if (tier || sort === 'highest') {
+      // Tier and prize live on the bet. Resolve the ordered set of claimed
+      // bets first (small: only bets that reached a claim), then page over
+      // their verifications in that order. Count and pages are exact.
+      let bq = admin.from('bets').select('id').in('status', CLAIMED_STATES)
+      if (tier) bq = bq.eq('tier', tier)
+      bq = sort === 'highest'
+        ? bq.order('potential_win_pence', { ascending: false })
+        : bq.order('created_at', { ascending: sort !== 'newest' })
+      const { data: betIdsRaw, error: betErr } = await bq.limit(5000)
+      if (betErr) throw betErr
+      const orderedIds = ((betIdsRaw ?? []) as { id: string }[]).map(b => b.id)
 
-    const bets = await betsForVerifications(auth.adminClient, rows)
-    const names = await namesForBets(auth.adminClient, [...bets.values()])
-    let items: VerificationQueueItem[] = rows.map(v => toQueueItem(v, bets.get(v.bet_id), names))
-
-    if (sort === 'highest') items = [...items].sort((a, b) => b.potentialWinCents - a.potentialWinCents)
-
-    // Tier is a bet column; filtered on the page (Batch 6 moves it into SQL).
-    if (tier) {
-      items = items.filter(i => i.tier === tier)
-      return NextResponse.json({ data: items, total: items.length, page, limit, totalPages: Math.ceil(items.length / limit) })
+      let vq = admin.from('verifications').select('*')
+      if (orderedIds.length) vq = vq.in('bet_id', orderedIds)
+      if (status) vq = vq.eq('status', status)
+      const { data: vRaw, error: vErr } = orderedIds.length ? await vq : { data: [], error: null }
+      if (vErr) throw vErr
+      const byBet = new Map(((vRaw ?? []) as VerificationRowLike[]).map(v => [v.bet_id, v]))
+      const ordered = orderedIds.map(id => byBet.get(id)).filter((v): v is VerificationRowLike => !!v)
+      total = ordered.length
+      rows = ordered.slice(offset, offset + limit)
+    } else {
+      let query = admin.from('verifications').select('*', { count: 'exact' })
+      if (status) query = query.eq('status', status)
+      query = query.order('created_at', { ascending: sort !== 'newest' }).range(offset, offset + limit - 1)
+      const { data, count, error } = await query
+      if (error) throw error
+      rows = (data ?? []) as VerificationRowLike[]
+      total = count ?? rows.length
     }
 
-    const total = count ?? items.length
+    const bets = await betsForVerifications(admin, rows)
+    const names = await namesForBets(admin, [...bets.values()])
+    const items: VerificationQueueItem[] = rows.map(v => toQueueItem(v, bets.get(v.bet_id), names))
+
     const resp: PaginatedResponse<VerificationQueueItem> = { data: items, total, page, limit, totalPages: Math.ceil(total / limit) }
     return NextResponse.json(resp)
   } catch (err) {

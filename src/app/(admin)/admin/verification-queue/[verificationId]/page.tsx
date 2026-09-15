@@ -27,8 +27,35 @@ export default function VerificationDetailPage() {
   const [detail, setDetail] = useState<VerificationDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [notes, setNotes] = useState('')
-  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | null>(null)
+  const [confirmAction, setConfirmAction] = useState<'approve' | 'reject' | 'pay' | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [payoutError, setPayoutError] = useState<string | null>(null)
+
+  const confirmPayout = async () => {
+    if (!detail) return
+    setSubmitting(true)
+    setPayoutError(null)
+    try {
+      const res = await fetch(`/api/admin/bets/${detail.betId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'paid' }),
+      })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setPayoutError(body.error ?? 'Could not confirm the payout')
+      } else {
+        const data = await fetch(`/api/admin/verifications/${verificationId}`).then(r => r.json())
+        setDetail(data)
+      }
+    } catch (err) {
+      console.error('[admin] payout request failed:', err)
+      setPayoutError('Could not confirm the payout')
+    } finally {
+      setSubmitting(false)
+      setConfirmAction(null)
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/admin/verifications/${verificationId}`)
@@ -375,7 +402,26 @@ export default function VerificationDetailPage() {
                   </button>
                 </>
               )}
+              {detail.status === 'approved' && detail.betStatus === 'verified' && (
+                <button
+                  onClick={() => setConfirmAction('pay')}
+                  disabled={submitting}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '10px 20px', borderRadius: 8, border: 'none',
+                    background: '#335231', fontSize: 14, cursor: 'pointer', color: '#fff', fontWeight: 600,
+                  }}
+                >
+                  <CheckCircle size={16} /> Confirm Payout Made
+                </button>
+              )}
+              {detail.betStatus === 'paid' && (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, color: '#335231' }}>
+                  <CheckCircle size={16} /> Prize paid
+                </span>
+              )}
             </div>
+            {payoutError && <div style={{ marginTop: 10, fontSize: 13, color: '#c0392b' }}>{payoutError}</div>}
           </div>
         </div>
       </div>
@@ -388,6 +434,15 @@ export default function VerificationDetailPage() {
         confirmLabel="Approve & Verify"
         variant="success"
         onConfirm={() => handleAction('approve')}
+        onCancel={() => setConfirmAction(null)}
+      />
+      <ConfirmModal
+        open={confirmAction === 'pay'}
+        title="Confirm the Prize Was Paid"
+        message="Only confirm once the money has actually left the account. This marks the bet as paid, publishes it on the winners list, and is recorded in the audit trail with your admin id."
+        confirmLabel="Yes, the prize was paid"
+        variant="success"
+        onConfirm={confirmPayout}
         onCancel={() => setConfirmAction(null)}
       />
       <ConfirmModal

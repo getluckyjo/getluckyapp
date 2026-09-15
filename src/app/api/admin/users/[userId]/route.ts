@@ -35,7 +35,7 @@ export async function GET(_request: Request, { params }: Params) {
       user: {
         id: profile.id,
         name: profile.name,
-        email: '',
+        email: profile.email ?? '',
         handicap: profile.handicap,
         totalAttempts: profile.total_attempts ?? 0,
         totalStaked,

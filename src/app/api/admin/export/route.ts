@@ -42,12 +42,12 @@ export async function POST(request: Request) {
         bets.map(b => [b.id, names.users.get(b.user_id) ?? '', names.courses.get(b.course_id) ?? '', String(names.holes.get(b.hole_id) ?? ''), b.tier, String(b.stake_pence), String(b.potential_win_pence), b.status, b.declared_result ?? '', b.created_at]),
       )
     } else if (type === 'users') {
-      const { data, error } = await admin.from('profiles').select('id, name, handicap, total_attempts, payment_method, is_admin, suspended_at, created_at').order('created_at', { ascending: false }).limit(LIMIT)
+      const { data, error } = await admin.from('profiles').select('id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, created_at').order('created_at', { ascending: false }).limit(LIMIT)
       if (error) throw error
-      type P = { id: string; name: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; created_at: string }
+      type P = { id: string; name: string | null; email: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; created_at: string }
       csv = toCSV(
-        ['ID', 'Name', 'Handicap', 'Total Attempts', 'Payment Method', 'Admin', 'Suspended', 'Created'],
-        ((data ?? []) as P[]).map(p => [p.id, p.name ?? '', String(p.handicap ?? ''), String(p.total_attempts ?? 0), p.payment_method ?? '', p.is_admin ? 'Yes' : 'No', p.suspended_at ? 'Yes' : 'No', p.created_at]),
+        ['ID', 'Name', 'Email', 'Handicap', 'Total Attempts', 'Payment Method', 'Admin', 'Suspended', 'Created'],
+        ((data ?? []) as P[]).map(p => [p.id, p.name ?? '', p.email ?? '', String(p.handicap ?? ''), String(p.total_attempts ?? 0), p.payment_method ?? '', p.is_admin ? 'Yes' : 'No', p.suspended_at ? 'Yes' : 'No', p.created_at]),
       )
     } else {
       const { data, error } = await admin.from('verifications').select('*').order('created_at', { ascending: false }).limit(LIMIT)

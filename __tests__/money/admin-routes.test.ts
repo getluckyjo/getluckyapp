@@ -18,6 +18,9 @@ import { GET as listUsers } from '@/app/api/admin/users/route'
 import { GET as listBets } from '@/app/api/admin/bets/route'
 import { POST as batchReview } from '@/app/api/admin/verifications/batch/route'
 import { POST as exportCsv } from '@/app/api/admin/export/route'
+import { GET as listVerifications } from '@/app/api/admin/verifications/route'
+import { GET as stats } from '@/app/api/admin/stats/route'
+import { GET as revenue } from '@/app/api/admin/reports/revenue/route'
 
 let db: FakeDb
 const asAdmin = () => {
@@ -120,6 +123,81 @@ describe('input validation', () => {
     const csv = await res.text()
     expect(csv.split('\n')).toHaveLength(2)
     expect(csv).toContain('"Seed Admin","Leopard Creek","4","tier_1"')
+  })
+})
+
+describe('correct lists (Batch 6)', () => {
+  const USER_C = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  function seedPeople() {
+    asAdmin()
+    db.seed('profiles',
+      { id: USER_B.id, name: 'Mallory Mokoena', email: 'mallory@example.test', created_at: '2026-09-02T00:00:00Z' },
+      { id: USER_C, name: 'Thabo Reyneke', email: 'thabo@example.test', created_at: '2026-09-03T00:00:00Z' },
+    )
+    db.seed('courses', { id: COURSE_ID, name: 'Leopard Creek' })
+    db.seed('holes', { id: HOLE_ID, hole_number: 4 })
+  }
+
+  it('user search matches name or email in the query, with exact totals and the email shown', async () => {
+    seedPeople()
+    const byEmail = await (await listUsers(new Request('http://x/api/admin/users?search=thabo@') as never)).json()
+    expect(byEmail.total).toBe(1)
+    expect(byEmail.data[0]).toMatchObject({ id: USER_C, email: 'thabo@example.test' })
+    const byName = await (await listUsers(new Request('http://x/api/admin/users?search=mokoena') as never)).json()
+    expect(byName.data.map((u: { id: string }) => u.id)).toEqual([USER_B.id])
+    const none = await (await listUsers(new Request('http://x/api/admin/users?search=nobody') as never)).json()
+    expect(none).toMatchObject({ total: 0, data: [] })
+  })
+
+  it('bet search resolves player names, emails, course names and bet ids into the query', async () => {
+    seedPeople()
+    const [b1] = db.seed('bets', { user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'miss', stake_pence: 5000, potential_win_pence: 2_500_000 })
+    db.seed('bets', { user_id: USER_C, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_2', status: 'active', stake_pence: 10000, potential_win_pence: 6_000_000 })
+    const byName = await (await listBets(new Request('http://x/api/admin/bets?search=mallory') as never)).json()
+    expect(byName.total).toBe(1)
+    expect(byName.data[0].userName).toBe('Mallory Mokoena')
+    const byCourse = await (await listBets(new Request('http://x/api/admin/bets?search=leopard') as never)).json()
+    expect(byCourse.total).toBe(2)
+    const byId = await (await listBets(new Request(`http://x/api/admin/bets?search=${b1.id}`) as never)).json()
+    expect(byId.data.map((b: { id: string }) => b.id)).toEqual([b1.id])
+    const none = await (await listBets(new Request('http://x/api/admin/bets?search=zzz') as never)).json()
+    expect(none).toMatchObject({ total: 0, totalPages: 0 })
+    // PostgREST delimiters in the term cannot break the filter
+    const weird = await listBets(new Request('http://x/api/admin/bets?search=a),b.eq.(x') as never)
+    expect(weird.status).toBe(200)
+  })
+
+  it('verification queue: tier filter and highest-value sort give exact totals across pages', async () => {
+    seedPeople()
+    const mk = (tier: string, win: number, i: number) => {
+      const [bet] = db.seed('bets', { user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier, status: 'claimed', stake_pence: 5000, potential_win_pence: win, created_at: `2026-09-0${i}T00:00:00Z` })
+      db.seed('verifications', { bet_id: bet.id, status: 'documents_received', created_at: `2026-09-0${i}T01:00:00Z` })
+      return bet
+    }
+    mk('tier_1', 2_500_000, 1); mk('tier_5', 100_000_000, 2); mk('tier_1', 2_500_000, 3); mk('tier_3', 20_000_000, 4)
+    const tier1 = await (await listVerifications(new Request('http://x/api/admin/verifications?tier=tier_1&limit=1') as never)).json()
+    expect(tier1).toMatchObject({ total: 2, totalPages: 2 })
+    expect(tier1.data).toHaveLength(1)
+    const highest = await (await listVerifications(new Request('http://x/api/admin/verifications?sort=highest&limit=2') as never)).json()
+    expect(highest.total).toBe(4)
+    expect(highest.data.map((v: { potentialWinCents: number }) => v.potentialWinCents)).toEqual([100_000_000, 20_000_000])
+    const page2 = await (await listVerifications(new Request('http://x/api/admin/verifications?sort=highest&limit=2&page=2') as never)).json()
+    expect(page2.data.map((v: { potentialWinCents: number }) => v.potentialWinCents)).toEqual([2_500_000, 2_500_000])
+  })
+
+  it('dashboard and revenue report read SQL aggregates', async () => {
+    seedPeople()
+    db.seed('bets',
+      { user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'paid', stake_pence: 5000, potential_win_pence: 2_500_000 },
+      { user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'active', stake_pence: 5000, potential_win_pence: 2_500_000 },
+      { user_id: USER_C, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_2', status: 'miss', stake_pence: 10000, potential_win_pence: 6_000_000 },
+    )
+    const s = await (await stats()).json()
+    expect(s).toMatchObject({ totalRevenue: 20000, totalPayouts: 2_500_000, activeBets: 1, totalUsers: 3, pendingClaims: 0 })
+    const r = await (await revenue()).json()
+    expect(r).toMatchObject({ totalRevenue: 20000, totalPayouts: 2_500_000, netProfit: -2_480_000, totalBets: 3 })
+    expect(r.byTier.find((t: { tier: string }) => t.tier === 'tier_1')).toMatchObject({ count: 2, revenue: 10000, payouts: 2_500_000 })
+    expect(r.byCourse[0]).toMatchObject({ name: 'Leopard Creek', count: 3, revenue: 20000 })
   })
 })
 

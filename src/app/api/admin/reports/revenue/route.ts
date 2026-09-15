@@ -1,49 +1,35 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError } from '@/lib/api/http'
+import { adminTotals } from '@/lib/admin/data'
 import { TIER_LABELS } from '@/lib/tiers'
 
-interface Row { tier: string; stake_pence: number | null; potential_win_pence: number | null; status: string; course_id: string }
+interface TierRow { tier: string; bet_count: number; revenue_cents: number; payout_cents: number }
+interface CourseRow { course_id: string; course_name: string; bet_count: number; revenue_cents: number }
 
 export async function GET() {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
+  const admin = auth.adminClient
 
   try {
-    const { data, error } = await auth.adminClient.from('bets').select('tier, stake_pence, potential_win_pence, status, course_id')
-    if (error) throw error
-    const bets = (data ?? []) as Row[]
+    const [totals, tierRes, courseRes] = await Promise.all([
+      adminTotals(admin),
+      admin.rpc('admin_revenue_by_tier'),
+      admin.rpc('admin_revenue_by_course'),
+    ])
+    if (tierRes.error) throw tierRes.error
+    if (courseRes.error) throw courseRes.error
 
-    const courseIds = [...new Set(bets.map(b => b.course_id).filter(Boolean))]
-    const { data: courses } = courseIds.length
-      ? await auth.adminClient.from('courses').select('id, name').in('id', courseIds)
-      : { data: [] as { id: string; name: string }[] }
-    const courseName = new Map(((courses ?? []) as { id: string; name: string }[]).map(c => [c.id, c.name]))
-
-    const totalRevenue = bets.reduce((s, b) => s + (b.stake_pence ?? 0), 0)
-    const totalPayouts = bets.filter(b => b.status === 'paid').reduce((s, b) => s + (b.potential_win_pence ?? 0), 0)
-
+    const tierRows = new Map(((tierRes.data ?? []) as TierRow[]).map(r => [r.tier, r]))
     const byTier = Object.entries(TIER_LABELS).map(([tier, label]) => {
-      const tierBets = bets.filter(b => b.tier === tier)
-      return {
-        tier,
-        label,
-        count: tierBets.length,
-        revenue: tierBets.reduce((s, b) => s + (b.stake_pence ?? 0), 0),
-        payouts: tierBets.filter(b => b.status === 'paid').reduce((s, b) => s + (b.potential_win_pence ?? 0), 0),
-      }
+      const r = tierRows.get(tier)
+      return { tier, label, count: Number(r?.bet_count ?? 0), revenue: Number(r?.revenue_cents ?? 0), payouts: Number(r?.payout_cents ?? 0) }
     })
+    const byCourse = ((courseRes.data ?? []) as CourseRow[]).map(r => ({ name: r.course_name, revenue: Number(r.revenue_cents), count: Number(r.bet_count) }))
 
-    const courseMap = new Map<string, { name: string; revenue: number; count: number }>()
-    for (const b of bets) {
-      const name = courseName.get(b.course_id) ?? 'Unknown'
-      const existing = courseMap.get(name) ?? { name, revenue: 0, count: 0 }
-      existing.revenue += b.stake_pence ?? 0
-      existing.count += 1
-      courseMap.set(name, existing)
-    }
-    const byCourse = [...courseMap.values()].sort((a, b) => b.revenue - a.revenue)
-
+    const totalRevenue = totals.total_revenue_cents
+    const totalPayouts = totals.total_payout_cents
     return NextResponse.json({
       totalRevenue,
       totalPayouts,
@@ -51,7 +37,7 @@ export async function GET() {
       margin: totalRevenue > 0 ? ((totalRevenue - totalPayouts) / totalRevenue * 100).toFixed(1) : '0',
       byTier,
       byCourse,
-      totalBets: bets.length,
+      totalBets: totals.total_bets,
     })
   } catch (err) {
     return apiError('admin.reports.revenue_failed', err, { path: 'admin_review' })
