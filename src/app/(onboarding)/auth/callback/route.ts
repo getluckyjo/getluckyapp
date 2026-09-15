@@ -5,10 +5,13 @@ import type { NextRequest } from 'next/server'
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const rawNext = searchParams.get('next') ?? '/home'
+  // V2 flow: sign in → "All set! Swing your shot." → select a course. The
+  // welcome beat is the default landing; a specific `next` (someone bounced
+  // off /account, say) still goes straight there.
+  const rawNext = searchParams.get('next') ?? '/welcome'
   // Prevent open redirect: only allow known safe paths
-  const SAFE_PATHS = ['/home', '/history', '/leaderboard', '/account', '/select-course']
-  const next = SAFE_PATHS.some(p => rawNext === p) ? rawNext : '/home'
+  const SAFE_PATHS = ['/welcome', '/home', '/history', '/leaderboard', '/account', '/select-course']
+  const next = SAFE_PATHS.some(p => rawNext === p) ? rawNext : '/welcome'
 
   if (code) {
     const supabase = await createClient()

@@ -13,6 +13,7 @@ interface AuthContextValue {
   profile: Profile | null
   loading: boolean
   signInWithGoogle: (next?: string) => Promise<void>
+  signInWithFacebook: (next?: string) => Promise<{ error: string | null }>
   signInWithMagicLink: (email: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -75,20 +76,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // `next` is where to land after the callback. The callback allow-lists it
   // against SAFE_PATHS, so an unexpected value falls back to /home rather than
   // becoming an open redirect.
-  async function signInWithGoogle(next?: string) {
+  function callbackUrl(next?: string) {
     const callback = new URL('/auth/callback', window.location.origin)
     if (next) callback.searchParams.set('next', next)
+    return callback.toString()
+  }
+
+  async function signInWithGoogle(next?: string) {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: callback.toString() },
+      options: { redirectTo: callbackUrl(next) },
     })
+  }
+
+  // Facebook is a V2 design addition. It needs the provider enabled in the
+  // Supabase dashboard; until then Supabase answers with an error, which the
+  // sign-in screen turns into a "use Google or email" message.
+  async function signInWithFacebook(next?: string) {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'facebook',
+      options: { redirectTo: callbackUrl(next) },
+    })
+    return { error: error?.message ?? null }
   }
 
   async function signInWithMagicLink(email: string) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callbackUrl(),
       },
     })
     return { error: error?.message ?? null }
@@ -101,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider value={{
       user, session, profile, loading,
-      signInWithGoogle, signInWithMagicLink, signOut, refreshProfile,
+      signInWithGoogle, signInWithFacebook, signInWithMagicLink, signOut, refreshProfile,
     }}>
       {children}
     </AuthContext.Provider>

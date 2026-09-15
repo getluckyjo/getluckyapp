@@ -78,7 +78,7 @@ export default function AgeCheckPage() {
     }
 
     setLoading(false)
-    router.push('/home')
+    router.push('/welcome')
   }
 
   if (blocked) {
@@ -105,7 +105,7 @@ export default function AgeCheckPage() {
     <PhoneFrame statusTheme="dark">
       <div className="screen-payment">
         <div style={{ textAlign: 'center', padding: 'var(--space-2xl) var(--page-px) 0' }}>
-          <img src="/logo.png" alt="Get Lucky Golf Club" className="logo-header-dark" style={{ width: 'clamp(100px, 30vw, 120px)' }} />
+          <img src="/brand/logo-lockup.svg" alt="Get Lucky Hole-in-1 Challenge" className="logo-header-dark" style={{ width: "clamp(96px, 28vw, 116px)" }} />
         </div>
         <div className="signup-title-area" style={{ padding: 'var(--space-md) var(--page-px) var(--space-sm)' }}>
           <h3 className="signup-title">One quick check</h3>

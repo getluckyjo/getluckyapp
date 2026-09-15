@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import AppHeader from '@/components/layout/AppHeader'
+import BottomTabBar from '@/components/layout/BottomTabBar'
+import { SearchIcon, GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 import type { Course, Hole } from '@/context/BetContext'
 
@@ -46,6 +49,32 @@ function toContextHole(h: ApiHole, courseId: string): Hole {
   }
 }
 
+/** Course photo, or the brand-green tile when there is none or it fails to load. */
+function CourseThumb({ src }: { src: string | null }) {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) {
+    return (
+      <div className="cs-thumb" aria-hidden>
+        <GolfBallIcon size={30} ball="rgba(255,255,255,0.9)" />
+      </div>
+    )
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt="" className="cs-thumb" loading="lazy" onError={() => setFailed(true)} />
+  )
+}
+
+/**
+ * Select course — "Select Course Page.png".
+ * SELECT COURSE, a white search bar, region chips (the active one lime with
+ * the hard shadow), and a card per course: photo, name, town, and
+ * "N x PAR3's | Hole n | 162m" with the distance repeated in a lime badge
+ * pinned to the card's top-right corner.
+ *
+ * Tapping a card opens a small sheet above the tab bar to pick which par-3
+ * (most courses have several) and continue to the stake.
+ */
 export default function SelectCoursePage() {
   const router = useRouter()
   const { selectCourse } = useBet()
@@ -75,12 +104,25 @@ export default function SelectCoursePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { loadCourses() }, [])
 
-  const regions = ['All', ...Array.from(new Set(courses.map(c => c.region ?? '').filter(Boolean)))]
+  // Regions ordered by how many courses they hold, so the busiest provinces
+  // sit first in the chip row (the comp leads with Western Cape, Gauteng).
+  const regionCounts = new Map<string, number>()
+  for (const c of courses) {
+    if (c.region) regionCounts.set(c.region, (regionCounts.get(c.region) ?? 0) + 1)
+  }
+  const regions = [
+    'All',
+    ...Array.from(regionCounts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([r]) => r),
+  ]
 
+  const q = search.trim().toLowerCase()
   const filtered = courses.filter(c => {
     const matchesSearch =
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      (c.location_text ?? '').toLowerCase().includes(search.toLowerCase())
+      !q ||
+      c.name.toLowerCase().includes(q) ||
+      (c.location_text ?? '').toLowerCase().includes(q)
     const matchesFilter = filter === 'All' || c.region === filter
     return matchesSearch && matchesFilter
   })
@@ -102,140 +144,140 @@ export default function SelectCoursePage() {
 
   return (
     <PhoneFrame statusTheme="dark">
-      <div className="screen-course">
-        <div className="signup-header" style={{ padding: 'var(--space-md) var(--page-px) 0' }}>
-          <button className="back-btn" onClick={() => router.back()}>←</button>
-        </div>
-        <div className="signup-title-area" style={{ padding: 'var(--space-sm) var(--page-px) 4px' }}>
-          <h3 className="signup-title" style={{ fontSize: 'var(--text-xl)', color: 'var(--green-deep)' }}>Select Course</h3>
+      <div className="v2-screen">
+        <AppHeader tone="light" />
+
+        <div className="cs-head">
+          <h1 className="v2-title cs-title">{'Select\nCourse'}</h1>
+
+          <div className="cs-search">
+            <span className="cs-search-icon"><SearchIcon size={20} /></span>
+            <input
+              type="search"
+              placeholder="Search courses"
+              aria-label="Search courses"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="cs-chips" role="tablist" aria-label="Filter by region">
+            {regions.map(r => (
+              <button
+                key={r}
+                type="button"
+                role="tab"
+                aria-selected={filter === r}
+                className={`cs-chip${filter === r ? ' is-active' : ''}`}
+                onClick={() => setFilter(r)}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="course-search">
-          <input
-            placeholder="Search courses..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="course-filters">
-          {regions.map(f => (
-            <span
-              key={f}
-              className={`course-filter${filter === f ? ' active' : ''}`}
-              onClick={() => setFilter(f)}
-            >
-              {f === 'All' ? '📍 All' : f}
-            </span>
-          ))}
-        </div>
-
-        <div className="course-list" style={{ flex: 1 }}>
+        <div className={`cs-list${selectedCourse ? ' cs-list--sheet-open' : ''}`}>
           {loading ? (
             [0, 1, 2, 3].map(i => (
-              <div key={i} className="course-card" style={{ pointerEvents: 'none' }}>
-                <div className="skeleton" style={{ width: 52, height: 52, borderRadius: 12, flexShrink: 0 }} />
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div className="skeleton" style={{ height: 14, width: '70%', borderRadius: 4 }} />
-                  <div className="skeleton" style={{ height: 11, width: '50%', borderRadius: 3 }} />
-                  <div className="skeleton" style={{ height: 10, width: '40%', borderRadius: 3 }} />
+              <div key={i} className="cs-card" style={{ pointerEvents: 'none' }}>
+                <div className="skeleton cs-thumb" style={{ background: undefined }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="skeleton" style={{ height: 18, width: '60%' }} />
+                  <div className="skeleton" style={{ height: 13, width: '75%' }} />
+                  <div className="skeleton" style={{ height: 13, width: '65%' }} />
                 </div>
               </div>
             ))
           ) : fetchError ? (
-            <div style={{ padding: 'var(--space-2xl) var(--page-px)', textAlign: 'center' }}>
-              <div style={{ fontSize: 'var(--text-2xl)', marginBottom: 'var(--space-sm)' }}>📡</div>
-              <div style={{ fontSize: 'var(--text-md)', fontWeight: 600, color: 'var(--green-deep)', marginBottom: 6 }}>
-                Couldn&apos;t load courses
-              </div>
-              <div style={{ fontSize: 'var(--text-body)', color: 'var(--gray-light)', marginBottom: 'var(--space-lg)' }}>
-                Check your connection and try again.
-              </div>
-              <button
-                onClick={loadCourses}
-                style={{
-                  padding: 'var(--space-sm) var(--page-px)', background: 'var(--green-deep)',
-                  border: 'none', borderRadius: 'var(--radius-sm)', color: 'white',
-                  fontSize: 'var(--text-md)', fontWeight: 600, cursor: 'pointer',
-                }}
-              >
-                Retry
-              </button>
+            <div className="cs-state">
+              <h3>Couldn&apos;t load courses</h3>
+              <p>Check your connection and try again.</p>
+              <button type="button" className="btn-lime" onClick={loadCourses}>Retry</button>
             </div>
           ) : filtered.length === 0 ? (
-            <div style={{ padding: 'var(--space-2xl) var(--page-px)', textAlign: 'center', color: 'var(--gray-light)', fontSize: 'var(--text-md)' }}>
-              {search ? `No courses matching "${search}"` : 'No courses found'}
+            <div className="cs-state">
+              <h3>No courses found</h3>
+              <p>{search ? `Nothing matches “${search}”.` : 'Try another region.'}</p>
             </div>
-          ) : filtered.map(c => (
-            <div
-              key={c.id}
-              className={`course-card${selectedCourseId === c.id ? ' selected' : ''}`}
-              style={{ position: 'relative' }}
-              onClick={() => handleSelectCourse(c)}
-            >
-              {c.image_url ? (
-                <img src={c.image_url} alt={c.name} className="course-thumb" style={{ objectFit: 'cover' }} />
-              ) : (
-                <div className="course-thumb">⛳</div>
-              )}
-              <div className="course-info">
-                <div className="course-name">{c.name}</div>
-                <div className="course-location">📍 {c.location_text ?? c.region}</div>
-                <div className="course-meta">
-                  <span>{c.holes.length} par-3{c.holes.length !== 1 ? 's' : ''}</span>
-                  {c.holes[0] && <span>Hole {c.holes[0].hole_number}</span>}
-                  {c.holes[0]?.distance_metres && <span>{c.holes[0].distance_metres}m</span>}
-                </div>
-              </div>
-            </div>
-          ))}
+          ) : (
+            filtered.map((c, i) => {
+              const first = c.holes[0]
+              const n = c.holes.length
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`cs-card${selectedCourseId === c.id ? ' is-selected' : ''}`}
+                  style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
+                  onClick={() => handleSelectCourse(c)}
+                  aria-pressed={selectedCourseId === c.id}
+                >
+                  <CourseThumb src={c.image_url} />
+                  <div className="cs-info">
+                    <div className="cs-name">{c.name}</div>
+                    <div className="cs-loc">{c.location_text ?? c.region}</div>
+                    <div className="cs-meta">
+                      {n} x PAR3{n === 1 ? '' : '’s'}
+                      {first && <><i>|</i>Hole {first.hole_number}</>}
+                      {first?.distance_metres && <><i>|</i>{first.distance_metres}m</>}
+                    </div>
+                  </div>
+                  {first?.distance_metres && (
+                    <span className="cs-badge" aria-hidden>
+                      {first.distance_metres}<small>M</small>
+                    </span>
+                  )}
+                </button>
+              )
+            })
+          )}
         </div>
 
         {selectedCourse && selectedHole && (
-          <div className="course-hole-info">
-            <div className="hole-info-title">Challenge Hole Details</div>
+          <div className="cs-sheet" role="dialog" aria-label="Choose your par-3">
+            <div className="cs-sheet-top">
+              <div>
+                <div className="cs-sheet-name">{selectedCourse.name}</div>
+                <div className="cs-sheet-sub">
+                  Hole {selectedHole.hole_number} · Par {selectedHole.par} · {selectedHole.distance_metres ?? '—'}m
+                </div>
+              </div>
+              <button
+                type="button"
+                className="cs-sheet-close"
+                aria-label="Clear selection"
+                onClick={() => { setSelectedCourseId(null); setSelectedHoleId(null) }}
+              >
+                ×
+              </button>
+            </div>
 
             {selectedCourse.holes.length > 1 && (
-              <div style={{ display: 'flex', gap: 'var(--space-xs)', marginBottom: 'var(--space-sm)', flexWrap: 'wrap' }}>
+              <div className="cs-holes" role="radiogroup" aria-label="Par-3 hole">
                 {selectedCourse.holes.map(h => (
                   <button
                     key={h.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selectedHole.id === h.id}
+                    className={`cs-hole${selectedHole.id === h.id ? ' is-active' : ''}`}
                     onClick={() => setSelectedHoleId(h.id)}
-                    style={{
-                      flex: 1, minWidth: 60, padding: '6px 4px', borderRadius: 'var(--radius-sm)',
-                      fontSize: 'var(--text-sm)', fontWeight: 600, cursor: 'pointer',
-                      border: selectedHole.id === h.id ? '2px solid var(--green-mid)' : '1px solid #ddd',
-                      background: selectedHole.id === h.id ? 'rgba(74,157,91,0.1)' : 'white',
-                      color: 'var(--green-deep)',
-                    }}
                   >
                     Hole {h.hole_number}
+                    <small>{h.distance_metres ?? '—'}m</small>
                   </button>
                 ))}
               </div>
             )}
 
-            <div className="hole-info-grid">
-              <div>
-                <div className="hole-stat-value">{selectedHole.hole_number}</div>
-                <div className="hole-stat-label">Hole</div>
-              </div>
-              <div>
-                <div className="hole-stat-value">{selectedHole.distance_metres ?? '—'}</div>
-                <div className="hole-stat-label">Metres</div>
-              </div>
-              <div>
-                <div className="hole-stat-value">{selectedHole.par}</div>
-                <div className="hole-stat-label">Par</div>
-              </div>
-            </div>
-            <div style={{ marginTop: 'var(--space-md)' }}>
-              <button className="btn-primary" onClick={handleContinue}>
-                Continue →
-              </button>
-            </div>
+            <button type="button" className="btn-lime btn-lime--block" onClick={handleContinue}>
+              Continue
+            </button>
           </div>
         )}
+
+        <BottomTabBar active="play" />
       </div>
     </PhoneFrame>
   )

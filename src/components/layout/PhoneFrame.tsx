@@ -1,15 +1,14 @@
 'use client'
 
-import SponsorBanner from './SponsorBanner'
-
 interface PhoneFrameProps {
   children: React.ReactNode
   statusTheme?: 'light' | 'dark'
   showStatus?: boolean
+  /** Kept for call-site compatibility. V2 places the sponsor on the landing page, not in the frame. */
   hideSponsor?: boolean
 }
 
-export default function PhoneFrame({ children, hideSponsor }: PhoneFrameProps) {
+export default function PhoneFrame({ children }: PhoneFrameProps) {
   return (
     <div
       className="phone-frame-outer"
@@ -18,7 +17,7 @@ export default function PhoneFrame({ children, hideSponsor }: PhoneFrameProps) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0d0d0d',
+        background: 'var(--green-dark)',
         padding: 'clamp(12px, 3vw, 20px)',
       }}
     >
@@ -29,7 +28,6 @@ export default function PhoneFrame({ children, hideSponsor }: PhoneFrameProps) {
           <main className="phone-screen-content">
             {children}
           </main>
-          {!hideSponsor && <SponsorBanner />}
         </div>
       </div>
 

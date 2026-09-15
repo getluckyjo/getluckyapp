@@ -2,24 +2,21 @@
 
 import Image from 'next/image'
 
-export default function SponsorBanner() {
+/**
+ * Indwe sponsor lockup. V2 shows it as the landing page footer
+ * ("Proudly sponsored by Indwe Risk Services") rather than stacked inside
+ * the tab bar on every screen.
+ */
+export default function SponsorBanner({ className }: { className?: string }) {
   return (
-    <div style={{
-      width: '100%',
-      padding: '6px 16px',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      background: '#f5f5f5',
-      borderTop: '1px solid #e5e5e5',
-    }}>
+    <div className={`sponsor-band${className ? ` ${className}` : ''}`}>
       <Image
         src="/GLG_Indwe_FSP_Banner.png"
-        alt="Proudly sponsored by Indwe Risk Services"
-        width={400}
-        height={50}
+        alt="Proudly sponsored by Indwe Risk Services — an Authorised Financial Services Provider, FSP 3425"
+        width={800}
+        height={167}
         priority
-        style={{ width: '100%', maxWidth: 300, height: 'auto' }}
+        style={{ width: '100%', maxWidth: 320, height: 'auto' }}
       />
     </div>
   )

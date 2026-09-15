@@ -77,7 +77,10 @@ const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', 
 //     costs someone their money. It handles its own missing-session errors.
 //   /age-check      — reached by redirect straight from /auth/callback. Gating it
 //     turns a slow cookie write into a redirect loop back to /auth.
-const UNGATED_ROUTES = ['/payment-return', '/age-check']
+//   /welcome        — the "All set" beat, also reached straight from the
+//     callback, so the same cookie-timing argument applies. It sends a
+//     visitor with no session back to /auth itself.
+const UNGATED_ROUTES = ['/payment-return', '/age-check', '/welcome']
 
 // Dashboard surfaces. Public today: /leaderboard is a shop window, and /home
 // renders a signed-out state. Left as they are — see the note on /account below.
