@@ -9,6 +9,7 @@ import {
   Users,
   MapPin,
   BarChart3,
+  KeyRound,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -21,6 +22,7 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/courses', label: 'Courses', icon: MapPin },
   { href: '/admin/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/admin/beta', label: 'Beta testers', icon: KeyRound },
 ]
 
 export default function AdminSidebar({ pendingClaims = 0 }: { pendingClaims?: number }) {

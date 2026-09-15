@@ -7,6 +7,7 @@ Sentry.init({
   dsn: process.env.SENTRY_DSN || process.env.NEXT_PUBLIC_SENTRY_DSN,
   environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV,
   release: process.env.VERCEL_GIT_COMMIT_SHA,
+  initialScope: { tags: { build_date: process.env.NEXT_PUBLIC_BUILD_DATE ?? 'unknown' } },
   tracesSampleRate: process.env.VERCEL_ENV === 'production' ? 0.2 : 1.0,
   // No PII by default: request bodies and user emails stay out of events.
   sendDefaultPii: false,

@@ -44,6 +44,8 @@ export const RULES = {
   accountDelete: { name: 'account_delete', perUser: 5, perIp: 100, windowSeconds: ONE_HOUR } as RateRule,
   authConfirm: { name: 'auth_confirm', perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only
   witness:     { name: 'witness',     perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // public confirmation page: IP only
+  feedback:    { name: 'feedback',    perUser: 20, perIp: 400,  windowSeconds: ONE_HOUR    } as RateRule, // a clubhouse shares one IP
+  betaRedeem:  { name: 'beta_redeem', perUser: 0,  perIp: 20,   windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only
 } as const
 
 export interface RateScope {

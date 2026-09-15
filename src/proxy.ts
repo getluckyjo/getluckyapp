@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
+import { BETA_COOKIE, betaAllowed, betaGateApplies, betaGateEnabled } from '@/lib/beta'
 
 // ── Route config ──────────────────────────────────────────────────────────
 // Reachable signed out. Marketing, legal, and the sign-in flow itself.
@@ -60,16 +61,24 @@ export async function proxy(request: NextRequest) {
   // Rate limiting lives in the API routes themselves (src/lib/rate-limit.ts),
   // backed by Postgres. An in-memory limiter here limited nothing on Vercel.
 
+  // ── Closed beta ─────────────────────────────────────────────────────────
+  // With BETA_GATE=on, every app screen needs an allow-listed email or a
+  // redeemed invite code (src/lib/beta.ts). Sign-in, marketing, legal, the
+  // gate page and the PayFast return stay open. Off by default.
+  const gated = betaGateEnabled() && betaGateApplies(pathname)
+
   // API routes and admin routes handle their own auth (admin in its layout and
   // handlers; API routes with getUser() per route).
   if (
-    pathname === '/' ||
-    pathname.startsWith('/api/') ||
-    pathname.startsWith('/admin') ||
-    pathname.startsWith('/auth/callback') ||
-    PUBLIC_ROUTES.some(r => pathname.startsWith(r)) ||
-    UNGATED_ROUTES.some(r => pathname.startsWith(r)) ||
-    DASHBOARD_ROUTES.some(r => pathname.startsWith(r))
+    !gated && (
+      pathname === '/' ||
+      pathname.startsWith('/api/') ||
+      pathname.startsWith('/admin') ||
+      pathname.startsWith('/auth/callback') ||
+      PUBLIC_ROUTES.some(r => pathname.startsWith(r)) ||
+      UNGATED_ROUTES.some(r => pathname.startsWith(r)) ||
+      DASHBOARD_ROUTES.some(r => pathname.startsWith(r))
+    )
   ) {
     return NextResponse.next({ request })
   }
@@ -101,6 +110,27 @@ export async function proxy(request: NextRequest) {
   )
 
   const { data: { user } } = await supabase.auth.getUser()
+
+  if (gated) {
+    const code = request.cookies.get(BETA_COOKIE)?.value ?? null
+    let allowed = false
+    try {
+      allowed = await betaAllowed(supabase, { email: user?.email ?? null, code })
+    } catch {
+      // The gate must fail closed, but a broken lookup should send the tester
+      // to the gate page, not to a 500.
+      allowed = false
+    }
+    if (!allowed) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/beta'
+      url.search = ''
+      url.searchParams.set('next', pathname)
+      return NextResponse.redirect(url)
+    }
+    // Allowed: the dashboard routes are public otherwise, so stop here for them.
+    if (DASHBOARD_ROUTES.some(r => pathname.startsWith(r))) return supabaseResponse
+  }
 
   if (!user) {
     const url = request.nextUrl.clone()
