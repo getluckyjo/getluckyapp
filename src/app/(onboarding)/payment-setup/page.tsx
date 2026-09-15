@@ -2,18 +2,25 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { CreditCard, Landmark, Smartphone, Wallet, Lock } from 'lucide-react'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 
 const methods = [
-  { id: 'card',       icon: '💳', name: 'Credit / Debit Card', desc: 'Visa, Mastercard, Amex'     },
-  { id: 'eft',        icon: '🏦', name: 'Instant EFT',         desc: 'Direct from your bank'       },
-  { id: 'apple_pay',  icon: '🍎', name: 'Apple Pay',            desc: 'Fastest checkout at the tee' },
-  { id: 'google_pay', icon: 'G',  name: 'Google Pay',           desc: 'Quick tap-and-go'            },
+  { id: 'card',       Icon: CreditCard, name: 'Credit / debit card', desc: 'Visa, Mastercard, Amex'     },
+  { id: 'eft',        Icon: Landmark,   name: 'Instant EFT',         desc: 'Direct from your bank'       },
+  { id: 'apple_pay',  Icon: Smartphone, name: 'Apple Pay',           desc: 'Fastest checkout at the tee' },
+  { id: 'google_pay', Icon: Wallet,     name: 'Google Pay',          desc: 'Quick tap-and-go'            },
 ]
 
+/**
+ * Payment setup — a preferred way to pay, in the V2 system.
+ * Display title, a green PayFast trust card, the methods as white tiles
+ * with a radio, and one lime SAVE. PayFast still takes the actual payment
+ * at the tee; this only records the preference.
+ */
 export default function PaymentSetupPage() {
   const router = useRouter()
   const { user, refreshProfile } = useAuth()
@@ -54,63 +61,48 @@ export default function PaymentSetupPage() {
 
   return (
     <PhoneFrame statusTheme="dark">
-      <div className="screen-payment">
+      <div className="v2-screen">
         <AppHeader tone="light" />
-        <div className="signup-title-area" style={{ padding: 'clamp(8px, 2vh, 20px) var(--page-px) var(--space-md)' }}>
-          <h3 className="signup-title">Payment Setup</h3>
-          <p className="signup-sub">Choose how you'll pay when you play</p>
-        </div>
 
-        {/* PayFast trust badge */}
-        <div style={{
-          margin: '0 var(--page-px) var(--space-lg)',
-          background: 'rgba(26, 61, 46, 0.07)',
-          borderRadius: 'var(--radius-md)',
-          padding: 'var(--space-md)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 'var(--space-sm)',
-          border: '1px solid rgba(26, 61, 46, 0.12)',
-        }}>
-          <div style={{ fontSize: 'var(--text-2xl)' }}>🔒</div>
-          <div>
-            <div style={{ color: '#1a3d2e', fontWeight: 700, fontSize: 'var(--text-body)' }}>
-              Powered by PayFast
-            </div>
-            <div style={{ color: '#5a7a6a', fontSize: 'var(--text-xs)', marginTop: 2, lineHeight: 1.4 }}>
-              SA&apos;s most trusted payment gateway. Your card details are
-              never stored by Get Lucky.
+        <div className="vf-scroll">
+          <h1 className="v2-title" style={{ marginBottom: 8 }}>{'How you’ll\npay.'}</h1>
+          <p className="vf-sub">Pick your preferred method. You&apos;re only charged when you play.</p>
+
+          <div className="ps-trust">
+            <span className="ps-trust-icon" aria-hidden><Lock size={20} strokeWidth={2.4} /></span>
+            <div>
+              <div className="ps-trust-title">Powered by PayFast</div>
+              <div className="ps-trust-sub">SA&apos;s most trusted payment gateway. Your card details are never stored by Get Lucky.</div>
             </div>
           </div>
-        </div>
 
-        <div className="payment-methods">
-          <div className="payment-methods-title">Preferred Payment Method</div>
-          {methods.map(m => (
-            <div
-              key={m.id}
-              className={`payment-option${selected === m.id ? ' selected' : ''}`}
-              onClick={() => setSelected(m.id)}
-            >
-              <div className="payment-option-icon">{m.icon}</div>
-              <div className="payment-option-text">
-                <h5>{m.name}</h5>
-                <p>{m.desc}</p>
-              </div>
-              <div className="payment-radio" />
-            </div>
-          ))}
-        </div>
-        <div className="payment-secure">🔒 256-bit SSL · Secured by PayFast</div>
-        <div style={{ padding: '0 var(--page-px) var(--space-2xl)' }}>
-          <button
-            className="btn-primary"
-            onClick={handleSave}
-            disabled={loading}
-            style={{ opacity: loading ? 0.7 : 1 }}
-          >
-            {loading ? 'Saving...' : 'Save & Continue'}
+          <div className="ps-list" role="radiogroup" aria-label="Preferred payment method">
+            {methods.map(({ id, Icon, name, desc }) => {
+              const on = selected === id
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  className={`ps-option${on ? ' is-selected' : ''}`}
+                  onClick={() => setSelected(id)}
+                >
+                  <span className="ps-option-icon" aria-hidden><Icon size={22} strokeWidth={2.2} /></span>
+                  <span className="ps-option-text">
+                    <span className="ps-option-name">{name}</span>
+                    <span className="ps-option-desc">{desc}</span>
+                  </span>
+                  <span className="ps-radio" aria-hidden />
+                </button>
+              )
+            })}
+          </div>
+
+          <button type="button" className="btn-lime btn-lime--block" onClick={handleSave} disabled={loading}>
+            {loading ? 'Saving…' : 'Save & continue'}
           </button>
+          <p className="ps-secure">256-bit SSL · Secured by PayFast</p>
         </div>
       </div>
     </PhoneFrame>

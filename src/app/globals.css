@@ -201,11 +201,6 @@ body {
 .status-right { display: flex; gap: 6px; font-size: 12px; align-items: center; }
 
 /* ── SCREEN ENTRANCE ANIMATION ── */
-.screen-signup .signup-title-area,
-.screen-signup .signup-form,
-.screen-signup .signup-footer,
-.screen-payment .signup-title-area,
-.screen-payment .payment-methods,
 .screen-home .home-hero-card,
 .screen-home .home-section-title {
   animation: fadeUp 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -214,8 +209,6 @@ body {
 /* Stagger children slightly */
 .screen-home .home-hero-card { animation-delay: 0.05s; }
 .screen-home .home-section-title { animation-delay: 0.12s; }
-.screen-signup .signup-form { animation-delay: 0.08s; }
-.screen-signup .signup-footer { animation-delay: 0.16s; }
 
 /* ── LOGO UTILITY CLASSES ── */
 /* Logo is natively #335231 — no filter needed on light backgrounds */
@@ -336,27 +329,6 @@ body {
 .btn-tile:hover { box-shadow: 0 4px 16px rgba(52,82,49,0.12); }
 .btn-tile:active { transform: scale(0.98); }
 .btn-tile:disabled { opacity: 0.6; cursor: not-allowed; }
-/* ── SCREEN: SIGNUP / AUTH ── */
-/* ── SCREEN: AUTH / SIGNUP ── */
-.screen-signup {
-  width: 100%; height: 100%;
-  background: var(--cream-light);
-  display: flex; flex-direction: column;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* ── Auth page — full cream layout ── */
-.screen-auth {
-  width: 100%; flex: 1; min-height: 0;
-  background: var(--cream-light);
-  display: flex; flex-direction: column;
-  justify-content: center;
-  position: relative;
-  padding: clamp(48px, 9vh, 88px) 0 clamp(52px, 9vh, 84px);
-  overflow: hidden;
-}
-
 /* Auth error banner */
 .auth-error {
   width: 100%; box-sizing: border-box;
@@ -374,38 +346,6 @@ body {
 .auth-terms-link { color: var(--green-mid); cursor: pointer; text-decoration: none; }
 .auth-terms-link:hover { text-decoration: underline; }
 
-/* Form fields (kept for payment-setup and other forms) */
-.form-group label {
-  display: block; font-size: var(--text-xs); font-weight: 600;
-  text-transform: uppercase; letter-spacing: 1.5px;
-  color: var(--gray-mid); margin-bottom: 6px;
-}
-.label-optional { font-weight: 400; text-transform: none; letter-spacing: 0; color: #bbb; }
-.form-group input, .form-group select {
-  width: 100%; padding: 11px var(--space-md);
-  background: var(--white); border: 1px solid #ddd8ce;
-  border-radius: var(--radius-sm);
-  font-family: 'Inter', sans-serif; font-size: var(--text-body); color: var(--black);
-  outline: none; transition: border-color 0.2s, box-shadow 0.2s;
-}
-.form-group input:focus { border-color: var(--green-dark); box-shadow: 0 0 0 3px rgba(51,82,49,0.08); }
-.form-group input::placeholder { color: #c0bdb5; }
-.form-row { display: flex; gap: 12px; }
-.form-row .form-group { flex: 1; }
-
-/* Titles on the age-check and payment-setup forms. These had no rule of
-   their own and inherited the body's white text — invisible on the surface. */
-.signup-title {
-  font-family: var(--font-heading); font-weight: 800;
-  font-size: clamp(28px, 8.5vw, 36px); line-height: 1.1;
-  text-transform: uppercase; color: var(--green);
-  margin: 0 0 8px;
-}
-.signup-sub {
-  font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.45;
-  color: var(--green); opacity: 0.85; margin: 0;
-}
-
 /* Page heading on the list screens (My bets, Winners, Account) — the same
    display voice as the designed screens, one size down. */
 .page-title {
@@ -421,59 +361,6 @@ body {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
   padding: clamp(10px, 2.4vh, 22px) var(--page-px) 0;
 }
-
-/* Legacy compat — keep for payment-setup page */
-.signup-header { padding: var(--space-lg) var(--page-px) 0; }
-.back-btn {
-  width: 44px; height: 44px; background: rgba(0,0,0,0.05);
-  border: none; border-radius: 10px; font-size: 17px; cursor: pointer;
-  color: var(--green-deep); display: flex; align-items: center; justify-content: center;
-}
-.signup-title-area { padding: var(--space-lg) var(--page-px); }
-.signup-footer { padding: var(--space-md) var(--page-px) var(--space-2xl); }
-
-/* ── SCREEN: PAYMENT / AGE CHECK ── */
-.screen-payment {
-  width: 100%; height: 100%;
-  background: var(--cream-light);
-  display: flex; flex-direction: column;
-  overflow-y: auto;
-  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
-}
-.payment-card-preview {
-  margin: 20px 24px; height: 175px;
-  background: linear-gradient(150deg, #335231 0%, #335231 50%, #335231 100%);
-  border-radius: 16px; padding: 24px;
-  display: flex; flex-direction: column; justify-content: space-between;
-  position: relative; overflow: hidden;
-  box-shadow: 0 12px 40px rgba(30,49,32,0.35);
-  flex-shrink: 0;
-}
-.payment-card-preview::before {
-  content: ''; position: absolute; top: -40%; right: -20%;
-  width: 220px; height: 220px;
-  background: radial-gradient(circle, rgba(201,168,76,0.15), transparent 60%);
-  border-radius: 50%;
-}
-.card-type { font-size: 11px; text-transform: uppercase; letter-spacing: 4px; color: var(--gold); font-weight: 600; }
-.card-number { font-family: 'Space Mono', monospace; font-size: 18px; color: var(--cream); letter-spacing: 3px; }
-.card-bottom { display: flex; justify-content: space-between; color: rgba(255,255,255,0.6); font-size: 12px; }
-.card-bottom span:last-child { color: var(--cream); font-weight: 600; }
-.payment-methods { padding: 0 var(--page-px); margin-bottom: 20px; }
-.payment-methods-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px; color: var(--gray-mid); margin-bottom: 12px; }
-.payment-option {
-  display: flex; align-items: center; gap: 14px; padding: 15px;
-  background: var(--white); border: 1px solid #ddd8ce; border-radius: 10px;
-  margin-bottom: 10px; position: relative; cursor: pointer; transition: all 0.2s;
-}
-.payment-option.selected { border-color: var(--green-dark); box-shadow: 0 2px 16px rgba(30,49,32,0.1); }
-.payment-option-icon { width: 44px; height: 32px; background: #f0ece4; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
-.payment-option-text { flex: 1; }
-.payment-option-text h5 { font-size: 14px; font-weight: 600; color: var(--black); }
-.payment-option-text p { font-size: 12px; color: var(--gray-light); }
-.payment-radio { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid #d4d0c8; flex-shrink: 0; }
-.payment-option.selected .payment-radio { border-color: var(--green-dark); background: var(--green-dark); box-shadow: inset 0 0 0 4px var(--white); }
-.payment-secure { text-align: center; font-size: var(--text-sm); color: var(--gray-light); padding: 12px var(--page-px); }
 
 /* ── DASHBOARD / HOME ── */
 .screen-home {
@@ -1650,7 +1537,7 @@ body {
 
 .acct-form { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .acct-field { display: flex; flex-direction: column; gap: 6px; }
-.acct-field > span { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; opacity: 0.7; }
+.acct-field > span { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.7; }
 .acct-input {
   width: 100%; min-height: 46px; padding: 0 14px; box-sizing: border-box;
   background: var(--surface); color: var(--green);
@@ -1744,3 +1631,75 @@ body {
 .club-cta { padding-bottom: 6px; }
 .club-cta .btn-lime { text-decoration: none; }
 .club-legal { margin: 12px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.55; color: var(--green); opacity: 0.7; text-align: center; }
+
+/* ── SCREEN: AGE CHECK + PAYMENT SETUP (V2) ── */
+.ac-form { display: flex; flex-direction: column; }
+.ac-form .acct-field { margin-bottom: 14px; }
+.ac-date { -webkit-appearance: none; appearance: none; line-height: 46px; background: var(--white); border-color: var(--bar-off); }
+.ac-date:focus { border-color: var(--green); }
+.ac-date::-webkit-date-and-time-value { text-align: left; }
+.ac-consent {
+  position: relative; display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 16px; border-radius: 12px; cursor: pointer;
+  background: var(--white); border: 2px solid transparent; transition: border-color 0.15s;
+}
+.ac-consent.is-on { border-color: var(--green); }
+.ac-consent input { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.ac-consent input:focus-visible ~ .ac-consent-box { box-shadow: 0 0 0 3px rgba(52,82,49,0.25); }
+.ac-consent-box {
+  flex-shrink: 0; width: 24px; height: 24px; margin-top: 1px; border-radius: 6px;
+  border: 2px solid var(--bar-off); background: var(--white); color: var(--green);
+  display: flex; align-items: center; justify-content: center; transition: background 0.15s, border-color 0.15s;
+}
+.ac-consent-box svg { opacity: 0; transition: opacity 0.15s; }
+.ac-consent.is-on .ac-consent-box { background: var(--lime); border-color: var(--green); }
+.ac-consent.is-on .ac-consent-box svg { opacity: 1; }
+.ac-consent-text { font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.5; color: var(--green); }
+.ac-consent-text a { color: var(--green); font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.ac-submit { margin-top: 20px; }
+.ac-blocked-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 84px; height: 84px; border-radius: 50%; margin-bottom: 22px;
+  background: var(--green); color: var(--lime);
+  font-family: var(--font-heading); font-size: 30px; letter-spacing: 0.02em;
+  box-shadow: 4px 5px 0 var(--lime);
+}
+
+.ps-trust {
+  display: flex; align-items: flex-start; gap: 14px;
+  background: var(--green); color: var(--white); border-radius: 12px;
+  padding: 16px 18px; margin-bottom: 16px; font-family: 'Inter', sans-serif;
+  animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.ps-trust-icon {
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--lime); color: var(--green);
+  display: flex; align-items: center; justify-content: center;
+}
+.ps-trust-title { font-family: var(--font-heading); font-size: 18px; text-transform: uppercase; line-height: 1.1; }
+.ps-trust-sub { font-size: var(--text-sm); line-height: 1.45; opacity: 0.85; margin-top: 4px; }
+.ps-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.ps-option {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: left;
+  padding: 14px 16px; background: var(--white); border: 2px solid transparent; border-radius: 12px;
+  cursor: pointer; color: var(--green); font-family: 'Inter', sans-serif;
+  box-shadow: 0 4px 18px rgba(52,82,49,0.06);
+  transition: border-color 0.15s, transform 0.12s;
+}
+.ps-option:active { transform: scale(0.99); }
+.ps-option.is-selected { border-color: var(--green); }
+.ps-option-icon {
+  flex-shrink: 0; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--surface); color: var(--green);
+  display: flex; align-items: center; justify-content: center;
+}
+.ps-option.is-selected .ps-option-icon { background: var(--lime); }
+.ps-option-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ps-option-name { font-size: var(--text-md); font-weight: 700; line-height: 1.25; }
+.ps-option-desc { font-size: var(--text-sm); opacity: 0.7; margin-top: 2px; }
+.ps-radio {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid var(--bar-off); background: var(--white); transition: border-color 0.15s, background 0.15s;
+}
+.ps-option.is-selected .ps-radio { border-color: var(--green); background: var(--green); box-shadow: inset 0 0 0 4px var(--white); }
+.ps-secure { margin: 14px 0 0; text-align: center; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--green); opacity: 0.65; }
