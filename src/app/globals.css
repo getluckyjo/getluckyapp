@@ -1424,6 +1424,9 @@ body {
 }
 
 /* ── SCREEN: CLAIM (V2) ── */
+.cl-prize { padding: 14px 18px 14px; }
+.cl-prize .vf-prize-amount { font-size: clamp(30px, 9vw, 38px); margin: 4px 0 2px; }
+.cl-prize .vf-prize-meta { margin: 0; line-height: 1.35; }
 .cl-progress { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; }
 .cl-progress-text { font-family: var(--font-heading); font-size: 14px; text-transform: uppercase; color: var(--green); white-space: nowrap; letter-spacing: 0.03em; }
 .cl-progress .step-bar { flex: 1; }
@@ -1454,12 +1457,19 @@ body {
 }
 
 /* ── SCREEN: MISS + PAYMENT RETURN (V2) ── */
+.miss-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .miss-attempt {
-  display: inline-block; margin-bottom: 14px; padding: 6px 12px; border-radius: 999px;
+  display: inline-block; padding: 6px 12px; border-radius: 999px;
   background: rgba(255,255,255,0.92); color: var(--green);
   font-family: var(--font-heading); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
 }
+.miss-attempt--hole { background: var(--lime); }
 .miss-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+.miss-link {
+  margin-top: 2px; padding: 6px 0; background: none; border: none; cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: var(--text-sm); font-weight: 600; color: rgba(255,255,255,0.9);
+  text-decoration: underline; text-underline-offset: 3px; text-shadow: 0 1px 8px rgba(0,0,0,0.4);
+}
 .pr-spinner {
   position: relative; width: 84px; height: 84px; border-radius: 50%; margin-bottom: 22px;
   background: var(--lime); color: var(--green);

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
-import { useBet } from '@/context/BetContext'
+import { useBet, BET_TIERS } from '@/context/BetContext'
 import { createClient } from '@/lib/supabase/client'
 import { useShareVideo } from '@/hooks/useShareVideo'
 
@@ -15,6 +15,7 @@ interface UploadStep {
   done: boolean
   uploading?: boolean
   storagePath?: string
+  fileName?: string
 }
 
 /**
@@ -25,7 +26,8 @@ interface UploadStep {
  */
 export default function ClaimPage() {
   const router = useRouter()
-  const { betId, resetSession, videoBlob } = useBet()
+  const { betId, resetSession, videoBlob, selectedTier, selectedCourse, selectedHole } = useBet()
+  const tierData = BET_TIERS.find(t => t.tier === selectedTier) ?? BET_TIERS[1]
   const [toast, setToast] = useState<string | null>(null)
 
   // Guard: require an active bet session
@@ -120,7 +122,7 @@ export default function ClaimPage() {
         // Only mark done if upload actually succeeded
         if (storagePath) {
           setSteps(prev =>
-            prev.map(s => s.id === stepId ? { ...s, done: true, storagePath } : s)
+            prev.map(s => s.id === stepId ? { ...s, done: true, storagePath, fileName: file.name } : s)
           )
         } else {
           showToast('Upload failed — please try again')
@@ -166,8 +168,18 @@ export default function ClaimPage() {
         <div className="vf-scroll" style={{ paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))' }}>
           <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Incredible\nshot!'}</h1>
           <p className="vf-sub">
-            Upload your proof and we&apos;ll get your prize moving. Documents are reviewed within 24 hours.
+            Upload your proof and we&apos;ll get your prize moving. Claims are reviewed within 5 business days.
           </p>
+
+          <div className="vf-prize cl-prize">
+            <div>
+              <div className="vf-prize-label">Pending prize</div>
+              <div className="vf-prize-amount">R{tierData.winZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}</div>
+            </div>
+            {selectedCourse && selectedHole && (
+              <div className="vf-prize-meta">{selectedCourse.name} · Hole {selectedHole.holeNumber} · {selectedHole.distanceMetres}m</div>
+            )}
+          </div>
 
           <div className="cl-progress" aria-label={`${doneCount} of ${steps.length} uploaded`}>
             <span className="cl-progress-text">{doneCount} of {steps.length} in</span>
@@ -199,7 +211,7 @@ export default function ClaimPage() {
                     </span>
                     <span className="cl-step-text">
                       <span className="cl-step-title">{step.title}</span>
-                      <span className="cl-step-desc">{step.done ? step.desc : step.uploading ? 'Uploading…' : step.desc}</span>
+                      <span className="cl-step-desc">{step.uploading ? 'Uploading…' : step.done && step.fileName ? `Uploaded · ${step.fileName}` : step.desc}</span>
                     </span>
                     {actionable && <span className="cl-step-cta">Upload</span>}
                   </button>
