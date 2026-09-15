@@ -5,8 +5,15 @@
  *   STAGING_DATABASE_URL='postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres' \
  *     npm run staging:bootstrap
  *
- * Applies supabase/migrations/*.sql in filename order, each inside its own
- * transaction except the ones that cannot run in one (ALTER TYPE ... ADD
+ * or, where raw Postgres connections are not possible, through the Supabase
+ * management API (the access token comes from SUPABASE_ACCESS_TOKEN or a
+ * proxy that attaches it; see scripts/staging/db.mjs):
+ *
+ *   STAGING_PROJECT_REF=<ref> npm run staging:bootstrap
+ *
+ * Applies supabase/migrations/*.sql in filename order, each together with
+ * its schema_migrations row as one implicit transaction (a multi-statement
+ * string), except the ones that cannot run in one (ALTER TYPE ... ADD
  * VALUE), and records what it applied in public.schema_migrations so a
  * re-run is a no-op. It refuses to touch the production project.
  *
@@ -16,35 +23,26 @@
  */
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import pg from 'pg'
+import { connect } from './db.mjs'
 
-const PRODUCTION_REF = 'ajsgzeofswlizwwdkesp'
 const NO_TX = new Set(['004_tier_6.sql'])
-
-const url = process.env.STAGING_DATABASE_URL
-if (!url) {
-  console.error('STAGING_DATABASE_URL is required (Supabase → Project Settings → Database → Connection string, session mode).')
-  process.exit(1)
-}
-if (url.includes(PRODUCTION_REF)) {
-  console.error(`Refusing: STAGING_DATABASE_URL points at the production project (${PRODUCTION_REF}).`)
-  process.exit(1)
-}
 
 const dir = join(process.cwd(), 'supabase', 'migrations')
 const files = readdirSync(dir).filter(f => f.endsWith('.sql')).sort()
 
-const client = new pg.Client({ connectionString: url, ssl: { rejectUnauthorized: false } })
-await client.connect()
+const db = await connect()
+console.log(`bootstrap via ${db.label}`)
 
-await client.query(`
+await db.query(`
   create table if not exists public.schema_migrations (
     name text primary key,
     applied_at timestamptz not null default now()
   )
 `)
-const { rows: done } = await client.query('select name from public.schema_migrations')
+const { rows: done } = await db.query('select name from public.schema_migrations')
 const applied = new Set(done.map(r => r.name))
+
+const RECORD = 'insert into public.schema_migrations (name) values ($1)'
 
 let count = 0
 for (const file of files) {
@@ -53,24 +51,27 @@ for (const file of files) {
   const tx = !NO_TX.has(file)
   process.stdout.write(`apply  ${file}${tx ? '' : ' (no transaction)'} … `)
   try {
-    if (tx) await client.query('begin')
-    await client.query(sql)
-    await client.query('insert into public.schema_migrations (name) values ($1)', [file])
-    if (tx) await client.query('commit')
+    if (tx) {
+      // One string, one implicit transaction: the migration and its record
+      // land together or not at all, in both modes.
+      await db.query(`${sql.trim().replace(/;\s*$/, '')};\n${RECORD.replace('$1', "'" + file + "'")};`)
+    } else {
+      await db.query(sql)
+      await db.query(RECORD, [file])
+    }
     console.log('ok')
     count++
   } catch (err) {
-    if (tx) await client.query('rollback').catch(() => {})
     console.log('FAILED')
     console.error(err.message)
-    await client.end()
+    await db.end()
     process.exit(1)
   }
 }
 
-const { rows: tables } = await client.query(`
+const { rows: tables } = await db.query(`
   select table_name from information_schema.tables
   where table_schema = 'public' order by table_name
 `)
 console.log(`\n${count} migration(s) applied. Tables: ${tables.map(t => t.table_name).join(', ')}`)
-await client.end()
+await db.end()

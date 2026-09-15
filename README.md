@@ -46,6 +46,12 @@ npm run test:staging         # Row Level Security probed as a real user
 npm run load:event-day       # 120 golfers in 10 minutes against a preview URL (BASE_URL=…), see docs/batch-12-scale.md
 ```
 
+`staging:bootstrap`, `scripts/staging/explain.mjs` and `staging:verify-restore`
+connect with `STAGING_DATABASE_URL`. Where raw Postgres is unreachable, the
+first two accept `STAGING_PROJECT_REF` instead and send each statement
+through the Supabase management API (`scripts/staging/db.mjs` explains where
+the access token comes from). Every one of them refuses the production ref.
+
 ## Environment variables
 
 | Variable | Where | Notes |
