@@ -6,7 +6,9 @@ import type { Database } from '@/types/database'
 // ── Route config ──────────────────────────────────────────────────────────
 // Reachable signed out. Marketing, legal, and the sign-in flow itself.
 // /witness is the one-question page a named witness reaches from their email; they have no account.
-const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play', '/witness']
+// PWA plumbing is public too: the worker script, the manifest, and the offline
+// fallback the worker serves when a page cannot be fetched.
+const PUBLIC_ROUTES = ['/splash', '/onboarding', '/auth', '/terms', '/privacy', '/responsible-play', '/witness', '/serwist', '/manifest.webmanifest', '/~offline']
 
 // Reachable signed out because the app still shows something useful, or because
 // bouncing would be worse than letting them through:

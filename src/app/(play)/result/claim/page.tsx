@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import { track } from '@/lib/analytics'
+import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
 import { useBet, BET_TIERS } from '@/context/BetContext'
 import { useAuth } from '@/context/AuthContext'
@@ -201,6 +203,8 @@ export default function ClaimPage() {
     }
 
     setLoading(false)
+    haptics.success()
+    track('claim_submitted')
     router.push('/verify')
   }
 

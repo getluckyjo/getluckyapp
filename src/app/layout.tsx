@@ -1,11 +1,14 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
+import PwaChrome from '@/components/pwa/PwaChrome'
+import splash from '@/lib/pwa/splash.json'
 
 export const metadata: Metadata = {
   title: 'Get Lucky Golf — The Hole-in-One Challenge',
   description: 'Stake R50–R1,000 to win up to R1,000,000. Record your hole-in-one on any par-3 and claim your prize.',
   keywords: ['golf', 'hole-in-one', 'prize', 'South Africa', 'ZAR', 'competition'],
+  applicationName: 'Get Lucky',
   openGraph: {
     title: 'Get Lucky Golf',
     description: 'One shot. R1,000,000. Back yourself on any par-3.',
@@ -17,10 +20,21 @@ export const metadata: Metadata = {
     title: 'Get Lucky Golf',
     description: 'One shot. R1,000,000. Back yourself on any par-3.',
   },
+  // iOS home-screen behaviour. black-translucent lets the screen run under
+  // the status bar so the deep green header reads edge to edge; the header
+  // pads itself with env(safe-area-inset-top) so nothing sits under the clock.
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'Get Lucky Golf',
+    title: 'Get Lucky',
+  },
+  icons: {
+    icon: [
+      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
+      { url: '/icons/favicon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
+    ],
+    apple: [{ url: '/icons/apple-touch-icon-180.png', sizes: '180x180', type: 'image/png' }],
   },
 }
 
@@ -52,11 +66,16 @@ export default function RootLayout({
           href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap"
           rel="stylesheet"
         />
-        <link rel="icon" href="/favicon.png" type="image/png" />
-        <link rel="apple-touch-icon" href="/apple-icon.png" />
+        {/* iOS launch screens, one per device size. Generated: npm run pwa:assets. */}
+        {splash.map(s => (
+          <link key={s.href} rel="apple-touch-startup-image" href={s.href} media={s.media} />
+        ))}
       </head>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          {children}
+          <PwaChrome />
+        </AuthProvider>
       </body>
     </html>
   )

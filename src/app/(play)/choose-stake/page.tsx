@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import { track } from '@/lib/analytics'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
@@ -91,6 +92,9 @@ export default function ChooseStakePage() {
         course:       selectedCourse,
         hole:         selectedHole,
       }))
+
+      track('stake_chosen', { tier: selected })
+      track('payment_started', { tier: selected })
 
       // ── 3. Build hidden form and submit → redirect to PayFast ─────────────
       const form = document.createElement('form')

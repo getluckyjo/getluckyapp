@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import { track } from '@/lib/analytics'
+import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
 import { GolfBallIcon } from '@/components/icons'
 import { useBet, BET_TIERS } from '@/context/BetContext'
@@ -108,6 +110,8 @@ export default function PaymentReturnPage() {
 
         // ── 4. Clean up and redirect to record page ─────────────────────────
         localStorage.removeItem('pf_pending')
+        haptics.success()
+        track('bet_created', { tier })
         router.replace('/record')
 
       } catch (err) {

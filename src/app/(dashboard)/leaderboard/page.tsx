@@ -6,6 +6,8 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
+import PullToRefresh from '@/components/pwa/PullToRefresh'
+import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import { getInitials, formatRandFromCents as formatRand } from '@/lib/format'
 
 type Tab = 'biggest' | 'recent'
@@ -37,6 +39,7 @@ export default function LeaderboardPage() {
   const [tab, setTab] = useState<Tab>('biggest')
   const [winners, setWinners] = useState<Winner[] | null>(null)
   const [totalPaidOut, setTotalPaidOut] = useState(0)
+  const refreshTick = useRefreshSignal()
 
   useEffect(() => {
     let cancelled = false
@@ -49,7 +52,7 @@ export default function LeaderboardPage() {
       })
       .catch(() => { if (!cancelled) setWinners([]) })
     return () => { cancelled = true }
-  }, [])
+  }, [refreshTick])
 
   const displayName = profile?.name ?? user?.user_metadata?.full_name ?? null
   const userInitials = getInitials(displayName, user?.email)
@@ -65,6 +68,7 @@ export default function LeaderboardPage() {
   return (
     <PhoneFrame statusTheme="dark">
       <div className="v2-screen">
+        <PullToRefresh />
         <AppHeader tone="light" />
 
         <div className="vf-scroll">

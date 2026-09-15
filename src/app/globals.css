@@ -1784,3 +1784,142 @@ body {
 }
 .ps-option.is-selected .ps-radio { border-color: var(--green); background: var(--green); box-shadow: inset 0 0 0 4px var(--white); }
 .ps-secure { margin: 14px 0 0; text-align: center; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--green); opacity: 0.65; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   PWA CHROME — offline page, update toast
+   ══════════════════════════════════════════════════════════════════════════ */
+.offline {
+  min-height: 100dvh;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--green);
+  padding: calc(24px + env(safe-area-inset-top, 0px)) var(--page-px) calc(24px + env(safe-area-inset-bottom, 0px));
+}
+.offline-card {
+  width: min(100%, 360px);
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  gap: 14px;
+}
+.offline-lockup { width: min(58vw, 220px); height: auto; margin-bottom: 8px; user-select: none; }
+.offline-title {
+  font-family: var(--font-heading); font-size: var(--text-2xl); letter-spacing: 0.02em;
+  color: var(--white); text-transform: uppercase;
+}
+.offline-copy { font-size: var(--text-md); line-height: 1.45; color: rgba(255,255,255,0.86); }
+.offline-retry { width: 100%; margin-top: 8px; }
+.offline-hint { font-size: var(--text-sm); color: rgba(255,255,255,0.6); }
+
+.pwa-toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--tab-bar-h) + 10px);
+  z-index: 200;
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 12px 12px 18px;
+  background: var(--green-dark); color: var(--white);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.28);
+  font-size: 14px; font-weight: 500;
+  animation: pwaToastIn 0.2s ease both;
+  max-width: calc(100vw - 32px);
+}
+.pwa-toast-btn {
+  min-height: 44px; padding: 0 16px;
+  background: var(--lime); color: var(--green);
+  border: none; border-radius: 10px;
+  font-family: var(--font-heading); font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase;
+  cursor: pointer;
+}
+.pwa-toast-btn:disabled { opacity: 0.7; }
+@keyframes pwaToastIn { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   APP FEEL — the web tells, touch targets, transitions, skeletons, pull-to-refresh
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* No rubber-band on the document: the screen container scrolls, the page never does. */
+html, body { overscroll-behavior: none; }
+.phone-screen-content, .v2-body, .ob-body { overscroll-behavior-y: contain; }
+
+/* No blue flash on tap, anywhere. */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* UI chrome is not text: no selection, no long-press callout. */
+.tabbar, .app-header, .app-menu, .step-bar, .ptr, .pwa-toast, .install-card, .install-sheet, .fb-fab,
+button, [role="button"], [role="tab"] {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* iOS zooms into any focused field under 16px. Phones only, so the admin
+   tables keep their compact type on desktop. */
+@media (max-width: 430px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* 44 × 44 minimum on the controls that were smaller in the comps. Visual
+   size is kept where it matters; the hit area grows with a pseudo-element. */
+.cs-search-clear, .cs-sheet-close, .ob-dots button, .vf-step-dot[role="button"] { position: relative; }
+.cs-search-clear::after, .cs-sheet-close::after, .ob-dots button::after {
+  content: ''; position: absolute; inset: 50% auto auto 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%);
+}
+@media (max-width: 430px) { .record-btn-secondary { width: 44px; height: 44px; } }
+
+/* Screen entrance: opacity only, 160 ms, off when the OS says so. */
+.page-enter { animation: pageIn 160ms ease-out both; }
+@keyframes pageIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .page-enter { animation: none; }
+  .bone { animation: none; }
+}
+
+/* Skeleton blocks */
+.bone {
+  background: linear-gradient(90deg, rgba(52,82,49,0.08) 0%, rgba(52,82,49,0.16) 40%, rgba(52,82,49,0.08) 80%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+.skeleton-screen--dark .bone {
+  background: linear-gradient(90deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.20) 40%, rgba(255,255,255,0.10) 80%);
+  background-size: 200% 100%;
+}
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.skeleton-tabbar {
+  position: absolute; bottom: 0; left: 0; right: 0; padding-top: 10px;
+  display: flex; flex-direction: column;
+}
+.skeleton-tabbar .tabbar-labels { height: calc(50px + env(safe-area-inset-bottom, 0px)); }
+
+/* Pull-to-refresh: the lime disc drops from behind the header. */
+.ptr {
+  position: absolute; top: max(8px, env(safe-area-inset-top, 0px)); left: 0; right: 0;
+  display: flex; justify-content: center;
+  z-index: 30; pointer-events: none;
+}
+.ptr-disc {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: var(--lime); color: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  opacity: var(--ptr-progress, 0);
+  transform: translateY(calc(var(--ptr-pull, 0px) - 44px)) rotate(calc(var(--ptr-progress, 0) * 180deg));
+  transition: transform 0.12s ease-out, opacity 0.12s;
+}
+.ptr-disc.is-armed { transform: translateY(calc(var(--ptr-pull, 0px) - 44px)) scale(1.08); }
+.ptr-disc.is-busy { animation: ptrSpin 0.8s linear infinite; transform: translateY(28px); }
+@keyframes ptrSpin { to { transform: translateY(28px) rotate(360deg); } }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* Installed app: the browser chrome is gone, so the phone bezel on wide
+   screens would be a lie. Full bleed instead. */
+@media (display-mode: standalone) {
+  .phone-frame-outer { padding: 0 !important; }
+  .phone-frame-shell { width: 100vw !important; height: 100dvh !important; border-radius: 0 !important; padding: 0 !important; box-shadow: none !important; }
+  .phone-notch { display: none; }
+  .phone-screen { border-radius: 0 !important; }
+}

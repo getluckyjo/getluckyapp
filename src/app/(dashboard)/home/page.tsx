@@ -7,6 +7,8 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useAuth } from '@/context/AuthContext'
+import PullToRefresh from '@/components/pwa/PullToRefresh'
+import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 
 interface BetRecord {
   id: string
@@ -30,6 +32,7 @@ export default function HomePage() {
   // Keyed by user so a sign-out never shows the previous golfer's claim,
   // without an effect having to reset state.
   const [claim, setClaim] = useState<{ userId: string; bet: BetRecord | null } | null>(null)
+  const refreshTick = useRefreshSignal()
 
   const userId = user?.id
   const firstName = (profile?.name ?? user?.user_metadata?.full_name ?? '').split(' ')[0] || null
@@ -51,11 +54,12 @@ export default function HomePage() {
       })
       .catch(() => {})
     return () => { cancelled = true }
-  }, [userId])
+  }, [userId, refreshTick])
 
   return (
     <PhoneFrame statusTheme="light">
       <div className="v2-screen v2-screen--photo">
+        <PullToRefresh />
         <Image
           src="/marketing/hero-bg.webp"
           alt=""
