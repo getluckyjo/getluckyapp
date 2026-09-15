@@ -144,6 +144,26 @@ describe('bet creation', () => {
     })
   })
 
+  it('opens a play window and records the player as the actor', async () => {
+    ledgerRow()
+    const before = Date.now()
+    const { betId } = await (await post(body())).json()
+    const bet = db.find('bets', b => b.id === betId)!
+    const expires = Date.parse(bet.expires_at as string)
+    expect(expires).toBeGreaterThanOrEqual(before + 24 * 3_600_000 - 1000)
+    expect(expires).toBeLessThanOrEqual(Date.now() + 24 * 3_600_000 + 1000)
+    expect(bet.updated_by).toBe(USER_A.id)
+  })
+
+  it('403 ACCOUNT_SUSPENDED for a suspended profile, creating nothing', async () => {
+    db.find('profiles', p => p.id === USER_A.id)!.suspended_at = '2026-09-01T00:00:00Z'
+    ledgerRow()
+    const res = await post(body())
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe('ACCOUNT_SUSPENDED')
+    expect(db.rows('bets')).toHaveLength(0)
+  })
+
   it('increments the profile attempt counter', async () => {
     ledgerRow()
     await post(body())

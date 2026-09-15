@@ -56,6 +56,13 @@ export function getMockVerificationDetail(id: string): VerificationDetail | null
     certificateSignedUrl: item.certificatePath ? `https://placeholder.supabase.co/storage/v1/object/sign/verification-docs/${item.certificatePath}` : null,
     affidavitSignedUrl: item.affidavitPath ? `https://placeholder.supabase.co/storage/v1/object/sign/verification-docs/${item.affidavitPath}` : null,
     userBetHistory: MOCK_ADMIN_BETS.filter(b => b.userId === item.userId).slice(0, 5),
+    betStatus: 'claimed',
+    betCreatedAt: null,
+    betExpiresAt: null,
+    videoSha256: null,
+    videoBytes: null,
+    videoUploadedAt: null,
+    events: [],
     userTotalAttempts: MOCK_ADMIN_USERS.find(u => u.id === item.userId)?.totalAttempts ?? 0,
   }
 }

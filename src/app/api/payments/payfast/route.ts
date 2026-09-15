@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@/lib/supabase/server'
+import { assertNotSuspended, claimErrorResponse } from '@/lib/claims/state-machine'
 import { log } from '@/lib/observability/log'
 
 // ---------------------------------------------------------------------------
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+    await assertNotSuspended(supabase, user.id)
 
     const { tier, userName = '', courseId = '', holeId = '' } = await request.json()
 
@@ -144,6 +146,8 @@ export async function POST(request: NextRequest) {
       sandbox:      SANDBOX,
     })
   } catch (err) {
+    const known = claimErrorResponse(err)
+    if (known) return known
     log.error('payfast.checkout.failed', err, { path: 'payfast_checkout' })
     return NextResponse.json({ error: 'Payment creation failed' }, { status: 500 })
   }

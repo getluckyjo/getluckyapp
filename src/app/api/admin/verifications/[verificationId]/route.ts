@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import { getMockVerificationDetail, MOCK_ADMIN_VERIFICATIONS } from '@/lib/admin-mock-data'
+import { claimErrorResponse, isVerificationStatus, reviewVerification } from '@/lib/claims/state-machine'
+import { log } from '@/lib/observability/log'
 
 export async function GET(
   _request: Request,
@@ -137,10 +139,24 @@ export async function GET(
       }))
     }
 
+    const { data: events } = await adminClient
+      .from('claim_events')
+      .select('id, table_name, action, actor_id, actor_role, changed, created_at')
+      .eq('bet_id', row.bet_id)
+      .order('created_at', { ascending: true })
+      .limit(200)
+
     return NextResponse.json({
       id: row.id,
       betId: row.bet_id,
       status: row.status,
+      betStatus: bet?.status ?? null,
+      betCreatedAt: bet?.created_at ?? null,
+      betExpiresAt: bet?.expires_at ?? null,
+      videoSha256: bet?.video_sha256 ?? null,
+      videoBytes: bet?.video_bytes ?? null,
+      videoUploadedAt: bet?.video_uploaded_at ?? null,
+      events: events ?? [],
       tier: bet?.tier,
       stakeCents: bet?.stake_pence,
       potentialWinCents: bet?.potential_win_pence,
@@ -184,6 +200,9 @@ export async function PATCH(
     if (!status) {
       return NextResponse.json({ error: 'Status is required' }, { status: 400 })
     }
+    if (!isVerificationStatus(status)) {
+      return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+    }
 
     if (auth.isMock || !auth.adminClient) {
       const item = MOCK_ADMIN_VERIFICATIONS.find(v => v.id === verificationId)
@@ -191,46 +210,19 @@ export async function PATCH(
       return NextResponse.json({ success: true, source: 'mock', verificationId, newStatus: status })
     }
 
-    const adminClient = auth.adminClient
-    const now = new Date().toISOString()
+    const { betId } = await reviewVerification(auth.adminClient, {
+      verificationId,
+      to: status,
+      actorId: auth.user.id,
+      notes: reviewerNotes !== undefined ? String(reviewerNotes).slice(0, 2000) : undefined,
+    })
 
-    // Update verification
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const updates: any = { status }
-    if (reviewerNotes !== undefined) updates.reviewer_notes = reviewerNotes
-    if (auth.user) updates.reviewed_by = auth.user.id
-    if (status === 'approved') updates.verified_at = now
-    if (status === 'under_review') { /* no extra fields */ }
-
-    const { error: verError } = await adminClient
-      .from('verifications')
-      .update(updates)
-      .eq('id', verificationId)
-
-    if (verError) {
-      return NextResponse.json({ error: verError.message }, { status: 500 })
-    }
-
-    // If approved, also update bet status to 'verified'
-    if (status === 'approved') {
-      const { data: verification } = await adminClient
-        .from('verifications')
-        .select('bet_id')
-        .eq('id', verificationId)
-        .single()
-
-      if (verification) {
-        await adminClient
-          .from('bets')
-          .update({ status: 'verified' })
-          .eq('id', verification.bet_id)
-      }
-    }
-
-    // If rejected, keep bet as 'claimed' (no change needed)
-
+    log.info('admin.review', { admin_id: auth.user.id, verification_id: verificationId, bet_id: betId, status })
     return NextResponse.json({ success: true, verificationId, newStatus: status })
-  } catch {
+  } catch (err) {
+    const known = claimErrorResponse(err)
+    if (known) return known
+    log.error('admin.review_failed', err, { path: 'admin_review' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

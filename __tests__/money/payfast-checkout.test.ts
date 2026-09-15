@@ -108,6 +108,16 @@ describe('POST /api/payments/payfast', () => {
     }
   })
 
+  it('403 ACCOUNT_SUSPENDED for a suspended account', async () => {
+    const { POST } = await loadRoute()
+    const db = new FakeDb()
+    db.seed('profiles', { id: USER_A.id, suspended_at: '2026-09-01T00:00:00Z' })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
+    const res = await POST(jsonRequest('http://x', { tier: 'tier_1', courseId: COURSE_ID, holeId: HOLE_ID }) as never)
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe('ACCOUNT_SUSPENDED')
+  })
+
   it('strips characters that would break the PayFast form from the name', async () => {
     const { POST } = await loadRoute()
     asUser(USER_A)

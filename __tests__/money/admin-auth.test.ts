@@ -122,11 +122,86 @@ describe('PATCH /api/admin/verifications/[id]', () => {
     expect(bet.status).toBe('claimed')
   })
 
-  it('400 without a status', async () => {
+  it('400 without a status or with an unknown one', async () => {
     const { PATCH } = await load()
     db.seed('profiles', { id: USER_A.id, is_admin: true })
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
-    const res = await PATCH(jsonRequest('http://x', {}, { method: 'PATCH' }) as never, params('v1'))
+    expect((await PATCH(jsonRequest('http://x', {}, { method: 'PATCH' }) as never, params('v1'))).status).toBe(400)
+    expect((await PATCH(jsonRequest('http://x', { status: 'paid' }, { method: 'PATCH' }) as never, params('v1'))).status).toBe(400)
+  })
+
+  it('409 on an illegal review transition: a decided claim cannot be reopened or flipped', async () => {
+    const { PATCH } = await load()
+    db.seed('profiles', { id: USER_A.id, is_admin: true })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
+    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'claimed' })
+    const [rejected] = db.seed('verifications', { bet_id: bet.id, status: 'rejected' })
+    for (const status of ['under_review', 'approved', 'documents_received']) {
+      const res = await PATCH(jsonRequest('http://x', { status }, { method: 'PATCH' }) as never, params(rejected.id as string))
+      expect(res.status, status).toBe(409)
+      expect((await res.json()).code).toBe('INVALID_TRANSITION')
+    }
+    expect(rejected.status).toBe('rejected')
+    expect(bet.status).toBe('claimed')
+  })
+
+  it('409 when approving a verification whose bet is no longer claimed', async () => {
+    const { PATCH } = await load()
+    db.seed('profiles', { id: USER_A.id, is_admin: true })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
+    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'miss' })
+    const [v] = db.seed('verifications', { bet_id: bet.id, status: 'under_review' })
+    const res = await PATCH(jsonRequest('http://x', { status: 'approved' }, { method: 'PATCH' }) as never, params(v.id as string))
+    expect(res.status).toBe(409)
+    expect(v.status).toBe('under_review')
+    expect(bet.status).toBe('miss')
+  })
+
+  it('records the acting admin as updated_by on both rows (feeds the audit log)', async () => {
+    const { PATCH } = await load()
+    db.seed('profiles', { id: USER_A.id, is_admin: true })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
+    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'claimed' })
+    const [v] = db.seed('verifications', { bet_id: bet.id, status: 'documents_received' })
+    await PATCH(jsonRequest('http://x', { status: 'approved' }, { method: 'PATCH' }) as never, params(v.id as string))
+    expect(v.updated_by).toBe(USER_A.id)
+    expect(bet.updated_by).toBe(USER_A.id)
+  })
+})
+
+describe('PATCH /api/admin/bets/[betId]', () => {
+  const params = (id: string) => ({ params: Promise.resolve({ betId: id }) })
+  async function loadBets() {
+    vi.resetModules()
+    vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://staging.supabase.co')
+    vi.stubEnv('NODE_ENV', 'production')
+    return import('@/app/api/admin/bets/[betId]/route')
+  }
+
+  it('lets an admin confirm a payout: verified → paid', async () => {
+    const { PATCH } = await loadBets()
+    db.seed('profiles', { id: USER_A.id, is_admin: true })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
+    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'verified' })
+    const res = await PATCH(jsonRequest('http://x', { status: 'paid' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    expect(res.status).toBe(200)
+    expect(bet.status).toBe('paid')
+    expect(bet.updated_by).toBe(USER_A.id)
+  })
+
+  it('refuses every other admin status change, including declaring results or approving directly', async () => {
+    const { PATCH } = await loadBets()
+    db.seed('profiles', { id: USER_A.id, is_admin: true })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
+    const cases: [string, string][] = [['claimed', 'verified'], ['claimed', 'paid'], ['active', 'miss'], ['miss', 'claimed'], ['paid', 'verified'], ['active', 'paid']]
+    for (const [from, to] of cases) {
+      const [bet] = db.seed('bets', { user_id: USER_B.id, status: from })
+      const res = await PATCH(jsonRequest('http://x', { status: to }, { method: 'PATCH' }) as never, params(bet.id as string))
+      expect(res.status, `${from} → ${to}`).toBe(409)
+      expect(bet.status).toBe(from)
+    }
+    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'verified' })
+    const res = await PATCH(jsonRequest('http://x', { declared_result: 'miss' }, { method: 'PATCH' }) as never, params(bet.id as string))
     expect(res.status).toBe(400)
   })
 })

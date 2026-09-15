@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import type { BatchActionResult } from '@/types/admin'
+import { ClaimError, reviewVerification } from '@/lib/claims/state-machine'
+import { log } from '@/lib/observability/log'
 
 export async function POST(request: Request) {
   try {
@@ -45,50 +47,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ results, action, newStatus })
     }
 
-    const adminClient = auth.adminClient
-    const now = new Date().toISOString()
     const results: BatchActionResult[] = []
 
     for (const id of ids) {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const updates: any = {
-          status: newStatus,
-          reviewed_by: auth.user?.id,
-        }
-        if (sanitizedNotes) updates.reviewer_notes = sanitizedNotes
-        if (newStatus === 'approved') updates.verified_at = now
-
-        const { error } = await adminClient
-          .from('verifications')
-          .update(updates)
-          .eq('id', id)
-
-        if (error) {
-          results.push({ id, success: false, error: error.message })
-          continue
-        }
-
-        // If approved, update bet status
-        if (newStatus === 'approved') {
-          const { data: ver } = await adminClient
-            .from('verifications')
-            .select('bet_id')
-            .eq('id', id)
-            .single()
-          if (ver) {
-            await adminClient
-              .from('bets')
-              .update({ status: 'verified' })
-              .eq('id', ver.bet_id)
-          }
-        }
-
+        await reviewVerification(auth.adminClient, { verificationId: String(id), to: newStatus, actorId: auth.user.id, notes: sanitizedNotes })
         results.push({ id, success: true })
-      } catch {
-        results.push({ id, success: false, error: 'Processing failed' })
+      } catch (err) {
+        const message = err instanceof ClaimError ? err.message : 'Processing failed'
+        if (!(err instanceof ClaimError)) log.error('admin.batch_review_failed', err, { path: 'admin_review', verification_id: id })
+        results.push({ id, success: false, error: message })
       }
     }
+    log.info('admin.batch_review', { admin_id: auth.user.id, action, count: ids.length, failed: results.filter(r => !r.success).length })
 
     return NextResponse.json({ results, action, newStatus })
   } catch {

@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { BET_TIERS } from '@/lib/tiers'
 import { verifyPaymentAmount } from '@/lib/payments'
+import { assertNotSuspended, claimErrorResponse, computeExpiresAt } from '@/lib/claims/state-machine'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -28,6 +29,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
+
+    await assertNotSuspended(supabase, user.id)
 
     // ── Age gate: no real-money bet without a passed 18+ verification ──
     const { data: profile } = await supabase
@@ -129,6 +132,8 @@ export async function POST(request: NextRequest) {
         potential_win_pence: paidTier.winZAR   * 100,
         payment_intent_id:   paymentIntentId,
         status:              'active',
+        expires_at:          computeExpiresAt(),
+        updated_by:          user.id,
       })
       .select('id')
       .single()
@@ -159,6 +164,8 @@ export async function POST(request: NextRequest) {
     log.info('bets.create.created', { user_id: user.id, bet_id: bet.id, m_payment_id: paymentIntentId, tier: paidTier.tier })
     return NextResponse.json({ betId: bet.id })
   } catch (err) {
+    const known = claimErrorResponse(err)
+    if (known) return known
     log.error('bets.create.unhandled', err, { path: 'bets_create' })
     const msg = err instanceof Error ? err.message : 'Internal error'
     return NextResponse.json({ error: msg }, { status: 500 })

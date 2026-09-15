@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import { MOCK_ADMIN_BETS } from '@/lib/admin-mock-data'
+import { canTransitionBet, claimErrorResponse, isBetStatus, transitionBet } from '@/lib/claims/state-machine'
+import { log } from '@/lib/observability/log'
 
 export async function GET(
   _request: Request,
@@ -72,37 +74,28 @@ export async function PATCH(
       return NextResponse.json({ success: true, source: 'mock', betId })
     }
 
-    // Whitelist allowed fields and values to prevent mass assignment + invalid states
-    const VALID_STATUSES = ['active', 'miss', 'claimed', 'verified', 'paid'] as const
-    const VALID_RESULTS = ['miss', 'win'] as const
-    const updates: Record<string, unknown> = {}
-
-    if (body.status !== undefined) {
-      if (!(VALID_STATUSES as readonly string[]).includes(body.status)) {
-        return NextResponse.json({ error: 'Invalid status value' }, { status: 400 })
-      }
-      updates.status = body.status
+    // The only direct admin change to a bet is confirming a payout
+    // (verified → paid). Results are set by the player, approval by review;
+    // both are recorded in claim_events with the actor.
+    if (!isBetStatus(body.status)) {
+      return NextResponse.json({ error: 'Invalid status value' }, { status: 400 })
     }
-    if (body.declared_result !== undefined) {
-      if (!(VALID_RESULTS as readonly string[]).includes(body.declared_result)) {
-        return NextResponse.json({ error: 'Invalid declared_result value' }, { status: 400 })
-      }
-      updates.declared_result = body.declared_result
+    const { data: bet } = await auth.adminClient.from('bets').select('id, status').eq('id', betId).maybeSingle()
+    if (!bet) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!isBetStatus(bet.status) || !canTransitionBet('admin', bet.status, body.status)) {
+      return NextResponse.json(
+        { error: `An admin cannot move a bet from ${bet.status} to ${body.status}. Results are declared by the player; approval goes through the verification queue.`, code: 'INVALID_TRANSITION' },
+        { status: 409 },
+      )
     }
 
-    if (Object.keys(updates).length === 0) {
-      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 })
-    }
-
-    const { error } = await auth.adminClient
-      .from('bets')
-      .update(updates)
-      .eq('id', betId)
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
+    await transitionBet(auth.adminClient, { betId, from: bet.status, to: body.status, actor: 'admin', actorId: auth.user.id })
+    log.info('admin.bet_transition', { admin_id: auth.user.id, bet_id: betId, from: bet.status, to: body.status })
     return NextResponse.json({ success: true, betId })
-  } catch {
+  } catch (err) {
+    const known = claimErrorResponse(err)
+    if (known) return known
+    log.error('admin.bet_patch_failed', err, { path: 'admin_review' })
     return NextResponse.json({ error: 'Internal error' }, { status: 500 })
   }
 }

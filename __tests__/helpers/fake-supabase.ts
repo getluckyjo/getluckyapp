@@ -210,6 +210,8 @@ export interface FakeClientOptions {
   /** Force `.from(table)` to fail for a table, to simulate an outage or a missing migration. */
   failTable?: Record<string, PostgrestError>
   signedUploadUrl?: string | null
+  /** Objects `storage.from(bucket).download(path)` can return, keyed by path. */
+  storageObjects?: Record<string, string>
 }
 
 export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
@@ -263,6 +265,11 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           },
           async createSignedUrl(path: string) {
             return { data: { signedUrl: `https://storage.example/signed/${path}` }, error: null }
+          },
+          async download(path: string) {
+            const obj = opts.storageObjects?.[path]
+            if (obj === undefined) return { data: null, error: { message: 'Object not found' } }
+            return { data: new Blob([obj]), error: null }
           },
         }
       },
