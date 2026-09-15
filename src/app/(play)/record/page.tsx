@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import { GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
@@ -256,7 +257,7 @@ export default function RecordPage() {
             {isRecording ? 'Rec' : 'Ready'}
             <span className="rec-timer">{formatTime(seconds)}</span>
           </div>
-          <img src="/brand/logo-corner.svg" alt="Get Lucky" className="rec-sticker" draggable={false} />
+          <Image src="/brand/logo-corner.svg" alt="Get Lucky" width={173} height={133} unoptimized className="rec-sticker" draggable={false} />
         </div>
 
         {/* Camera permission overlay */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Download } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import SearchInput from '@/components/admin/SearchInput'
@@ -14,31 +14,36 @@ export default function AdminBetsPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [tierFilter, setTierFilter] = useState('')
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' })
-      if (search) params.set('search', search)
-      if (statusFilter) params.set('status', statusFilter)
-      if (tierFilter) params.set('tier', tierFilter)
-      const res = await fetch(`/api/admin/bets?${params}`)
-      const json: PaginatedResponse<AdminBetRecord> = await res.json()
-      setData(json.data || [])
-      setTotal(json.total || 0)
-      setTotalPages(json.totalPages || 1)
-    } catch {
-      setData([])
-    } finally {
-      setLoading(false)
-    }
+  // Loading is derived: the page is loading until the query it currently
+  // shows has been answered, so no state is set synchronously in an effect.
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ page: String(page), limit: '20' })
+    if (search) params.set('search', search)
+    if (statusFilter) params.set('status', statusFilter)
+    if (tierFilter) params.set('tier', tierFilter)
+    return params.toString()
   }, [page, search, statusFilter, tierFilter])
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
+  const loading = loadedQuery !== query
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/admin/bets?${query}`)
+      .then(res => res.json() as Promise<PaginatedResponse<AdminBetRecord>>)
+      .then(json => {
+        if (cancelled) return
+        setData(json.data || [])
+        setTotal(json.total || 0)
+        setTotalPages(json.totalPages || 1)
+      })
+      .catch(() => { if (!cancelled) setData([]) })
+      .finally(() => { if (!cancelled) setLoadedQuery(query) })
+    return () => { cancelled = true }
+  }, [query])
 
   const handleExport = async () => {
     const res = await fetch('/api/admin/export', {

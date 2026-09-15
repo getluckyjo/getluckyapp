@@ -79,6 +79,9 @@ export default function DocumentViewer({ certificateUrl, affidavitUrl }: Documen
                 title={activeTab}
               />
             ) : (
+              // A signed storage URL to claim evidence: it must not pass through
+              // the image optimizer (which would cache it), so a plain <img>.
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={currentUrl}
                 alt={activeTab}

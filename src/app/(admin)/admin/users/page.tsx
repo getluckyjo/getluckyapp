@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Download, Eye, Ban, Shield } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
@@ -15,29 +15,34 @@ export default function AdminUsersPage() {
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [suspendedFilter, setSuspendedFilter] = useState('')
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams({ page: String(page), limit: '20' })
-      if (search) params.set('search', search)
-      if (suspendedFilter) params.set('suspended', suspendedFilter)
-      const res = await fetch(`/api/admin/users?${params}`)
-      const json: PaginatedResponse<AdminUserRecord> = await res.json()
-      setData(json.data || [])
-      setTotal(json.total || 0)
-      setTotalPages(json.totalPages || 1)
-    } catch {
-      setData([])
-    } finally {
-      setLoading(false)
-    }
+  // Loading is derived: the page is loading until the query it currently
+  // shows has been answered, so no state is set synchronously in an effect.
+  const query = useMemo(() => {
+    const params = new URLSearchParams({ page: String(page), limit: '20' })
+    if (search) params.set('search', search)
+    if (suspendedFilter) params.set('suspended', suspendedFilter)
+    return params.toString()
   }, [page, search, suspendedFilter])
+  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
+  const loading = loadedQuery !== query
 
-  useEffect(() => { fetchData() }, [fetchData])
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/admin/users?${query}`)
+      .then(res => res.json() as Promise<PaginatedResponse<AdminUserRecord>>)
+      .then(json => {
+        if (cancelled) return
+        setData(json.data || [])
+        setTotal(json.total || 0)
+        setTotalPages(json.totalPages || 1)
+      })
+      .catch(() => { if (!cancelled) setData([]) })
+      .finally(() => { if (!cancelled) setLoadedQuery(query) })
+    return () => { cancelled = true }
+  }, [query])
 
   const handleExport = async () => {
     const res = await fetch('/api/admin/export', {
