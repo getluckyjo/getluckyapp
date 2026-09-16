@@ -20,7 +20,8 @@ with checks(n, name, applied) as (values
   ('016', 'beta',                 to_regclass('public.feedback') is not null),
   ('017', 'course_image_url',     exists (select 1 from information_schema.columns where table_schema='public' and table_name='courses' and column_name='image_url')),
   ('018', 'icons',                to_regclass('public.icon_votes') is not null),
-  ('019', 'top100_courses',       exists (select 1 from public.courses where lower(name) = 'st francis links' and is_partner))
+  ('019', 'top100_courses',       exists (select 1 from public.courses where lower(name) = 'st francis links' and is_partner)),
+  ('020', 'course_photos',        exists (select 1 from public.courses where lower(name) = 'st francis links' and image_url is not null))
 )
 select n, name, case when applied then 'applied' else 'MISSING' end as status
 from checks order by n;
