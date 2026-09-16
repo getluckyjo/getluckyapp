@@ -11,7 +11,7 @@ import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import { useAuth } from '@/context/AuthContext'
 import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
-import { ICONS_EVENT, TEAM_LABEL, iconInitials, withShares, type IconTeam, type PublicIcon } from '@/lib/icons'
+import { ICONS_EVENT, TEAM_LABEL, iconInitials, withStandings, type IconTeam, type PublicIcon } from '@/lib/icons'
 
 interface Payload {
   event: typeof ICONS_EVENT
@@ -25,8 +25,10 @@ const TEAMS: IconTeam[] = ['rsa', 'world']
 /**
  * Icons — "Back an Icon". Icons Cup South Africa, Team South Africa vs Team
  * World at The Links at Fancourt. The field by team, how many golfers back
- * each Icon, and the caller's own pick. One pick per golfer, changeable.
- * Prize copy comes from src/lib/icons.ts, one place to change it.
+ * each Icon (a count, with a bar against the favourite: one pick per golfer
+ * makes a percentage misleading), and the caller's own pick. One pick per
+ * golfer, changeable. Prize copy comes from src/lib/icons.ts, one place to
+ * change it.
  */
 export default function IconsPage() {
   const router = useRouter()
@@ -54,12 +56,12 @@ export default function IconsPage() {
     setSaving(iconId)
     setError(null)
     const previous = data
-    // Optimistic: move the pick, recount the shares.
+    // Optimistic: move the pick, redraw the standings.
     const moved = data.icons.map(i => ({
       ...i,
       votes: i.votes + (i.id === iconId ? 1 : 0) - (i.id === data.myVote ? 1 : 0),
     }))
-    setData({ ...data, icons: withShares(moved), myVote: iconId, totalVotes: data.totalVotes + (data.myVote ? 0 : 1) })
+    setData({ ...data, icons: withStandings(moved), myVote: iconId, totalVotes: data.totalVotes + (data.myVote ? 0 : 1) })
     try {
       const res = await fetch('/api/icons/vote', {
         method: 'POST',
@@ -98,12 +100,13 @@ export default function IconsPage() {
           <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Back an\nIcon'}</h1>
           <p className="vf-sub">
             {ICONS_EVENT.format} · {ICONS_EVENT.venue} · {ICONS_EVENT.dates}.
-            {' '}Which Icon holes it on the signature par 3? Pick one. You can change your mind until the first tee.
+            {' '}Which Icon makes a hole-in-one on {ICONS_EVENT.holeName}? Pick one. You can change your mind until the first tee.
           </p>
 
           <div className="ic-prize">
             <span className="ic-prize-head">{ICONS_EVENT.prizeHeadline}</span>
             <span className="ic-prize-line">{ICONS_EVENT.fanPrizeLine}</span>
+            <span className="ic-prize-line ic-prize-line--icon">{ICONS_EVENT.iconPrizeLine}</span>
             <span className="ic-prize-terms">{ICONS_EVENT.prizeTerms}</span>
           </div>
 
@@ -111,6 +114,9 @@ export default function IconsPage() {
             <div className={`ic-mine is-${mine.team}`}>
               <span className="ic-mine-label">You&rsquo;re backing</span>
               <span className="ic-mine-name">{mine.name}</span>
+              <span className="ic-mine-prize">
+                If {mine.name} holes it on {ICONS_EVENT.holeName}, you stand a chance to win one of three R1 million prizes.
+              </span>
             </div>
           )}
 
@@ -164,13 +170,14 @@ export default function IconsPage() {
                           <span className="ic-name">
                             {icon.name}
                             {icon.isCaptain && <span className="ic-captain">Captain</span>}
+                            {icon.isLeader && <span className="ic-lead">Fan favourite</span>}
                           </span>
                           {icon.tagline && <span className="ic-tag">{icon.tagline}</span>}
-                          <span className="ic-bar" aria-hidden><span className="ic-bar-fill" style={{ width: `${icon.percent}%` }} /></span>
+                          <span className="ic-bar" aria-hidden><span className="ic-bar-fill" style={{ width: `${icon.share}%` }} /></span>
                         </span>
                         <span className="ic-pct">
-                          <span className="ic-pct-num">{icon.percent}%</span>
-                          <span className="ic-pct-sub">{picked ? 'Your pick' : `${icon.votes} backing`}</span>
+                          <span className="ic-pct-num">{icon.votes}</span>
+                          <span className="ic-pct-sub">{picked ? 'Your pick' : icon.votes === 1 ? 'golfer backing' : 'golfers backing'}</span>
                         </span>
                       </button>
                     )

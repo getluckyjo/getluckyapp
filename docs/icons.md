@@ -10,12 +10,21 @@ Get Lucky sponsors Icons Cup South Africa (Team South Africa vs Team
 World, The Links at Fancourt, 11–13 December 2026). The event is public
 (icons-series.com), so the screen shows the launch graphic, names the
 event and the teams, marks the captains and carries a sponsor line. On
-16 September 2026 Johannes approved the prize copy too: a green card
-under the intro reads "R10 million hole-in-one prize", "A hole-in-one
-from your choice could win you R1 million", and "Terms and conditions
-apply". All of that lives in `src/lib/icons.ts`. The screen still does
-not name the insurer or the charity split. Terms for the fan prize need
-to exist somewhere a golfer can read them before the event.
+16 September 2026 Johannes set the prize copy: a green card under the
+intro reads "Three R1 million fan prizes", "Back an Icon. If your Icon
+makes a hole-in-one on the Get Lucky hole, you stand a chance to win one
+of three R1 million prizes", "The Icon who holes it wins the R10 million
+hole-in-one prize", and "Terms and conditions apply". The "You're
+backing" card repeats the fan line with the Icon's name so the stake of
+the pick is clear at the moment of picking. All of that lives in
+`src/lib/icons.ts`. The screen still does not name the insurer or the
+charity split. Terms for the fan prize need to exist somewhere a golfer
+can read them before the event.
+
+Standings show a count of golfers backing each Icon, with a bar drawn
+against the most-backed Icon and a "Fan favourite" tag on the leader.
+It is one pick per golfer, so a percentage of picks would mislead
+(three picks would read as 67%).
 
 Player photos need rights; the seed ships without them and the cards show
 initials. Add a photo URL in the admin once rights are confirmed.

@@ -2031,6 +2031,7 @@ button, [role="button"], [role="tab"] {
 }
 .ic-mine-label { font-family: 'Inter', sans-serif; font-size: var(--text-sm); opacity: 0.8; }
 .ic-mine-name { font-family: var(--font-heading); font-size: 20px; text-transform: uppercase; line-height: 1; color: var(--lime); }
+.ic-mine-prize { flex-basis: 100%; font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.4; margin-top: 4px; }
 .ic-signin { margin: 0 0 14px; }
 .ic-error { font-family: 'Inter', sans-serif; font-size: var(--text-sm); color: #b00020; margin: 0 0 12px; }
 .ic-list { display: flex; flex-direction: column; gap: 10px; }
@@ -2085,7 +2086,12 @@ button, [role="button"], [role="tab"] {
 }
 .ic-prize-head { font-family: var(--font-heading); font-size: clamp(20px, 6vw, 24px); text-transform: uppercase; line-height: 1.05; color: var(--lime); }
 .ic-prize-line { font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.4; }
+.ic-prize-line--icon { font-size: var(--text-sm); opacity: 0.85; }
 .ic-prize-terms { font-family: 'Inter', sans-serif; font-size: 11px; opacity: 0.7; margin-top: 2px; }
+.ic-lead {
+  display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 999px; vertical-align: middle;
+  background: var(--lime); color: var(--green); font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+}
 
 /* Courses listed but not yet open for the challenge (migration 019). */
 .cs-card.is-soon .cs-thumb, .cs-card.is-soon .cs-name, .cs-card.is-soon .cs-loc, .cs-card.is-soon .cs-meta { opacity: 0.55; }

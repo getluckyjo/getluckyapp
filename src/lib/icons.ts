@@ -12,10 +12,14 @@ export const ICONS_EVENT = {
   format: 'South Africa vs World',
   venue: 'The Links at Fancourt',
   dates: '11–13 December 2026',
+  /** The hole the Icons play for the prize. */
+  holeName: 'the Get Lucky hole',
   /** The headline on the prize card. */
-  prizeHeadline: 'R10 million hole-in-one prize',
+  prizeHeadline: 'Three R1 million fan prizes',
   /** What backing an Icon can mean for the golfer. */
-  fanPrizeLine: 'A hole-in-one from your choice could win you R1 million.',
+  fanPrizeLine: 'Back an Icon. If your Icon makes a hole-in-one on the Get Lucky hole, you stand a chance to win one of three R1 million prizes.',
+  /** What the Icon plays for. */
+  iconPrizeLine: 'The Icon who holes it wins the R10 million hole-in-one prize.',
   /** Small print under the prize card. */
   prizeTerms: 'Terms and conditions apply.',
   sponsorLine: 'Get Lucky is a proud sponsor of Icons Cup South Africa.',
@@ -37,14 +41,25 @@ export interface PublicIcon {
   tagline: string | null
   photoUrl: string | null
   votes: number
-  /** Share of all picks, 0–100, rounded; 0 when nobody has picked yet. */
-  percent: number
+  /** Bar length, 0–100: this Icon's backers against the most-backed Icon's. */
+  share: number
+  /** Has the most backers (ties share it); false until anyone has picked. */
+  isLeader: boolean
 }
 
-/** Rounded shares that still add up sensibly for a bar per Icon. */
-export function withShares<T extends { votes: number }>(rows: T[]): (T & { percent: number })[] {
-  const total = rows.reduce((s, r) => s + r.votes, 0)
-  return rows.map(r => ({ ...r, percent: total ? Math.round((r.votes / total) * 100) : 0 }))
+/**
+ * Standings for the list. One pick per golfer, so the honest number is how
+ * many golfers back each Icon, not a percentage: three picks would read as
+ * "67%" and mislead. The bar is drawn against the leader so the favourite
+ * is full width and the rest are in proportion.
+ */
+export function withStandings<T extends { votes: number }>(rows: T[]): (T & { share: number; isLeader: boolean })[] {
+  const top = rows.reduce((m, r) => Math.max(m, r.votes), 0)
+  return rows.map(r => ({
+    ...r,
+    share: top ? Math.round((r.votes / top) * 100) : 0,
+    isLeader: top > 0 && r.votes === top,
+  }))
 }
 
 /** Initials for the avatar when an Icon has no photo: "Ernie Els" → "EE". */
