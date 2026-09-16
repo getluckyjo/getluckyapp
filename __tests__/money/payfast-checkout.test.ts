@@ -41,9 +41,12 @@ function asUser(user: FakeUser | null) {
   serverClient.createClient.mockResolvedValue(createFakeClient(db, { user }))
 }
 
-function seedTarget(over: { active?: boolean; partner?: boolean } = {}) {
+function seedTarget(over: { active?: boolean; partner?: boolean; par?: number; metres?: number | null } = {}) {
   db.seed('courses', { id: COURSE_ID, name: 'Leopard Creek', is_partner: over.partner ?? true }, { id: OTHER_COURSE, name: 'Elsewhere', is_partner: true })
-  db.seed('holes', { id: HOLE_ID, course_id: COURSE_ID, hole_number: 4, is_active: over.active ?? true })
+  db.seed('holes', {
+    id: HOLE_ID, course_id: COURSE_ID, hole_number: 4, is_active: over.active ?? true,
+    par: over.par ?? 3, distance_metres: over.metres === undefined ? 165 : over.metres,
+  })
 }
 
 const checkout = (body: unknown) => POST(jsonRequest('http://x/api/payments/payfast', body) as never)
@@ -138,6 +141,23 @@ describe('request gates', () => {
   it('400 HOLE_INACTIVE for a hole that is switched off', async () => {
     asUser(USER_A); seedTarget({ active: false })
     expect((await (await checkout(good)).json()).code).toBe('HOLE_INACTIVE')
+  })
+
+  it('400 HOLE_NOT_ELIGIBLE for a par 3 shorter than 140m, a par 4, or a hole with no distance', async () => {
+    asUser(USER_A); seedTarget({ metres: 139 })
+    const short = await (await checkout(good)).json()
+    expect(short.code).toBe('HOLE_NOT_ELIGIBLE')
+    expect(short.error).toContain('140m')
+    seedTarget({ par: 4, metres: 320 })
+    expect((await (await checkout(good)).json()).code).toBe('HOLE_NOT_ELIGIBLE')
+    seedTarget({ metres: null })
+    expect((await (await checkout(good)).json()).code).toBe('HOLE_NOT_ELIGIBLE')
+  })
+
+  it('accepts a par 3 of exactly 140m', async () => {
+    asUser(USER_A); seedTarget({ metres: 140 })
+    const res = await checkout(good)
+    expect(res.status).toBe(200)
   })
 
   it('400 COURSE_NOT_PARTNER for a course without an agreement', async () => {

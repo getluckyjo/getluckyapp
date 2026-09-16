@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { ArrowLeft, Save, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
 import type { CourseRow, HoleRow } from '@/types/admin'
+import { MIN_HOLE_METRES, holeUnavailableReason } from '@/lib/holes'
 
 const REGIONS = ['Western Cape', 'Gauteng', 'KwaZulu-Natal', 'Mpumalanga', 'North West', 'Eastern Cape', 'Free State', 'Limpopo', 'Northern Cape']
 
@@ -308,7 +309,14 @@ export default function AdminEditCoursePage() {
                 <tr key={hole.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
                   <td style={{ padding: '8px 10px', fontWeight: 500, color: '#111' }}>Hole {hole.hole_number}</td>
                   <td style={{ padding: '8px 10px', textAlign: 'center', color: '#666' }}>{hole.par}</td>
-                  <td style={{ padding: '8px 10px', textAlign: 'center', color: '#666' }}>{hole.distance_metres ?? '—'}</td>
+                  <td style={{ padding: '8px 10px', textAlign: 'center', color: '#666' }}>
+                    {hole.distance_metres ?? '—'}
+                    {holeUnavailableReason(hole) && (
+                      <span title={`The challenge is played on par 3s of ${MIN_HOLE_METRES}m or more; this hole is listed but cannot be played.`} style={{ display: 'block', fontSize: 11, color: '#b45309' }}>
+                        {holeUnavailableReason(hole)}
+                      </span>
+                    )}
+                  </td>
                   <td style={{ padding: '8px 10px', textAlign: 'center' }}>
                     <button
                       onClick={() => toggleHoleActive(hole.id, hole.is_active)}

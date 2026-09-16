@@ -925,6 +925,7 @@ body {
 }
 .cs-hole small { font-weight: 500; opacity: 0.7; font-size: 11px; }
 .cs-hole.is-active { background: var(--lime); border-color: var(--green); }
+.cs-hole:disabled { opacity: 0.45; cursor: not-allowed; }
 
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
