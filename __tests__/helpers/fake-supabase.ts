@@ -91,7 +91,7 @@ export class Builder implements PromiseLike<Result> {
   private singleMode: 'one' | 'maybe' | null = null
   private limitN: number | null = null
   private rangeN: [number, number] | null = null
-  private orderBy: { col: string; asc: boolean } | null = null
+  private orderBy: { col: string; asc: boolean }[] = []
   private returning = false
 
   constructor(private db: FakeDb, private table: string) {}
@@ -108,7 +108,9 @@ export class Builder implements PromiseLike<Result> {
   }
   delete() { this.op = 'delete'; return this }
 
-  eq(col: string, val: unknown) { this.filters.push(r => r[col] === val); return this }
+  // A filter on an embedded resource ('holes.is_active') shapes the child
+  // rows in PostgREST; the fake does not model children, so it is a no-op.
+  eq(col: string, val: unknown) { if (!col.includes('.')) this.filters.push(r => r[col] === val); return this }
   neq(col: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
   in(col: string, vals: unknown[]) { this.filters.push(r => vals.includes(r[col])); return this }
   is(col: string, val: unknown) { this.filters.push(r => (val === null ? r[col] == null : r[col] === val)); return this }
@@ -141,7 +143,7 @@ export class Builder implements PromiseLike<Result> {
     this.filters.push(r => conds.some(c => c(r)))
     return this
   }
-  order(col: string, opts?: { ascending?: boolean }) { this.orderBy = { col, asc: opts?.ascending !== false }; return this }
+  order(col: string, opts?: { ascending?: boolean }) { this.orderBy.push({ col, asc: opts?.ascending !== false }); return this }
   limit(n: number) { this.limitN = n; return this }
   range(a: number, b: number) { this.rangeN = [a, b]; return this }
   maybeSingle() { this.singleMode = 'maybe'; return this }
@@ -149,11 +151,18 @@ export class Builder implements PromiseLike<Result> {
 
   private matching(): Row[] {
     let rows = this.db.rows(this.table).filter(r => this.filters.every(f => f(r)))
-    if (this.orderBy) {
-      const { col, asc } = this.orderBy
+    if (this.orderBy.length) {
       const cmp = (x: unknown, y: unknown) =>
-        typeof x === 'number' && typeof y === 'number' ? x - y : String(x) < String(y) ? -1 : String(x) > String(y) ? 1 : 0
-      rows = [...rows].sort((a, b) => cmp(a[col], b[col]) * (asc ? 1 : -1))
+        typeof x === 'number' && typeof y === 'number' ? x - y
+        : typeof x === 'boolean' && typeof y === 'boolean' ? Number(x) - Number(y)
+        : String(x) < String(y) ? -1 : String(x) > String(y) ? 1 : 0
+      rows = [...rows].sort((a, b) => {
+        for (const { col, asc } of this.orderBy) {
+          const c = cmp(a[col], b[col]) * (asc ? 1 : -1)
+          if (c !== 0) return c
+        }
+        return 0
+      })
     }
     if (this.rangeN) rows = rows.slice(this.rangeN[0], this.rangeN[1] + 1)
     if (this.limitN != null) rows = rows.slice(0, this.limitN)

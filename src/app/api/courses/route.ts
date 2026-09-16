@@ -8,7 +8,10 @@ const CACHE_HEADERS = {
 }
 
 /**
- * GET /api/courses — partner courses with their active par-3 holes.
+ * GET /api/courses — every listed course with its active par-3 holes,
+ * playable ones first. Migration 019 lists the Top 100 and opens them all
+ * to play; a course an admin closes (is_partner off) is still listed, as
+ * "coming soon", and checkout refuses it.
  *
  * The 1,180-line seed file that used to serve as a fallback is gone: its ids
  * were not UUIDs and never survived checkout, and its images were hot-linked
@@ -21,8 +24,8 @@ export async function GET() {
     const { data: courses, error } = await supabase
       .from('courses')
       .select('*, holes(id, hole_number, par, distance_metres)')
-      .eq('is_partner', true)
       .eq('holes.is_active', true)
+      .order('is_partner', { ascending: false })
       .order('name')
     if (error) throw error
     return NextResponse.json({ courses: courses ?? [], source: 'database' }, { headers: CACHE_HEADERS })
