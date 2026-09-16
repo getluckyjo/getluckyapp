@@ -6,7 +6,7 @@ import { parseAmountToCents, verifyPaymentAmount } from '@/lib/payments'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { resolvePayfastConfig, type PayfastConfig } from '@/lib/payfast/config'
-import { isFromPayfast } from '@/lib/payfast/ips'
+import { isFromPayfastLive } from '@/lib/payfast/ips'
 
 /** How long we give PayFast's validate endpoint before failing closed. */
 const VALIDATE_TIMEOUT_MS = 10_000
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       const forwardedFor = request.headers.get('x-forwarded-for') ?? ''
       const realIp = request.headers.get('x-real-ip') ?? ''
       const allIps = [...forwardedFor.split(',').map(ip => ip.trim()), realIp.trim()].filter(Boolean)
-      if (!isFromPayfast(allIps)) {
+      if (!(await isFromPayfastLive(allIps))) {
         log.warn('payfast.itn.rejected_ip', { ips: allIps })
         return new NextResponse('Forbidden', { status: 403 })
       }

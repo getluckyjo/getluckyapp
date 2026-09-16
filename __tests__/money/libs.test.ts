@@ -3,10 +3,10 @@
  * PayFast address list, CSV escaping, display formatting. These import the
  * real modules; the previous version of this file tested private copies.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { BET_TIERS, TIER_STAKE_CENTS, TIER_WIN_CENTS } from '@/lib/tiers'
 import { verifyPaymentAmount, parseAmountToCents, expectedStakeCents } from '@/lib/payments'
-import { PAYFAST_IPS, isFromPayfast } from '@/lib/payfast/ips'
+import { PAYFAST_IPS, isFromPayfast, isFromPayfastLive, resetResolvedPayfastIps } from '@/lib/payfast/ips'
 import { toCSV } from '@/lib/admin/csv'
 import { formatRand, formatRandFromCents, formatZAR, getInitials, timeAgo } from '@/lib/format'
 
@@ -50,9 +50,9 @@ describe('payment amounts', () => {
 })
 
 describe('PayFast addresses', () => {
-  it('covers the five published ranges (81 addresses) and nothing else', () => {
-    expect(PAYFAST_IPS.size).toBe(81)
-    for (const ip of ['197.97.145.144', '197.97.145.159', '41.74.179.192', '41.74.179.223', '102.216.36.0', '102.216.36.15', '102.216.36.128', '102.216.36.143', '144.126.193.139']) {
+  it('covers the five published ranges plus the observed w1w address (82) and nothing else', () => {
+    expect(PAYFAST_IPS.size).toBe(82)
+    for (const ip of ['197.97.145.144', '197.97.145.159', '41.74.179.192', '41.74.179.223', '102.216.36.0', '102.216.36.15', '102.216.36.128', '102.216.36.143', '144.126.193.139', '13.245.74.88']) {
       expect(PAYFAST_IPS.has(ip), ip).toBe(true)
     }
     for (const ip of ['197.97.145.143', '197.97.145.160', '41.74.179.191', '41.74.179.224', '102.216.36.16', '102.216.36.127', '1.2.3.4', '10.0.0.1']) {
@@ -65,6 +65,28 @@ describe('PayFast addresses', () => {
     expect(isFromPayfast(['76.76.21.21', ' 41.74.179.200 '])).toBe(true)
     expect(isFromPayfast(['203.0.113.10'])).toBe(false)
     expect(isFromPayfast([])).toBe(false)
+  })
+
+  it('also accepts an address PayFast\'s hostnames resolve to, and caches the lookup', async () => {
+    resetResolvedPayfastIps()
+    const resolver = vi.fn(async (host: string) => (host === 'w1w.payfast.co.za' ? ['198.51.100.7'] : []))
+    expect(await isFromPayfastLive(['198.51.100.7'], resolver)).toBe(true)
+    expect(await isFromPayfastLive(['198.51.100.8'], resolver)).toBe(false)
+    expect(resolver).toHaveBeenCalledTimes(4)
+    // A listed address never needs the lookup.
+    expect(await isFromPayfastLive(['197.97.145.150'], resolver)).toBe(true)
+    expect(resolver).toHaveBeenCalledTimes(4)
+    resetResolvedPayfastIps()
+  })
+
+  it('falls back to the static list when resolution fails, and never under vitest without a resolver', async () => {
+    resetResolvedPayfastIps()
+    const failing = vi.fn(async () => { throw new Error('ENOTFOUND') })
+    expect(await isFromPayfastLive(['203.0.113.10'], failing)).toBe(false)
+    expect(await isFromPayfastLive(['41.74.179.200'], failing)).toBe(true)
+    resetResolvedPayfastIps()
+    expect(await isFromPayfastLive(['203.0.113.10'])).toBe(false)
+    resetResolvedPayfastIps()
   })
 })
 

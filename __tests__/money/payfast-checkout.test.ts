@@ -171,7 +171,7 @@ describe('the signed checkout', () => {
     expect(formFields.custom_str4).toBe('tier_2')
     expect(formFields.m_payment_id).toBe(m_payment_id)
     expect(formFields.notify_url).toBe('https://preview.example.com/api/payments/payfast/notify')
-    expect(formFields.return_url).toBe('https://preview.example.com/payment-return')
+    expect(formFields.return_url).toBe(`https://preview.example.com/payment-return?ref=${formFields.m_payment_id}`)
     expect(sandbox).toBe(true)
     expect(redirectUrl).toBe('https://sandbox.payfast.co.za/eng/process')
 

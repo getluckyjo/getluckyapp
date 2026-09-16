@@ -37,7 +37,10 @@ npm test              # vitest: route handlers against an in-memory Supabase fak
 npm run build
 ```
 
-Against the staging Supabase project (needs the `STAGING_*` variables):
+Against a staging Supabase project (needs the `STAGING_*` variables). There
+is no staging project at present (`docs/launch-checklist.md`, decisions),
+so these are not run; they stay because every one of them refuses the
+production ref, which is the safe default if one is created later:
 
 ```bash
 npm run staging:bootstrap    # apply supabase/migrations/*.sql, idempotent

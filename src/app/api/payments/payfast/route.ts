@@ -119,7 +119,11 @@ export async function POST(request: NextRequest) {
     const data: Record<string, string> = {
       merchant_id:   config.merchantId,
       merchant_key:  config.merchantKey,
-      return_url:    `${config.siteUrl}/payment-return`,
+      // The reference rides on the return URL so the return page can finish
+      // the purchase even when the browser that comes back is not the one
+      // that left (an installed iOS app hands PayFast to an in-app browser
+      // with its own storage; localStorage.pf_pending is missing there).
+      return_url:    `${config.siteUrl}/payment-return?ref=${mPaymentId}`,
       cancel_url:    `${config.siteUrl}/choose-stake`,
       notify_url:    `${config.siteUrl}/api/payments/payfast/notify`,
       name_first:    firstName,

@@ -62,7 +62,12 @@ After (paste output)
 
 ## Timings
 
-_Not captured yet._ The script now has a second way in for environments
+_Not captured, by decision (16 September 2026): no staging project, and
+the script refuses production._ The migration's indexes are in place; the
+admin pages are watched during the first event instead. If a staging project is
+ever created, the procedure below still applies.
+
+The script has a second way in for environments
 that cannot open a Postgres connection: with `STAGING_DATABASE_URL` unset
 and `STAGING_PROJECT_REF` set, each `EXPLAIN` goes through the Supabase
 management API (`POST /v1/projects/<ref>/database/query`; see
