@@ -13,12 +13,13 @@ event and the teams, marks the captains and carries a sponsor line. On
 16 September 2026 Johannes set the prize copy: a green card under the
 intro reads "Three R1 million fan prizes", "Back an Icon. If your Icon
 makes a hole-in-one on the Get Lucky hole, you stand a chance to win one
-of three R1 million prizes", "The Icon who holes it wins the R10 million
-hole-in-one prize", and "Terms and conditions apply". The "You're
+of three R1 million prizes", "The Icon who holes it wins R4 million, and
+R3 million goes to a charity they support", and "Terms and conditions
+apply" (R10 million in all: three fan prizes, the Icon, the charity). The "You're
 backing" card repeats the fan line with the Icon's name so the stake of
 the pick is clear at the moment of picking. All of that lives in
 `src/lib/icons.ts`. The screen still does not name the insurer or the
-charity split. Terms for the fan prize need to exist somewhere a golfer
+charity name. Terms for the fan prize need to exist somewhere a golfer
 can read them before the event.
 
 Standings show a count of golfers backing each Icon, with a bar drawn
