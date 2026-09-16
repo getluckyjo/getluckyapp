@@ -17,7 +17,8 @@ with checks(n, name, applied) as (values
   ('013', 'risk_review',          exists (select 1 from information_schema.columns where table_schema='public' and table_name='bets' and column_name='risk_score')),
   ('014', 'confirmation',         to_regclass('public.course_contacts') is not null),
   ('015', 'outbox',               to_regclass('public.outbox') is not null),
-  ('016', 'beta',                 to_regclass('public.feedback') is not null)
+  ('016', 'beta',                 to_regclass('public.feedback') is not null),
+  ('017', 'course_image_url',     exists (select 1 from information_schema.columns where table_schema='public' and table_name='courses' and column_name='image_url'))
 )
 select n, name, case when applied then 'applied' else 'MISSING' end as status
 from checks order by n;

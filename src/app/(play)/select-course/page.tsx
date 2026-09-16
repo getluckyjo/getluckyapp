@@ -10,7 +10,7 @@ import BottomTabBar from '@/components/layout/BottomTabBar'
 import { SearchIcon, GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 import type { Course, Hole } from '@/context/BetContext'
-import { localCoursePhoto } from '@/lib/course-photo'
+import { coursePhotoCandidates } from '@/lib/course-photo'
 
 interface ApiHole {
   id: string
@@ -52,11 +52,16 @@ function toContextHole(h: ApiHole, courseId: string): Hole {
   }
 }
 
-/** Our own course photo, else the seed's, else the brand-green tile. */
+/**
+ * Our own course photo, else the original on satop100courses.com, else the
+ * database's URL, else the brand-green tile. A source that fails to load
+ * hands over to the next one instead of blanking the card.
+ */
 function CourseThumb({ name, src }: { name: string; src: string | null }) {
-  const [failed, setFailed] = useState(false)
-  const photo = localCoursePhoto(name) ?? src
-  if (!photo || failed) {
+  const [failedCount, setFailedCount] = useState(0)
+  const candidates = coursePhotoCandidates(name, src)
+  const photo = candidates[failedCount]
+  if (!photo) {
     return (
       <div className="cs-thumb" aria-hidden>
         <GolfBallIcon size={30} ball="rgba(255,255,255,0.9)" />
@@ -65,7 +70,7 @@ function CourseThumb({ name, src }: { name: string; src: string | null }) {
   }
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src={photo} alt="" className="cs-thumb" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+    <img key={photo} src={photo} alt="" className="cs-thumb" loading="lazy" decoding="async" onError={() => setFailedCount(n => n + 1)} />
   )
 }
 

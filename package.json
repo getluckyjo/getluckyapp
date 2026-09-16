@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "check:design": "node scripts/check-design-package.mjs",
     "pwa:assets": "node scripts/pwa/generate-assets.mjs",
+    "photos:fetch": "tsx scripts/fetch-course-photos.mts",
     "test:staging": "vitest run __tests__/staging",
     "typecheck": "tsc --noEmit",
     "staging:bootstrap": "node scripts/staging/bootstrap.mjs",
