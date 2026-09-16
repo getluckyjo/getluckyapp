@@ -19,7 +19,7 @@ export function betaGateEnabled(env: Record<string, string | undefined> = proces
 
 /** Routes that stay reachable with the gate on: sign-in, marketing, legal, the gate itself, and plumbing. */
 const OPEN_PREFIXES = [
-  '/api/', '/admin', '/auth', '/beta', '/splash', '/onboarding', '/terms', '/privacy', '/responsible-play',
+  '/api/', '/admin', '/auth', '/beta', '/splash', '/onboarding', '/terms', '/privacy', '/responsible-play', '/install',
   '/witness', '/~offline', '/serwist', '/manifest.webmanifest', '/monitoring',
   // A tester already mid-payment must be able to come back from PayFast.
   '/payment-return', '/age-check', '/welcome',
