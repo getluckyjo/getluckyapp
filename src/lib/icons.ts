@@ -19,7 +19,7 @@ export const ICONS_EVENT = {
   /** What backing an Icon can mean for the golfer. */
   fanPrizeLine: 'Back an Icon. If your Icon makes a hole-in-one on the Get Lucky hole, you stand a chance to win one of three R1 million prizes.',
   /** What the Icon plays for. */
-  iconPrizeLine: 'The Icon who holes it wins the R10 million hole-in-one prize.',
+  iconPrizeLine: 'The Icon who holes it wins R4 million, and R3 million goes to a charity they support.',
   /** Small print under the prize card. */
   prizeTerms: 'Terms and conditions apply.',
   sponsorLine: 'Get Lucky is a proud sponsor of Icons Cup South Africa.',
