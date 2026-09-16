@@ -64,7 +64,7 @@ After (paste output)
 
 _Not captured, by decision (16 September 2026): no staging project, and
 the script refuses production._ The migration's indexes are in place; the
-admin pages are watched during the beta instead. If a staging project is
+admin pages are watched during the first event instead. If a staging project is
 ever created, the procedure below still applies.
 
 The script has a second way in for environments

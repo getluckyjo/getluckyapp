@@ -85,9 +85,8 @@ Errors of any kind other than 202 on `bet_create` are findings.
 ## Results
 
 _Not run, by decision (16 September 2026)._ There is no staging project
-and the script refuses production, which is left as is. The closed beta on
-the production URL (`docs/launch-checklist.md` §5) stands in for it at the
-volume that matters. If a staging project is ever created, run the block
+and the script refuses production, which is left as is. The first event day
+is the load test at the volume that matters (`docs/launch-checklist.md` §5). If a staging project is ever created, run the block
 above unchanged and paste the table here.
 
 **Attempt of 2026-09-15 (cloud session, environment "Get Lucky").** Not

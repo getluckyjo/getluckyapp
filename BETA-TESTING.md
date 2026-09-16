@@ -1,23 +1,16 @@
-# Get Lucky — closed beta testing guide
+# Get Lucky — testing guide for the first golfers
 
-For the golfers testing the app before launch, and for whoever is running
-the beta. Everything here works on a normal phone with no app store.
+The launch is open: there is no closed beta and no invite list. This guide
+is for the first small group of golfers Johannes asks to try the app, and
+for Johannes running that. Everything here works on a normal phone with no
+app store. The invite-code and gate mechanics further down exist in the
+code and stay off unless a closed test is ever wanted.
 
 ## Before you start
 
-You need an invite. That is either:
-
-- an **email address** that has been added to the tester list (you sign in with it), or
-- an **invite code** that looks like `GL-7K4M9P2X` (you type it once on the first screen).
-
-The app runs at `https://www.getluckyholeinone.com`, the same address it
-will have at launch, so what you install now is what you keep.
-
-**Entries in the beta are real money.** A bet costs what it says on the
-screen (use the R50 tier) and goes through the real PayFast checkout with
-your own card. Johannes refunds every beta entry from the PayFast dashboard
-within a few days. A hole-in-one in the beta is a real claim, so play it
-straight.
+The app runs at `https://www.getluckyholeinone.com`. Entries are real:
+a bet costs what it says on the screen and goes through the real PayFast
+checkout. A hole-in-one is a real claim, so play it straight.
 
 ## Install on Android (Chrome)
 
@@ -62,7 +55,7 @@ Do these in order once, then use the app as you normally would.
 
 ## How to send feedback
 
-Tap the small round **chat button** at the bottom right of any screen
+If the build has the feedback button switched on: tap the small round **chat button** at the bottom right of any screen
 (it is not on the camera screen). Write what you were doing and what you
 expected. The message goes straight to Johannes with the screen you were
 on, your phone model, and the build number, so you do not need to add
@@ -78,7 +71,7 @@ your phone model and a screenshot.
 - A screenshot or screen recording if you can.
 - The build number: Account screen, at the very bottom ("build abc1234 · 16 Sep 2026").
 
-## Known limitations in this beta
+## Known limitations
 
 - **iPhone: Chrome and in-app browsers cannot install.** Safari only.
 - **No push notifications yet.** Claim updates arrive by email. Push is planned after the beta (see `docs/pwa-push.md`).
@@ -86,9 +79,9 @@ your phone model and a screenshot.
 - **Video upload on a weak signal** can take a few minutes. Keep the app in the foreground until the claim screen says it is submitted.
 - **The desktop view** shows a phone-shaped frame; that is by design for reviewers, not a bug.
 
-## For the person running the beta
+## For the person running the first group (and the gate, if ever used)
 
-- **The beta runs on production with real money.** There is no staging project and previews cannot start without one, so the beta is the live site behind the gate, with the live PayFast account. Refund each tester's entry from the PayFast dashboard after their session; `/admin/bets` shows the `pf_payment_id` to match it against. Tell Indwe that beta entries are real entries.
+- **The launch is open; the gate is not used.** The first group plays on the live site like anyone else. Everything below about the gate and invite codes is there if a closed test is ever wanted.
 - **Both beta features are off by default.** The app launches looking launched: no gate, no feedback button. Turn them on only for a closed test.
 - **Turn the gate on**: Vercel → project → Settings → Environment Variables → `BETA_GATE` = `on` (Production) → Redeploy. Add your own email at `/admin/beta` **before** you do this; admins are not exempt.
 - **Show the feedback button**: `NEXT_PUBLIC_FEEDBACK` = `on`, then redeploy (it is baked in at build time).
