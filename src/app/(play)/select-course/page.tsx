@@ -32,6 +32,9 @@ interface ApiCourse {
   holes: ApiHole[]
 }
 
+/** Chip that narrows the list to courses open for the challenge. */
+const PARTNERS = 'Open to play'
+
 function toContextCourse(c: ApiCourse): Course {
   return {
     id: c.id,
@@ -124,8 +127,10 @@ export default function SelectCoursePage() {
   for (const c of courses) {
     if (c.region) regionCounts.set(c.region, (regionCounts.get(c.region) ?? 0) + 1)
   }
+  const hasComingSoon = courses.some(c => !c.is_partner)
   const regions = [
     'All',
+    ...(hasComingSoon ? [PARTNERS] : []),
     ...Array.from(regionCounts.entries())
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
       .map(([r]) => r),
@@ -137,7 +142,7 @@ export default function SelectCoursePage() {
       !q ||
       c.name.toLowerCase().includes(q) ||
       (c.location_text ?? '').toLowerCase().includes(q)
-    const matchesFilter = filter === 'All' || c.region === filter
+    const matchesFilter = filter === 'All' || (filter === PARTNERS ? c.is_partner : c.region === filter)
     return matchesSearch && matchesFilter
   })
 
@@ -151,7 +156,7 @@ export default function SelectCoursePage() {
   }
 
   function handleContinue() {
-    if (!selectedCourse || !selectedHole) return
+    if (!selectedCourse || !selectedHole || !selectedCourse.is_partner) return
     selectCourse(toContextCourse(selectedCourse), toContextHole(selectedHole, selectedCourse.id))
     haptics.tap()
     track('course_selected', { partner: selectedCourse.is_partner })
@@ -229,7 +234,7 @@ export default function SelectCoursePage() {
                 <button
                   key={c.id}
                   type="button"
-                  className={`cs-card${selectedCourseId === c.id ? ' is-selected' : ''}`}
+                  className={`cs-card${selectedCourseId === c.id ? ' is-selected' : ''}${c.is_partner ? '' : ' is-soon'}`}
                   style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
                   onClick={e => {
                     handleSelectCourse(c)
@@ -248,11 +253,13 @@ export default function SelectCoursePage() {
                       {first?.distance_metres && <><i>|</i>{first.distance_metres}m</>}
                     </div>
                   </div>
-                  {first?.distance_metres && (
+                  {!c.is_partner ? (
+                    <span className="cs-badge cs-badge--soon">Coming soon</span>
+                  ) : first?.distance_metres ? (
                     <span className="cs-badge" aria-hidden>
                       {first.distance_metres}<small>M</small>
                     </span>
-                  )}
+                  ) : null}
                 </button>
               )
             })
@@ -278,7 +285,13 @@ export default function SelectCoursePage() {
               </button>
             </div>
 
-            {selectedCourse.holes.length > 1 && (
+            {!selectedCourse.is_partner && (
+              <p className="cs-soon-note">
+                Not open for the challenge yet. We add partner courses all the time; pick one marked open to play today.
+              </p>
+            )}
+
+            {selectedCourse.is_partner && selectedCourse.holes.length > 1 && (
               <div className="cs-holes" role="radiogroup" aria-label="Par-3 hole">
                 {selectedCourse.holes.map(h => (
                   <button
@@ -296,9 +309,15 @@ export default function SelectCoursePage() {
               </div>
             )}
 
-            <button type="button" className="btn-lime btn-lime--block" onClick={handleContinue}>
-              Continue
-            </button>
+            {selectedCourse.is_partner ? (
+              <button type="button" className="btn-lime btn-lime--block" onClick={handleContinue}>
+                Continue
+              </button>
+            ) : (
+              <button type="button" className="btn-tile btn-tile--block" onClick={() => { setSelectedCourseId(null); setSelectedHoleId(null); setFilter(PARTNERS) }}>
+                Show courses open to play
+              </button>
+            )}
           </div>
         )}
 
