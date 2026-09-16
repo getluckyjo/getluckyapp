@@ -27,7 +27,7 @@ The long way, for reference:
 1. Open the link in **Chrome**.
 2. Use the app for a minute: open Winners or My bets. A card appears at the bottom, "Add Get Lucky to your home screen". Tap **Install**.
 3. If the card does not appear: tap the three-dot menu (top right) → **Add to Home screen** (on some phones: **Install app**) → **Install**.
-4. Find the green Get Lucky icon on your home screen and open it from there. It opens full screen with no browser bar.
+4. Find the lime Get Lucky icon on your home screen and open it from there. It opens full screen with no browser bar.
 
 Samsung Internet: menu → **Add page to** → **Home screen**.
 
