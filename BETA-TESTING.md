@@ -12,6 +12,16 @@ The app runs at `https://www.getluckyholeinone.com`. Entries are real:
 a bet costs what it says on the screen and goes through the real PayFast
 checkout. A hole-in-one is a real claim, so play it straight.
 
+## The short way: one link
+
+Send them `https://www.getluckyholeinone.com/install`. The page works out
+the phone and browser and shows the right steps: an Install button on
+Android, the three Safari taps on iPhone, a "copy the link and open it in
+Safari" button when the link was opened inside WhatsApp or Instagram, and
+a QR code on a laptop. It is also in the app's menu as "Get the app". The
+QR code is at `public/marketing/install-qr.png` for posters and scorecards.
+The long way, for reference:
+
 ## Install on Android (Chrome)
 
 1. Open the link in **Chrome**.

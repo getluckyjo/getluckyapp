@@ -23,6 +23,7 @@ const PRIMARY = [
 
 const SECONDARY = [
   { label: 'How it works',     path: '/onboarding' },
+  { label: 'Get the app',      path: '/install' },
   { label: 'Terms & conditions', path: '/terms' },
   { label: 'Privacy policy',   path: '/privacy' },
   { label: 'Responsible play', path: '/responsible-play' },

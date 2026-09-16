@@ -47,7 +47,7 @@ describe('gate helper', () => {
   })
 
   it('leaves sign-in, marketing, legal, the gate page, the PayFast return and plumbing open', () => {
-    for (const p of ['/', '/auth', '/auth/callback', '/splash', '/onboarding', '/terms', '/privacy', '/responsible-play', '/beta', '/witness/abc', '/payment-return', '/age-check', '/welcome', '/api/bets', '/admin/users', '/~offline', '/serwist/sw.js', '/manifest.webmanifest']) {
+    for (const p of ['/', '/auth', '/auth/callback', '/splash', '/onboarding', '/terms', '/privacy', '/responsible-play', '/install', '/beta', '/witness/abc', '/payment-return', '/age-check', '/welcome', '/api/bets', '/admin/users', '/~offline', '/serwist/sw.js', '/manifest.webmanifest']) {
       expect(betaGateApplies(p), p).toBe(false)
     }
   })
