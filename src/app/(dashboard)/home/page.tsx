@@ -17,6 +17,13 @@ interface BetRecord {
   courses: { id: string; name: string } | null
 }
 
+interface PendingPayment {
+  m_payment_id: string
+  amount_cents: number
+  course: { id: string; name: string | null } | null
+  hole: { id: string; hole_number: number | null } | null
+}
+
 /**
  * Home — "Home Page.png".
  * One full-bleed aerial, one message (1 SHOT, R1 MILLION.), one button.
@@ -32,11 +39,15 @@ export default function HomePage() {
   // Keyed by user so a sign-out never shows the previous golfer's claim,
   // without an effect having to reset state.
   const [claim, setClaim] = useState<{ userId: string; bet: BetRecord | null } | null>(null)
+  // A payment PayFast confirmed that never became a bet, because the browser
+  // that came back from PayFast was not the one that left. One tap finishes it.
+  const [paid, setPaid] = useState<{ userId: string; payment: PendingPayment | null } | null>(null)
   const refreshTick = useRefreshSignal()
 
   const userId = user?.id
   const firstName = (profile?.name ?? user?.user_metadata?.full_name ?? '').split(' ')[0] || null
   const activeClaim = userId && claim?.userId === userId ? claim.bet : null
+  const paidShot = userId && paid?.userId === userId ? paid.payment : null
 
   useEffect(() => {
     if (!userId) return
@@ -51,6 +62,14 @@ export default function HomePage() {
             (b.declared_result === 'win' && b.status !== 'paid' && b.status !== 'verified'),
         )
         setClaim({ userId, bet: found ?? null })
+      })
+      .catch(() => {})
+    fetch('/api/payments/pending')
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        const list = (data?.pending ?? []) as PendingPayment[]
+        setPaid({ userId, payment: list[0] ?? null })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -93,6 +112,24 @@ export default function HomePage() {
             >
               Play now
             </button>
+
+            {paidShot && (
+              <button
+                type="button"
+                className="home-claim"
+                onClick={() => router.push(`/payment-return?ref=${encodeURIComponent(paidShot.m_payment_id)}`)}
+              >
+                <span className="home-claim-dot" aria-hidden />
+                <span>
+                  <span className="home-claim-title">Your paid shot is waiting</span>
+                  <span className="home-claim-sub" style={{ display: 'block' }}>
+                    {paidShot.course?.name ?? 'Your entry'}
+                    {paidShot.hole?.hole_number ? ` · Hole ${paidShot.hole.hole_number}` : ''}
+                    {` · R${Math.round(paidShot.amount_cents / 100)} paid · Tap to set it up`}
+                  </span>
+                </span>
+              </button>
+            )}
 
             {activeClaim && (
               <button

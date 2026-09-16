@@ -13,13 +13,14 @@ import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { hashIdentifier } from '@/lib/risk/hash'
 
 // The body's course, hole and tier are advisory: the authoritative values come
-// from the payments ledger. They are still required so a malformed client
-// fails fast rather than after a ledger round trip.
+// from the payments ledger. They are optional because the return page may
+// only know the reference (it arrives on the PayFast return URL); when they
+// are sent they are still validated so a malformed client fails fast.
 const Body = z.object({
   paymentIntentId: z.string().trim().min(1).max(100),
-  tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]),
-  courseId: uuid,
-  holeId: uuid,
+  tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
+  courseId: uuid.optional(),
+  holeId: uuid.optional(),
 })
 
 export async function POST(request: NextRequest) {

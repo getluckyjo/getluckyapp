@@ -179,10 +179,11 @@ one), `SEND_EMAIL_HOOK_SECRET` (the Supabase hook stops delivering codes).
 4. Row written with `status = 'amount_mismatch'` (alerted): the golfer paid
    an amount that matches no tier. Refund through PayFast or decide the
    tier by hand; no bet is granted automatically.
-5. Row is `complete` but the golfer's return page timed out: they can
-   reopen `/payment-return?m_payment_id=…`, or you can call
-   `/api/bets/create` for them from the admin's browser session; it is
-   idempotent.
+5. Row is `complete` but no bet: the golfer opens the app, and Home shows
+   "Your paid shot is waiting" (from `/api/payments/pending`); tapping it
+   finishes the purchase. Or send them
+   `/payment-return?ref=<m_payment_id>`, which does the same. Both call
+   `/api/bets/create`, which is idempotent.
 6. Never insert a bet by hand. Fix the ledger row, let the route make the
    bet, so the event log and idempotency hold.
 

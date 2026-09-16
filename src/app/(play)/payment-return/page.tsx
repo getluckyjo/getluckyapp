@@ -17,6 +17,20 @@ class PaymentTimeout extends Error {
   }
 }
 
+/** This browser has no session: the golfer must sign in to finish. */
+class SignInNeeded extends Error {
+  constructor(public reference: string) {
+    super('Sign in to finish setting up your shot')
+  }
+}
+
+interface ApiBet {
+  id: string
+  tier: BetTier
+  courses: { id: string; name: string; location_text: string | null; region: string | null } | null
+  holes: { id: string; hole_number: number; par: number; distance_metres: number | null } | null
+}
+
 interface PendingPayment {
   m_payment_id: string
   tier: BetTier
@@ -41,21 +55,23 @@ export default function PaymentReturnPage() {
   // beyond that the payment is real but unconfirmed, which is an ops problem, not
   // something the player can fix by waiting longer.
   async function createBetWhenPaymentConfirms(
-    payload: { courseId: string; holeId: string; tier: string; m_payment_id: string },
+    payload: { courseId?: string; holeId?: string; tier?: string; m_payment_id: string },
   ): Promise<{ betId: string }> {
     const delaysMs = [0, 1500, 2500, 4000, 6000, 8000, 10000]
 
     for (let attempt = 0; attempt < delaysMs.length; attempt++) {
       if (delaysMs[attempt]) await new Promise(r => setTimeout(r, delaysMs[attempt]))
 
+      // Course, hole and tier are advisory; the server builds the bet from
+      // the ledger row the reference names. Send them only when known.
       const res = await fetch('/api/bets/create', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          courseId: payload.courseId,
-          holeId:   payload.holeId,
-          tier:     payload.tier,
           paymentIntentId: payload.m_payment_id,
+          ...(payload.courseId ? { courseId: payload.courseId } : {}),
+          ...(payload.holeId   ? { holeId:   payload.holeId }   : {}),
+          ...(payload.tier     ? { tier:     payload.tier }     : {}),
         }),
       })
 
@@ -67,6 +83,8 @@ export default function PaymentReturnPage() {
       }
 
       if (res.ok) return res.json()
+
+      if (res.status === 401) throw new SignInNeeded(payload.m_payment_id)
 
       const err = await res.json().catch(() => ({ error: 'Unknown error' }))
 
@@ -84,38 +102,79 @@ export default function PaymentReturnPage() {
 
     async function processReturn() {
       try {
-        // ── 1. Read saved session from localStorage ─────────────────────────
-        const pendingStr = localStorage.getItem('pf_pending')
-        if (!pendingStr) {
+        // ── 1. Which payment? ───────────────────────────────────────────────
+        // The stake screen saves a note in localStorage before handing over to
+        // PayFast, and PayFast's return URL carries the reference. Either is
+        // enough. The note can be missing when the browser that comes back is
+        // not the one that left (an installed iOS app opens PayFast in an
+        // in-app browser with its own storage), so the URL wins on conflict.
+        const params = new URLSearchParams(window.location.search)
+        const refFromUrl = params.get('ref') ?? params.get('m_payment_id')
+        let saved: PendingPayment | null = null
+        try {
+          const pendingStr = localStorage.getItem('pf_pending')
+          saved = pendingStr ? (JSON.parse(pendingStr) as PendingPayment) : null
+        } catch { saved = null }
+        if (saved && refFromUrl && saved.m_payment_id !== refFromUrl) saved = null
+
+        if (!saved && !refFromUrl) {
           setErrorKind('none')
           setStatus('error')
           return
         }
 
-        const pending: PendingPayment = JSON.parse(pendingStr)
-        const { m_payment_id, tier, courseId, holeId, course, hole } = pending
-        setPending(pending)
+        const m_payment_id = saved?.m_payment_id ?? (refFromUrl as string)
 
         // ── 2. Restore BetContext state (lost during redirect) ──────────────
-        selectCourse(course, hole)
-        selectTier(tier)
+        if (saved) {
+          setPending(saved)
+          selectCourse(saved.course, saved.hole)
+          selectTier(saved.tier)
+        }
         confirmPayment(m_payment_id)
 
         // ── 3. Create the bet, once the payment is confirmed ────────────────
         // The server only grants a bet after PayFast's ITN has verified the
         // payment. That notification frequently arrives after the browser gets
         // back here, so a 202 PAYMENT_PENDING is normal — poll rather than fail.
-        const bet = await createBetWhenPaymentConfirms({ courseId, holeId, tier, m_payment_id })
+        const bet = await createBetWhenPaymentConfirms({
+          m_payment_id,
+          courseId: saved?.courseId,
+          holeId: saved?.holeId,
+          tier: saved?.tier,
+        })
         setBetId(bet.betId)
 
+        // Without the note, the record screen still needs the course and hole:
+        // read them back from the bet the server just made (or already had).
+        let tier: BetTier | undefined = saved?.tier
+        if (!saved) {
+          const res = await fetch('/api/bets?limit=50')
+          const data = res.ok ? await res.json() : { bets: [] }
+          const row = (data.bets as ApiBet[] | undefined)?.find(b => b.id === bet.betId)
+          if (row?.courses && row?.holes) {
+            selectCourse(
+              { id: row.courses.id, name: row.courses.name, location: row.courses.location_text ?? row.courses.region ?? '', region: row.courses.region ?? '', emoji: '⛳' },
+              { id: row.holes.id, courseId: row.courses.id, holeNumber: row.holes.hole_number, par: row.holes.par, distanceMetres: row.holes.distance_metres ?? 0 },
+            )
+            selectTier(row.tier)
+            tier = row.tier
+          }
+        }
+
         // ── 4. Clean up and redirect to record page ─────────────────────────
-        localStorage.removeItem('pf_pending')
+        try { localStorage.removeItem('pf_pending') } catch { /* storage unavailable */ }
         haptics.success()
-        track('bet_created', { tier })
+        track('bet_created', { tier: tier ?? 'unknown' })
         router.replace('/record')
 
       } catch (err) {
         console.error('[PaymentReturn] Error:', err)
+        if (err instanceof SignInNeeded) {
+          // Same page, same reference, once signed in.
+          router.replace(`/auth?next=${encodeURIComponent(`/payment-return?ref=${err.reference}`)}`)
+          return
+        }
         if (err instanceof PaymentTimeout) {
           setErrorKind('timeout')
         } else {

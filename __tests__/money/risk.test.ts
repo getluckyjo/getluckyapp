@@ -34,7 +34,7 @@ const H = 3_600_000, D = 24 * H
 let db: FakeDb
 const admin = () => createFakeClient(db) as unknown as SupabaseClient<Database>
 const bet = (user: string, over: Record<string, unknown> = {}) =>
-  db.seed('bets', { user_id: user, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'claimed', created_at: ago(2 * H), expires_at: ago(-20 * H), capture_lat: -34, capture_lng: 22, capture_distance_m: 50, ...over })[0]
+  db.seed('bets', { user_id: user, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'claimed', created_at: ago(2 * H), expires_at: new Date(Date.now() + 20 * H).toISOString(), capture_lat: -34, capture_lng: 22, capture_distance_m: 50, ...over })[0]
 const rules = (r: { flags: RiskFlag[] } | null) => (r?.flags ?? []).map(f => f.rule).sort()
 
 beforeEach(() => {
