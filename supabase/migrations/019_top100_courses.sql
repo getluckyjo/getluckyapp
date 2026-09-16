@@ -1,20 +1,21 @@
 -- ================================================================
--- 019 — The Top 100 South African courses, listed (not all playable)
+-- 019 — The Top 100 South African courses, all open to play
 --
 -- The original app listed 95 ranked courses (Golf Digest SA Top 100) with
--- their par 3s; Batch 5 deleted that seed file and the list shrank to the
--- partner courses in the database. This puts every course back so
--- /select-course lists them all again. Only partner courses
--- (is_partner = true) can be played: checkout still refuses the rest and
--- the app shows them as "Coming soon". To open a course for play, tick
--- Partner in Admin → Courses.
+-- their par 3s and let a golfer play any of them; Batch 5 deleted that
+-- seed file and the list shrank to the eleven partner courses in the
+-- database. This puts every course back so /select-course lists them all
+-- again, and marks every course playable (is_partner = true): the app can
+-- be used anywhere. Checkout still requires is_partner, so a course can
+-- be closed to play later by un-ticking Partner in Admin → Courses; the
+-- app then lists it as "Coming soon".
 --
 -- Matching is by name (case-insensitive), so re-running is a no-op and
--- the partner courses already present are left exactly as they are. Holes
--- are added only where a course has none for that hole number. The ten
--- placeholder courses from migration 001 (fixed 11111111-… ids) are
--- removed where nothing references them, so "Atlantic Beach Estate" does
--- not sit next to "Atlantic Beach Golf Estate".
+-- courses already present keep their rows. Holes are added only where a
+-- course has none for that hole number. The ten placeholder courses from
+-- migration 001 (fixed 11111111-… ids) are removed where nothing
+-- references them, so "Atlantic Beach Estate" does not sit next to
+-- "Atlantic Beach Golf Estate".
 -- ================================================================
 
 -- 1. Placeholders from 001, when unused.
@@ -28,99 +29,99 @@ delete from public.courses c
 with seed (name, location_text, region, lat, lng, is_partner) as (values
   ('Leopard Creek Country Club', 'Malelane, Mpumalanga', 'Mpumalanga', -25.471, 31.559, true),
   ('Fancourt – The Links', 'George, Western Cape', 'Western Cape', -33.954, 22.407, true),
-  ('St Francis Links', 'St Francis Bay, Eastern Cape', 'Eastern Cape', -34.163, 24.812, false),
-  ('Blair Atholl Golf & Equestrian Estate', 'Lanseria, Gauteng', 'Gauteng', -25.93, 27.86, false),
+  ('St Francis Links', 'St Francis Bay, Eastern Cape', 'Eastern Cape', -34.163, 24.812, true),
+  ('Blair Atholl Golf & Equestrian Estate', 'Lanseria, Gauteng', 'Gauteng', -25.93, 27.86, true),
   ('Arabella Golf Club', 'Kleinmond, Western Cape', 'Western Cape', -34.317, 19.135, true),
   ('Pearl Valley Golf Club', 'Paarl, Western Cape', 'Western Cape', -33.823, 18.99, true),
   ('Fancourt – Montagu', 'George, Western Cape', 'Western Cape', -33.954, 22.407, true),
-  ('Glendower Golf Club', 'Edenvale, Gauteng', 'Gauteng', -26.149, 28.152, false),
-  ('Sishen Golf Club', 'Kathu, Northern Cape', 'Northern Cape', -27.71, 23.05, false),
-  ('East London Golf Club', 'East London, Eastern Cape', 'Eastern Cape', -32.973, 27.923, false),
+  ('Glendower Golf Club', 'Edenvale, Gauteng', 'Gauteng', -26.149, 28.152, true),
+  ('Sishen Golf Club', 'Kathu, Northern Cape', 'Northern Cape', -27.71, 23.05, true),
+  ('East London Golf Club', 'East London, Eastern Cape', 'Eastern Cape', -32.973, 27.923, true),
   ('Pinnacle Point Golf Club', 'Mossel Bay, Western Cape', 'Western Cape', -34.206, 22.09, true),
-  ('Royal Johannesburg & Kensington – East', 'Linksfield, Gauteng', 'Gauteng', -26.182, 28.113, false),
-  ('Elements Private Golf Reserve', 'Bela-Bela, Limpopo', 'Limpopo', -24.85, 28.25, false),
-  ('The Club at Steyn City', 'Fourways, Gauteng', 'Gauteng', -25.97, 27.995, false),
-  ('Humewood Golf Club', 'Gqeberha, Eastern Cape', 'Eastern Cape', -33.98, 25.656, false),
+  ('Royal Johannesburg & Kensington – East', 'Linksfield, Gauteng', 'Gauteng', -26.182, 28.113, true),
+  ('Elements Private Golf Reserve', 'Bela-Bela, Limpopo', 'Limpopo', -24.85, 28.25, true),
+  ('The Club at Steyn City', 'Fourways, Gauteng', 'Gauteng', -25.97, 27.995, true),
+  ('Humewood Golf Club', 'Gqeberha, Eastern Cape', 'Eastern Cape', -33.98, 25.656, true),
   ('Zimbali Country Club', 'Ballito, KwaZulu-Natal', 'KwaZulu-Natal', -29.543, 31.196, true),
   ('Sun City – Gary Player CC', 'Sun City, North West', 'North West', -25.345, 27.093, true),
-  ('Pezula Championship Course', 'Knysna, Western Cape', 'Western Cape', -34.07, 23.09, false),
-  ('Highland Gate Golf & Trout Estate', 'Dullstroom, Mpumalanga', 'Mpumalanga', -25.448, 30.205, false),
-  ('Champagne Sports Resort', 'Winterton, KwaZulu-Natal', 'KwaZulu-Natal', -29.004, 29.465, false),
-  ('Simola Golf Estate', 'Knysna, Western Cape', 'Western Cape', -34.002, 23.027, false),
-  ('George Golf Club', 'George, Western Cape', 'Western Cape', -33.958, 22.405, false),
-  ('Country Club Johannesburg – Woodmead', 'Woodmead, Gauteng', 'Gauteng', -26.047, 28.096, false),
-  ('Pretoria Country Club', 'Waterkloof, Gauteng', 'Gauteng', -25.792, 28.234, false),
+  ('Pezula Championship Course', 'Knysna, Western Cape', 'Western Cape', -34.07, 23.09, true),
+  ('Highland Gate Golf & Trout Estate', 'Dullstroom, Mpumalanga', 'Mpumalanga', -25.448, 30.205, true),
+  ('Champagne Sports Resort', 'Winterton, KwaZulu-Natal', 'KwaZulu-Natal', -29.004, 29.465, true),
+  ('Simola Golf Estate', 'Knysna, Western Cape', 'Western Cape', -34.002, 23.027, true),
+  ('George Golf Club', 'George, Western Cape', 'Western Cape', -33.958, 22.405, true),
+  ('Country Club Johannesburg – Woodmead', 'Woodmead, Gauteng', 'Gauteng', -26.047, 28.096, true),
+  ('Pretoria Country Club', 'Waterkloof, Gauteng', 'Gauteng', -25.792, 28.234, true),
   ('Fancourt – Outeniqua', 'George, Western Cape', 'Western Cape', -33.954, 22.407, true),
-  ('Erinvale Golf Club', 'Somerset West, Western Cape', 'Western Cape', -34.068, 18.88, false),
-  ('Country Club Johannesburg – Rocklands', 'Auckland Park, Gauteng', 'Gauteng', -26.177, 28.009, false),
-  ('Royal Johannesburg & Kensington – West', 'Linksfield, Gauteng', 'Gauteng', -26.182, 28.113, false),
-  ('De Zalze Golf Club', 'Stellenbosch, Western Cape', 'Western Cape', -33.964, 18.841, false),
-  ('Houghton Golf Club', 'Houghton, Gauteng', 'Gauteng', -26.17, 28.06, false),
-  ('Pecanwood Golf & Country Club', 'Hartbeespoort, North West', 'North West', -25.759, 27.855, false),
-  ('Kyalami Country Club', 'Kyalami, Gauteng', 'Gauteng', -26.01, 28.077, false),
-  ('Bryanston Country Club', 'Bryanston, Gauteng', 'Gauteng', -26.06, 28.013, false),
-  ('Victoria Country Club', 'Pietermaritzburg, KwaZulu-Natal', 'KwaZulu-Natal', -29.571, 30.361, false),
-  ('Parkview Golf Club', 'Parkview, Gauteng', 'Gauteng', -26.165, 28.034, false),
-  ('Randpark Golf Club – Firethorn', 'Randpark Ridge, Gauteng', 'Gauteng', -26.113, 27.958, false),
-  ('Eye of Africa Golf Estate', 'Eikenhof, Gauteng', 'Gauteng', -26.378, 28.014, false),
-  ('Royal Cape Golf Club', 'Wynberg, Western Cape', 'Western Cape', -34.004, 18.478, false),
-  ('Hermanus Golf Club', 'Hermanus, Western Cape', 'Western Cape', -34.424, 19.233, false),
-  ('Ebotse Golf & Country Estate', 'Benoni, Gauteng', 'Gauteng', -26.167, 28.334, false),
-  ('Wild Coast Sun Country Club', 'Port Edward, Eastern Cape', 'Eastern Cape', -31.08, 30.17, false),
-  ('Serengeti Golf & Wildlife Estate', 'Kempton Park, Gauteng', 'Gauteng', -26.041, 28.298, false),
-  ('Maccauvlei Golf Club', 'Vereeniging, Gauteng', 'Gauteng', -26.66, 27.92, false),
-  ('Wingate Park Country Club', 'Pretoria East, Gauteng', 'Gauteng', -25.8, 28.32, false),
-  ('Plettenberg Bay Country Club', 'Plettenberg Bay, Western Cape', 'Western Cape', -34.052, 23.368, false),
-  ('Killarney Country Club', 'Houghton, Gauteng', 'Gauteng', -26.172, 28.05, false),
-  ('Clovelly Country Club', 'Clovelly, Western Cape', 'Western Cape', -34.128, 18.435, false),
-  ('Modderfontein Golf Club', 'Modderfontein, Gauteng', 'Gauteng', -26.096, 28.163, false),
-  ('Cotswold Downs Golf Club', 'Hillcrest, KwaZulu-Natal', 'KwaZulu-Natal', -29.773, 30.769, false),
-  ('The Els Club – Copperleaf', 'Centurion, Gauteng', 'Gauteng', -25.881, 28.049, false),
-  ('Steenberg Golf Club', 'Tokai, Western Cape', 'Western Cape', -34.066, 18.437, false),
-  ('Mount Edgecombe CC – Course One', 'Mount Edgecombe, KwaZulu-Natal', 'KwaZulu-Natal', -29.72, 31.04, false),
-  ('Woodhill Country Club', 'Pretoria East, Gauteng', 'Gauteng', -25.815, 28.34, false),
-  ('Gowrie Farm Golf Course', 'Nottingham Road, KwaZulu-Natal', 'KwaZulu-Natal', -29.364, 30.003, false),
-  ('Dainfern Golf & Country Club', 'Fourways, Gauteng', 'Gauteng', -25.987, 27.995, false),
-  ('Irene Country Club', 'Irene, Gauteng', 'Gauteng', -25.87, 28.218, false),
+  ('Erinvale Golf Club', 'Somerset West, Western Cape', 'Western Cape', -34.068, 18.88, true),
+  ('Country Club Johannesburg – Rocklands', 'Auckland Park, Gauteng', 'Gauteng', -26.177, 28.009, true),
+  ('Royal Johannesburg & Kensington – West', 'Linksfield, Gauteng', 'Gauteng', -26.182, 28.113, true),
+  ('De Zalze Golf Club', 'Stellenbosch, Western Cape', 'Western Cape', -33.964, 18.841, true),
+  ('Houghton Golf Club', 'Houghton, Gauteng', 'Gauteng', -26.17, 28.06, true),
+  ('Pecanwood Golf & Country Club', 'Hartbeespoort, North West', 'North West', -25.759, 27.855, true),
+  ('Kyalami Country Club', 'Kyalami, Gauteng', 'Gauteng', -26.01, 28.077, true),
+  ('Bryanston Country Club', 'Bryanston, Gauteng', 'Gauteng', -26.06, 28.013, true),
+  ('Victoria Country Club', 'Pietermaritzburg, KwaZulu-Natal', 'KwaZulu-Natal', -29.571, 30.361, true),
+  ('Parkview Golf Club', 'Parkview, Gauteng', 'Gauteng', -26.165, 28.034, true),
+  ('Randpark Golf Club – Firethorn', 'Randpark Ridge, Gauteng', 'Gauteng', -26.113, 27.958, true),
+  ('Eye of Africa Golf Estate', 'Eikenhof, Gauteng', 'Gauteng', -26.378, 28.014, true),
+  ('Royal Cape Golf Club', 'Wynberg, Western Cape', 'Western Cape', -34.004, 18.478, true),
+  ('Hermanus Golf Club', 'Hermanus, Western Cape', 'Western Cape', -34.424, 19.233, true),
+  ('Ebotse Golf & Country Estate', 'Benoni, Gauteng', 'Gauteng', -26.167, 28.334, true),
+  ('Wild Coast Sun Country Club', 'Port Edward, Eastern Cape', 'Eastern Cape', -31.08, 30.17, true),
+  ('Serengeti Golf & Wildlife Estate', 'Kempton Park, Gauteng', 'Gauteng', -26.041, 28.298, true),
+  ('Maccauvlei Golf Club', 'Vereeniging, Gauteng', 'Gauteng', -26.66, 27.92, true),
+  ('Wingate Park Country Club', 'Pretoria East, Gauteng', 'Gauteng', -25.8, 28.32, true),
+  ('Plettenberg Bay Country Club', 'Plettenberg Bay, Western Cape', 'Western Cape', -34.052, 23.368, true),
+  ('Killarney Country Club', 'Houghton, Gauteng', 'Gauteng', -26.172, 28.05, true),
+  ('Clovelly Country Club', 'Clovelly, Western Cape', 'Western Cape', -34.128, 18.435, true),
+  ('Modderfontein Golf Club', 'Modderfontein, Gauteng', 'Gauteng', -26.096, 28.163, true),
+  ('Cotswold Downs Golf Club', 'Hillcrest, KwaZulu-Natal', 'KwaZulu-Natal', -29.773, 30.769, true),
+  ('The Els Club – Copperleaf', 'Centurion, Gauteng', 'Gauteng', -25.881, 28.049, true),
+  ('Steenberg Golf Club', 'Tokai, Western Cape', 'Western Cape', -34.066, 18.437, true),
+  ('Mount Edgecombe CC – Course One', 'Mount Edgecombe, KwaZulu-Natal', 'KwaZulu-Natal', -29.72, 31.04, true),
+  ('Woodhill Country Club', 'Pretoria East, Gauteng', 'Gauteng', -25.815, 28.34, true),
+  ('Gowrie Farm Golf Course', 'Nottingham Road, KwaZulu-Natal', 'KwaZulu-Natal', -29.364, 30.003, true),
+  ('Dainfern Golf & Country Club', 'Fourways, Gauteng', 'Gauteng', -25.987, 27.995, true),
+  ('Irene Country Club', 'Irene, Gauteng', 'Gauteng', -25.87, 28.218, true),
   ('Atlantic Beach Golf Estate', 'Melkbosstrand, Western Cape', 'Western Cape', -33.743, 18.487, true),
-  ('San Lameer Country Club', 'Southbroom, KwaZulu-Natal', 'KwaZulu-Natal', -30.945, 30.298, false),
-  ('Zebula Country Club & Spa', 'Bela-Bela, Limpopo', 'Limpopo', -24.748, 27.966, false),
-  ('Stellenbosch Golf Club', 'Stellenbosch, Western Cape', 'Western Cape', -33.935, 18.87, false),
-  ('Nelspruit Golf Club', 'Mbombela, Mpumalanga', 'Mpumalanga', -25.476, 30.969, false),
-  ('Umhlali Country Club', 'Umhlali, KwaZulu-Natal', 'KwaZulu-Natal', -29.465, 31.203, false),
-  ('Krugersdorp Golf Club', 'Krugersdorp, Gauteng', 'Gauteng', -26.106, 27.782, false),
-  ('Wanderers Golf Club', 'Illovo, Gauteng', 'Gauteng', -26.142, 28.055, false),
-  ('Reading Country Club', 'Alberton, Gauteng', 'Gauteng', -26.254, 28.116, false),
-  ('Paarl Golf Club (Boschenmeer)', 'Paarl, Western Cape', 'Western Cape', -33.741, 18.968, false),
-  ('Centurion Country Club', 'Centurion, Gauteng', 'Gauteng', -25.857, 28.196, false),
-  ('Eagle Canyon Golf Club', 'Honeydew, Gauteng', 'Gauteng', -26.082, 27.93, false),
+  ('San Lameer Country Club', 'Southbroom, KwaZulu-Natal', 'KwaZulu-Natal', -30.945, 30.298, true),
+  ('Zebula Country Club & Spa', 'Bela-Bela, Limpopo', 'Limpopo', -24.748, 27.966, true),
+  ('Stellenbosch Golf Club', 'Stellenbosch, Western Cape', 'Western Cape', -33.935, 18.87, true),
+  ('Nelspruit Golf Club', 'Mbombela, Mpumalanga', 'Mpumalanga', -25.476, 30.969, true),
+  ('Umhlali Country Club', 'Umhlali, KwaZulu-Natal', 'KwaZulu-Natal', -29.465, 31.203, true),
+  ('Krugersdorp Golf Club', 'Krugersdorp, Gauteng', 'Gauteng', -26.106, 27.782, true),
+  ('Wanderers Golf Club', 'Illovo, Gauteng', 'Gauteng', -26.142, 28.055, true),
+  ('Reading Country Club', 'Alberton, Gauteng', 'Gauteng', -26.254, 28.116, true),
+  ('Paarl Golf Club (Boschenmeer)', 'Paarl, Western Cape', 'Western Cape', -33.741, 18.968, true),
+  ('Centurion Country Club', 'Centurion, Gauteng', 'Gauteng', -25.857, 28.196, true),
+  ('Eagle Canyon Golf Club', 'Honeydew, Gauteng', 'Gauteng', -26.082, 27.93, true),
   ('Sun City – The Lost City', 'Sun City, North West', 'North West', -25.335, 27.1, true),
-  ('Ruimsig Country Club', 'Ruimsig, Gauteng', 'Gauteng', -26.093, 27.862, false),
-  ('Mount Edgecombe CC – Course Two', 'Mount Edgecombe, KwaZulu-Natal', 'KwaZulu-Natal', -29.72, 31.04, false),
-  ('Goldfields West Golf Club', 'Carletonville, Gauteng', 'Gauteng', -26.39, 27.465, false),
-  ('Knysna Golf Club', 'Knysna, Western Cape', 'Western Cape', -34.045, 23.046, false),
-  ('Glenvista Country Club', 'Glenvista, Gauteng', 'Gauteng', -26.295, 28.095, false),
-  ('Mossel Bay Golf Club', 'Mossel Bay, Western Cape', 'Western Cape', -34.178, 22.13, false),
-  ('Waterkloof Golf Club', 'Waterkloof, Gauteng', 'Gauteng', -25.79, 28.23, false),
-  ('Umdoni Park Golf Club', 'Pennington, KwaZulu-Natal', 'KwaZulu-Natal', -30.44, 30.657, false),
-  ('St Francis Bay Golf Club', 'St Francis Bay, Eastern Cape', 'Eastern Cape', -34.17, 24.84, false),
-  ('Goose Valley Golf Club', 'Plettenberg Bay, Western Cape', 'Western Cape', -34.025, 23.305, false),
-  ('Westlake Golf Club', 'Westlake, Western Cape', 'Western Cape', -34.082, 18.438, false),
-  ('Randpark Golf Club – Bushwillow', 'Randpark Ridge, Gauteng', 'Gauteng', -26.113, 27.958, false),
-  ('King David Mowbray Golf Club', 'Mowbray, Western Cape', 'Western Cape', -33.952, 18.471, false),
-  ('Oubaai Golf Club', 'Herolds Bay, Western Cape', 'Western Cape', -34.046, 22.409, false),
-  ('Royal Port Alfred Golf Club', 'Port Alfred, Eastern Cape', 'Eastern Cape', -33.592, 26.89, false),
-  ('Wedgewood Golf & Country Estate', 'Gqeberha, Eastern Cape', 'Eastern Cape', -33.87, 25.67, false),
-  ('Parys Golf & Country Estate', 'Parys, Free State', 'Free State', -26.892, 27.465, false),
-  ('Katberg Eco Golf Estate', 'Fort Beaufort, Eastern Cape', 'Eastern Cape', -32.489, 26.667, false),
-  ('Milnerton Golf Club', 'Milnerton, Western Cape', 'Western Cape', -33.858, 18.505, false),
-  ('Bloemfontein Golf Club', 'Bloemfontein, Free State', 'Free State', -29.105, 26.199, false),
-  ('Kingswood Golf Estate', 'George, Western Cape', 'Western Cape', -33.97, 22.4, false),
-  ('Emfuleni Golf Estate', 'Vanderbijlpark, Gauteng', 'Gauteng', -26.685, 27.79, false),
-  ('Olivewood Private Estate & Golf Club', 'Chintsa, Eastern Cape', 'Eastern Cape', -32.83, 28.07, false),
-  ('Jackal Creek Golf Estate', 'Honeydew, Gauteng', 'Gauteng', -26.04, 27.9, false),
-  ('Southbroom Golf Club', 'Southbroom, KwaZulu-Natal', 'KwaZulu-Natal', -30.913, 30.315, false),
-  ('Port Elizabeth Golf Club', 'Gqeberha, Eastern Cape', 'Eastern Cape', -33.96, 25.612, false)
+  ('Ruimsig Country Club', 'Ruimsig, Gauteng', 'Gauteng', -26.093, 27.862, true),
+  ('Mount Edgecombe CC – Course Two', 'Mount Edgecombe, KwaZulu-Natal', 'KwaZulu-Natal', -29.72, 31.04, true),
+  ('Goldfields West Golf Club', 'Carletonville, Gauteng', 'Gauteng', -26.39, 27.465, true),
+  ('Knysna Golf Club', 'Knysna, Western Cape', 'Western Cape', -34.045, 23.046, true),
+  ('Glenvista Country Club', 'Glenvista, Gauteng', 'Gauteng', -26.295, 28.095, true),
+  ('Mossel Bay Golf Club', 'Mossel Bay, Western Cape', 'Western Cape', -34.178, 22.13, true),
+  ('Waterkloof Golf Club', 'Waterkloof, Gauteng', 'Gauteng', -25.79, 28.23, true),
+  ('Umdoni Park Golf Club', 'Pennington, KwaZulu-Natal', 'KwaZulu-Natal', -30.44, 30.657, true),
+  ('St Francis Bay Golf Club', 'St Francis Bay, Eastern Cape', 'Eastern Cape', -34.17, 24.84, true),
+  ('Goose Valley Golf Club', 'Plettenberg Bay, Western Cape', 'Western Cape', -34.025, 23.305, true),
+  ('Westlake Golf Club', 'Westlake, Western Cape', 'Western Cape', -34.082, 18.438, true),
+  ('Randpark Golf Club – Bushwillow', 'Randpark Ridge, Gauteng', 'Gauteng', -26.113, 27.958, true),
+  ('King David Mowbray Golf Club', 'Mowbray, Western Cape', 'Western Cape', -33.952, 18.471, true),
+  ('Oubaai Golf Club', 'Herolds Bay, Western Cape', 'Western Cape', -34.046, 22.409, true),
+  ('Royal Port Alfred Golf Club', 'Port Alfred, Eastern Cape', 'Eastern Cape', -33.592, 26.89, true),
+  ('Wedgewood Golf & Country Estate', 'Gqeberha, Eastern Cape', 'Eastern Cape', -33.87, 25.67, true),
+  ('Parys Golf & Country Estate', 'Parys, Free State', 'Free State', -26.892, 27.465, true),
+  ('Katberg Eco Golf Estate', 'Fort Beaufort, Eastern Cape', 'Eastern Cape', -32.489, 26.667, true),
+  ('Milnerton Golf Club', 'Milnerton, Western Cape', 'Western Cape', -33.858, 18.505, true),
+  ('Bloemfontein Golf Club', 'Bloemfontein, Free State', 'Free State', -29.105, 26.199, true),
+  ('Kingswood Golf Estate', 'George, Western Cape', 'Western Cape', -33.97, 22.4, true),
+  ('Emfuleni Golf Estate', 'Vanderbijlpark, Gauteng', 'Gauteng', -26.685, 27.79, true),
+  ('Olivewood Private Estate & Golf Club', 'Chintsa, Eastern Cape', 'Eastern Cape', -32.83, 28.07, true),
+  ('Jackal Creek Golf Estate', 'Honeydew, Gauteng', 'Gauteng', -26.04, 27.9, true),
+  ('Southbroom Golf Club', 'Southbroom, KwaZulu-Natal', 'KwaZulu-Natal', -30.913, 30.315, true),
+  ('Port Elizabeth Golf Club', 'Gqeberha, Eastern Cape', 'Eastern Cape', -33.96, 25.612, true)
 )
 insert into public.courses (name, location_text, region, country, lat, lng, is_partner)
 select s.name, s.location_text, s.region, 'South Africa', s.lat, s.lng, s.is_partner
@@ -521,6 +522,9 @@ select c.id, s.hole_number, s.par, s.distance_metres
   join public.courses c on lower(c.name) = lower(s.course_name)
 on conflict (course_id, hole_number) do nothing;
 
--- Verify: expect 11 partner courses and 84 others, 4 par 3s each.
+-- 4. Every listed course is open to play.
+update public.courses set is_partner = true where not is_partner;
+
+-- Verify: expect 95 courses, all playable, about 4 par 3s each.
 select is_partner, count(*) as courses from public.courses group by is_partner order by is_partner desc;
 select count(*) as holes from public.holes h join public.courses c on c.id = h.course_id;

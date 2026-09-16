@@ -9,9 +9,9 @@ const CACHE_HEADERS = {
 
 /**
  * GET /api/courses — every listed course with its active par-3 holes,
- * partner courses first. Only partner courses can be played (checkout
- * refuses the rest); the others are listed as "coming soon", as the
- * original app listed the Top 100 (migration 019).
+ * playable ones first. Migration 019 lists the Top 100 and opens them all
+ * to play; a course an admin closes (is_partner off) is still listed, as
+ * "coming soon", and checkout refuses it.
  *
  * The 1,180-line seed file that used to serve as a fallback is gone: its ids
  * were not UUIDs and never survived checkout, and its images were hot-linked
