@@ -15,7 +15,7 @@ import { GET as listIcons } from '@/app/api/icons/route'
 import { POST as vote } from '@/app/api/icons/vote/route'
 import { GET as adminList, POST as adminCreate } from '@/app/api/admin/icons/route'
 import { PATCH as adminPatch, DELETE as adminDelete } from '@/app/api/admin/icons/[iconId]/route'
-import { withShares, iconInitials, sortIcons } from '@/lib/icons'
+import { withStandings, iconInitials, sortIcons } from '@/lib/icons'
 
 const ICON_A = '55555555-5555-4555-8555-555555555555'
 const ICON_B = '66666666-6666-4666-8666-666666666666'
@@ -45,16 +45,16 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('GET /api/icons', () => {
-  it('lists active icons with counts and shares, signed out', async () => {
+  it('lists active icons with counts and standings, signed out', async () => {
     asUser(null)
     db.seed('icon_votes', { user_id: USER_A.id, icon_id: ICON_A }, { user_id: USER_B.id, icon_id: ICON_A }, { user_id: 'u3', icon_id: ICON_B })
     const res = await listIcons()
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.icons.map((i: { id: string }) => i.id)).toEqual([ICON_A, ICON_B])   // South Africa first, then World
-    expect(json.icons[0]).toMatchObject({ name: 'Ernie Els', team: 'rsa', isCaptain: true, votes: 2, percent: 67 })
+    expect(json.icons[0]).toMatchObject({ name: 'Ernie Els', team: 'rsa', isCaptain: true, votes: 2, share: 100, isLeader: true })
     expect(json.icons[0]).not.toHaveProperty('sortOrder')
-    expect(json.icons[1]).toMatchObject({ votes: 1, percent: 33 })
+    expect(json.icons[1]).toMatchObject({ votes: 1, share: 50, isLeader: false })
     expect(json.totalVotes).toBe(3)
     expect(json.myVote).toBeNull()
     expect(json.event.name).toBe('Icons Cup South Africa')
@@ -140,9 +140,10 @@ describe('admin icons', () => {
 })
 
 describe('lib', () => {
-  it('shares round to whole percents and are 0 with no picks', () => {
-    expect(withShares([{ votes: 0 }, { votes: 0 }]).map(r => r.percent)).toEqual([0, 0])
-    expect(withShares([{ votes: 1 }, { votes: 2 }]).map(r => r.percent)).toEqual([33, 67])
+  it('draws each bar against the leader and marks the leader, none until someone picks', () => {
+    expect(withStandings([{ votes: 0 }, { votes: 0 }]).map(r => [r.share, r.isLeader])).toEqual([[0, false], [0, false]])
+    expect(withStandings([{ votes: 1 }, { votes: 4 }]).map(r => [r.share, r.isLeader])).toEqual([[25, false], [100, true]])
+    expect(withStandings([{ votes: 3 }, { votes: 3 }]).map(r => r.isLeader)).toEqual([true, true])
   })
   it('orders South Africa before World, captains first, then the admin order', () => {
     const rows = [
