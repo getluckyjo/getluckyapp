@@ -25,7 +25,7 @@ const UNGATED_ROUTES = ['/payment-return', '/age-check', '/welcome']
 
 // Dashboard surfaces. Public today: /leaderboard is a shop window, and /home
 // renders a signed-out state. Left as they are — see the note on /account below.
-const DASHBOARD_ROUTES = ['/home', '/history', '/leaderboard', '/account', '/membership']
+const DASHBOARD_ROUTES = ['/home', '/history', '/leaderboard', '/account', '/icons']
 
 // The play flow. These REQUIRE a session.
 //

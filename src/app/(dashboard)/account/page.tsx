@@ -6,9 +6,6 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
-import { useMembership } from '@/hooks/useMembership'
-import MemberBadge from '@/components/membership/MemberBadge'
-import { MEMBERSHIP_PLANS } from '@/lib/membership'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/format'
 import { buildLabel } from '@/lib/version'
@@ -22,13 +19,11 @@ const Chevron = () => (
 /**
  * Account — the golfer's own card in the V2 system.
  * A green identity card with a lime initials disc, two stat tiles, then
- * white cards for profile details (with inline edit), the club, and the
- * legal links. Sign out sits last and quiet.
+ * white cards for profile details (with inline edit) and the legal links. Sign out sits last and quiet.
  */
 export default function AccountPage() {
   const router = useRouter()
   const { user, profile, signOut, refreshProfile, loading } = useAuth()
-  const { isMember, plan, joinedDate } = useMembership()
 
   // Profile editing
   const [editingProfile, setEditingProfile] = useState(false)
@@ -106,15 +101,6 @@ export default function AccountPage() {
     setEditingProfile(true)
   }
 
-  const clubLine = (() => {
-    const planKey = plan?.toLowerCase()
-    const planText = planKey === 'monthly' || planKey === 'annual' ? MEMBERSHIP_PLANS[planKey].label : 'Active'
-    const since = joinedDate
-      ? ` · since ${new Date(joinedDate).toLocaleDateString('en-ZA', { month: 'short', year: 'numeric' })}`
-      : ''
-    return `${planText}${since}`
-  })()
-
   return (
     <PhoneFrame statusTheme="dark">
       <div className="v2-screen">
@@ -140,10 +126,9 @@ export default function AccountPage() {
                 <>
                   <div className="acct-name">{displayName ?? 'Golfer'}</div>
                   <div className="acct-email">{user?.email ?? 'Not signed in'}</div>
-                  {(profile?.handicap != null || isMember) && (
+                  {profile?.handicap != null && (
                     <div className="acct-chips">
-                      {profile?.handicap != null && <span className="acct-chip">HCP {profile.handicap}</span>}
-                      {isMember && <MemberBadge size="sm" />}
+                      <span className="acct-chip">HCP {profile.handicap}</span>
                     </div>
                   )}
                 </>
@@ -234,27 +219,6 @@ export default function AccountPage() {
               ))
             )}
           </section>
-
-          {/* ── Club ── */}
-          {isMember ? (
-            <button type="button" className="acct-card acct-card--tap" onClick={() => router.push('/membership')}>
-              <div className="acct-row" style={{ borderBottom: 'none' }}>
-                <span>
-                  <span className="acct-row-title">Get Lucky Golf Club</span>
-                  <span className="acct-row-sub">{clubLine}</span>
-                </span>
-                <span className="acct-row-end"><MemberBadge size="sm" /><Chevron /></span>
-              </div>
-            </button>
-          ) : (
-            <button type="button" className="acct-club" onClick={() => router.push('/membership')}>
-              <span className="acct-club-text">
-                <span className="acct-club-title">Join the club</span>
-                <span className="acct-club-sub">Status, perks &amp; insured prizes from R{MEMBERSHIP_PLANS.monthly.priceZAR}/month</span>
-              </span>
-              <span className="acct-club-cta">Join</span>
-            </button>
-          )}
 
           {/* ── Legal ── */}
           <section className="acct-card">

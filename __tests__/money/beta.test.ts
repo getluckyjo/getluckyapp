@@ -53,7 +53,7 @@ describe('gate helper', () => {
   })
 
   it('gates the app screens', () => {
-    for (const p of ['/home', '/leaderboard', '/history', '/account', '/membership', '/select-course', '/choose-stake', '/record', '/verify', '/result/claim']) {
+    for (const p of ['/home', '/leaderboard', '/history', '/account', '/icons', '/select-course', '/choose-stake', '/record', '/verify', '/result/claim']) {
       expect(betaGateApplies(p), p).toBe(true)
     }
   })

@@ -9,7 +9,7 @@ import { enqueue } from '@/lib/outbox'
  * Where a sign-in is allowed to land. Anything else falls back to /welcome so a
  * crafted `next` can never become an open redirect.
  */
-export const SAFE_NEXT_PATHS = ['/welcome', '/home', '/history', '/leaderboard', '/account', '/select-course']
+export const SAFE_NEXT_PATHS = ['/welcome', '/home', '/history', '/leaderboard', '/account', '/select-course', '/icons']
 
 export function safeNext(raw: string | null | undefined): string {
   return raw && SAFE_NEXT_PATHS.includes(raw) ? raw : '/welcome'

@@ -514,6 +514,43 @@ export interface Database {
         Update: { attempts?: number; next_attempt_at?: string; last_error?: string | null; done_at?: string | null; failed_at?: string | null }
         Relationships: []
       }
+      icons: {
+        Row: {
+          id: string
+          name: string
+          tagline: string | null
+          photo_url: string | null
+          sort_order: number
+          is_active: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          tagline?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_by?: string | null
+        }
+        Update: {
+          name?: string
+          tagline?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      icon_votes: {
+        Row: { user_id: string; icon_id: string; created_at: string; updated_at: string }
+        Insert: { user_id: string; icon_id: string; updated_at?: string }
+        Update: { icon_id?: string; updated_at?: string }
+        Relationships: []
+      }
       beta_access: {
         Row: { id: number; kind: BetaAccessKind; value: string; note: string | null; added_by: string | null; created_at: string }
         Insert: { kind: BetaAccessKind; value: string; note?: string | null; added_by?: string | null }
