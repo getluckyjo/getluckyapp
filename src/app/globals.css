@@ -2077,3 +2077,11 @@ button, [role="button"], [role="tab"] {
 }
 .ic-team.is-world .ic-captain { background: #2b7de9; color: var(--white); }
 .ic-sponsor { margin: 8px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.55; color: var(--green); opacity: 0.7; text-align: center; }
+.ic-prize {
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--green); color: var(--white); border-radius: 14px;
+  padding: 14px 16px; margin: 0 0 14px;
+}
+.ic-prize-head { font-family: var(--font-heading); font-size: clamp(20px, 6vw, 24px); text-transform: uppercase; line-height: 1.05; color: var(--lime); }
+.ic-prize-line { font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.4; }
+.ic-prize-terms { font-family: 'Inter', sans-serif; font-size: 11px; opacity: 0.7; margin-top: 2px; }

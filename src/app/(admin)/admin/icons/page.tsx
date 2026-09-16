@@ -172,7 +172,7 @@ export default function AdminIconsPage() {
       </div>
 
       <p style={{ fontSize: 12, color: '#888', marginTop: 12 }}>
-        The app never states a prize on this screen. Event name, venue, dates and the sponsor line come from <code>src/lib/icons.ts</code>. Player photos need rights; leave the URL blank for initials.
+        Event name, venue, dates, the prize card and the sponsor line come from <code>src/lib/icons.ts</code>. Player photos need rights; leave the URL blank for initials.
       </p>
     </div>
   )

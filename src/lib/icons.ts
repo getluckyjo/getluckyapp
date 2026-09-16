@@ -2,16 +2,22 @@
  * Back an Icon: the fan pick for Icons Cup South Africa.
  *
  * Get Lucky sponsors the event. It is public (icons-series.com), so the
- * app names it, shows the field by team and marks the captains. What the
- * app still does not state is any prize: the arrangement in the proposal
- * is confidential and no prize is announced before cover is confirmed in
- * writing. The field itself is data, managed at /admin/icons.
+ * app names it, shows the field by team and marks the captains. The prize
+ * copy below was approved by Johannes on 16 September 2026; every word of
+ * it lives here so it can be changed in one place. The field itself is
+ * data, managed at /admin/icons.
  */
 export const ICONS_EVENT = {
   name: 'Icons Cup South Africa',
   format: 'South Africa vs World',
   venue: 'The Links at Fancourt',
   dates: '11–13 December 2026',
+  /** The headline on the prize card. */
+  prizeHeadline: 'R10 million hole-in-one prize',
+  /** What backing an Icon can mean for the golfer. */
+  fanPrizeLine: 'A hole-in-one from your choice could win you R1 million.',
+  /** Small print under the prize card. */
+  prizeTerms: 'Terms and conditions apply.',
   sponsorLine: 'Get Lucky is a proud sponsor of Icons Cup South Africa.',
   hero: '/marketing/icons/launch.webp',
 } as const
