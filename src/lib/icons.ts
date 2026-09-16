@@ -14,14 +14,19 @@ export const ICONS_EVENT = {
   dates: '11–13 December 2026',
   /** The hole the Icons play for the prize. */
   holeName: 'the Get Lucky hole',
-  /** The headline on the prize card. */
-  prizeHeadline: 'Three R1 million fan prizes',
-  /** What backing an Icon can mean for the golfer. */
-  fanPrizeLine: 'Back an Icon. If your Icon makes a hole-in-one on the Get Lucky hole, you stand a chance to win one of three R1 million prizes.',
-  /** What the Icon plays for. */
-  iconPrizeLine: 'The Icon who holes it wins R4 million, and R3 million goes to a charity they support.',
+  /** The one question the screen asks. */
+  question: 'Who holes it on the Get Lucky hole?',
+  /** The R10 million hole-in-one prize, as three tiles: amount, how many, who. */
+  prizeTotal: 'R10 million hole-in-one prize',
+  prizes: [
+    { amount: 'R1m', count: 3, who: 'Fans who backed the Icon' },
+    { amount: 'R4m', count: 1, who: 'The Icon' },
+    { amount: 'R3m', count: 1, who: 'A charity they support' },
+  ],
+  /** Under the "You're backing" card, with the Icon's name in front. */
+  fanStake: 'holes it, you are in the draw for R1 million.',
   /** Small print under the prize card. */
-  prizeTerms: 'Terms and conditions apply.',
+  prizeTerms: 'T&Cs apply',
   sponsorLine: 'Get Lucky is a proud sponsor of Icons Cup South Africa.',
   hero: '/marketing/icons/launch.webp',
 } as const

@@ -44,7 +44,8 @@ export default function PaymentReturnPage() {
   const router = useRouter()
   const { selectCourse, selectTier, confirmPayment, setBetId } = useBet()
   const [status, setStatus] = useState<'processing' | 'error'>('processing')
-  const [errorKind, setErrorKind] = useState<'none' | 'timeout' | 'failed'>('failed')
+  const [errorKind, setErrorKind] = useState<'none' | 'timeout' | 'failed' | 'signin'>('failed')
+  const [reference, setReference] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
   const [waiting, setWaiting] = useState(false)
   const [pending, setPending] = useState<PendingPayment | null>(null)
@@ -124,6 +125,7 @@ export default function PaymentReturnPage() {
         }
 
         const m_payment_id = saved?.m_payment_id ?? (refFromUrl as string)
+        setReference(m_payment_id)
 
         // ── 2. Restore BetContext state (lost during redirect) ──────────────
         if (saved) {
@@ -171,8 +173,12 @@ export default function PaymentReturnPage() {
       } catch (err) {
         console.error('[PaymentReturn] Error:', err)
         if (err instanceof SignInNeeded) {
-          // Same page, same reference, once signed in.
-          router.replace(`/auth?next=${encodeURIComponent(`/payment-return?ref=${err.reference}`)}`)
+          // This browser has no session. Usually it is the in-app browser an
+          // installed iOS app opened for PayFast: the bet already exists (the
+          // ITN granted it) and the golfer's app shows it on Home. Say so
+          // rather than pushing a sign-in into the wrong browser.
+          setErrorKind('signin')
+          setStatus('error')
           return
         }
         if (err instanceof PaymentTimeout) {
@@ -190,7 +196,6 @@ export default function PaymentReturnPage() {
   }, [])
 
   const tierData = pending ? BET_TIERS.find(t => t.tier === pending.tier) : undefined
-  const reference = pending?.m_payment_id ?? ''
   const supportHref = `mailto:support@getluckygolf.co.za?subject=${encodeURIComponent(`Payment ${reference} not confirmed`)}&body=${encodeURIComponent(`Hi Get Lucky,\n\nI paid for a shot but the app couldn't confirm it.\n\nPayment reference: ${reference}\nCourse: ${pending?.course.name ?? ''}\nHole: ${pending?.hole.holeNumber ?? ''}\n\nThanks`)}`
 
   async function copyReference() {
@@ -265,6 +270,22 @@ export default function PaymentReturnPage() {
                   </button>
                   <button type="button" className="btn-tile" onClick={() => router.push('/history')}>
                     My bets
+                  </button>
+                </div>
+              </>
+            ) : errorKind === 'signin' ? (
+              <>
+                <h1 className="v2-title">{'Paid.\nNow open the app'}</h1>
+                <p className="v2-sub" style={{ fontSize: 'var(--text-md)' }}>
+                  Your shot is set up. This window isn&apos;t signed in, so close it and open Get Lucky from your home screen: your shot is waiting on Home, ready to record.
+                </p>
+                <p className="pr-note">Not using the home-screen app? Sign in here instead.</p>
+                <div className="miss-actions">
+                  <button type="button" className="btn-lime" onClick={() => router.push('/home')}>
+                    Open Home
+                  </button>
+                  <button type="button" className="btn-tile" onClick={() => router.push(`/auth?next=${encodeURIComponent(`/payment-return?ref=${reference}`)}`)}>
+                    Sign in here
                   </button>
                 </div>
               </>

@@ -7,6 +7,7 @@ import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { resolvePayfastConfig, type PayfastConfig } from '@/lib/payfast/config'
 import { isFromPayfastLive } from '@/lib/payfast/ips'
+import { grantBetForPayment } from '@/lib/claims/grant'
 
 /** How long we give PayFast's validate endpoint before failing closed. */
 const VALIDATE_TIMEOUT_MS = 10_000
@@ -172,7 +173,22 @@ export async function POST(request: NextRequest) {
 
     log.info('payfast.itn.recorded', { m_payment_id: mPaymentId, pf_payment_id: pfPaymentId, user_id: userId, tier, amount_cents: amountCents, status: check.ok ? 'complete' : 'amount_mismatch' })
 
-    // ── 7. If a bet already exists for this reference, attach PayFast's id
+    // ── 7. Grant the bet now, so it exists whether or not the golfer's
+    // browser comes back with a session (an installed iOS app returns from
+    // PayFast in an in-app browser with no cookies). A repeat ITN finds the
+    // bet it already made. Never fail the ITN over this: the ledger row is
+    // written, and the return page or Home can finish what is left (an
+    // unverified age, for instance).
+    if (check.ok) {
+      try {
+        const granted = await grantBetForPayment(supabase, mPaymentId, { source: 'itn', createdIpHash: null })
+        if (!granted.ok) log.info('payfast.itn.bet_not_granted', { m_payment_id: mPaymentId, user_id: userId, reason: granted.reason })
+      } catch (grantErr) {
+        await alertOps({ event: 'payfast.itn.grant_failed', path: 'payfast_itn', summary: `Payment ${mPaymentId} is recorded but the bet could not be granted from the ITN; the return page or Home will retry.`, details: { m_payment_id: mPaymentId, user_id: userId }, err: grantErr })
+      }
+    }
+
+    // ── 8. If a bet already existed for this reference, attach PayFast's id
     // for reconciliation. The bet's own reference (payment_intent_id) is
     // never rewritten, so /api/bets/create can always find it. Status is
     // never touched: a late ITN must not reset a resolved result.

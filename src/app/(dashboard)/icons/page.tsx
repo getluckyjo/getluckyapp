@@ -98,25 +98,27 @@ export default function IconsPage() {
           </div>
 
           <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Back an\nIcon'}</h1>
-          <p className="vf-sub">
-            {ICONS_EVENT.format} · {ICONS_EVENT.venue} · {ICONS_EVENT.dates}.
-            {' '}Which Icon makes a hole-in-one on {ICONS_EVENT.holeName}? Pick one. You can change your mind until the first tee.
-          </p>
+          <p className="vf-sub">{ICONS_EVENT.question} Pick one. Change it any time before the first tee.</p>
 
-          <div className="ic-prize">
-            <span className="ic-prize-head">{ICONS_EVENT.prizeHeadline}</span>
-            <span className="ic-prize-line">{ICONS_EVENT.fanPrizeLine}</span>
-            <span className="ic-prize-line ic-prize-line--icon">{ICONS_EVENT.iconPrizeLine}</span>
-            <span className="ic-prize-terms">{ICONS_EVENT.prizeTerms}</span>
+          <div className="ic-prize" aria-label={ICONS_EVENT.prizeTotal}>
+            <div className="ic-prize-tiles">
+              {ICONS_EVENT.prizes.map(p => (
+                <div key={p.who} className="ic-prize-tile">
+                  <span className="ic-prize-amt">
+                    {p.amount}{p.count > 1 && <small>×{p.count}</small>}
+                  </span>
+                  <span className="ic-prize-who">{p.who}</span>
+                </div>
+              ))}
+            </div>
+            <span className="ic-prize-terms">{ICONS_EVENT.prizeTotal} · {ICONS_EVENT.prizeTerms}</span>
           </div>
 
           {mine && (
             <div className={`ic-mine is-${mine.team}`}>
               <span className="ic-mine-label">You&rsquo;re backing</span>
               <span className="ic-mine-name">{mine.name}</span>
-              <span className="ic-mine-prize">
-                If {mine.name} holes it on {ICONS_EVENT.holeName}, you stand a chance to win one of three R1 million prizes.
-              </span>
+              <span className="ic-mine-prize">If {mine.name} {ICONS_EVENT.fanStake}</span>
             </div>
           )}
 
@@ -177,7 +179,7 @@ export default function IconsPage() {
                         </span>
                         <span className="ic-pct">
                           <span className="ic-pct-num">{icon.votes}</span>
-                          <span className="ic-pct-sub">{picked ? 'Your pick' : icon.votes === 1 ? 'golfer backing' : 'golfers backing'}</span>
+                          <span className="ic-pct-sub">{picked ? 'Your pick' : 'backing'}</span>
                         </span>
                       </button>
                     )
@@ -187,16 +189,10 @@ export default function IconsPage() {
             )
           })}
 
-          {data && icons.length > 0 && (
-            <p className="lb-note">
-              {data.totalVotes > 0
-                ? `${data.totalVotes} ${data.totalVotes === 1 ? 'golfer has' : 'golfers have'} picked so far. One pick per golfer. `
-                : 'One pick per golfer. '}
-              Fourteen a side; more Icons are added as they are announced.
-            </p>
-          )}
-
-          <p className="ic-sponsor">{ICONS_EVENT.sponsorLine}</p>
+          <p className="ic-sponsor">
+            {data && data.totalVotes > 0 && <>{data.totalVotes} {data.totalVotes === 1 ? 'golfer has' : 'golfers have'} picked · </>}
+            {ICONS_EVENT.sponsorLine}
+          </p>
         </div>
 
         <BottomTabBar active="icons" />
