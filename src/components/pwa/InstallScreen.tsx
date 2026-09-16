@@ -202,7 +202,7 @@ export default function InstallScreen() {
           )}
 
           <p className="inst-foot">
-            Already have it? Look for the green Get Lucky icon on your home screen.
+            Already have it? Look for the lime Get Lucky icon on your home screen.
             {' '}Questions: <a href="mailto:support@getluckygolf.co.za">support@getluckygolf.co.za</a>
           </p>
         </div>
