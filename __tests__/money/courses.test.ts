@@ -1,6 +1,8 @@
 /**
  * GET /api/courses lists every course, partner courses first, so the Top 100
  * show again while only partners are playable (checkout enforces that).
+ * Each hole is flagged `playable` (par 3, 140 m or more) and the playable
+ * ones come first.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient } from '../helpers/fake-supabase'
@@ -32,5 +34,18 @@ describe('GET /api/courses', () => {
       'Atlantic Beach Golf Estate', 'Zimbali Country Club', 'Arabella Golf Club', 'Bellville Golf Club',
     ])
     expect(courses.map((c: { is_partner: boolean }) => c.is_partner)).toEqual([true, true, false, false])
+  })
+
+  it('flags holes shorter than 140m as not playable and lists the playable ones first', async () => {
+    db.seed('courses', { id: 'c1', name: 'Arabella Golf Club', is_partner: true })
+    db.seed('holes',
+      { id: 'h5', course_id: 'c1', hole_number: 5, par: 3, distance_metres: 120, is_active: true },
+      { id: 'h8', course_id: 'c1', hole_number: 8, par: 3, distance_metres: 140, is_active: true },
+      { id: 'h12', course_id: 'c1', hole_number: 12, par: 3, distance_metres: 175, is_active: true },
+      { id: 'h16', course_id: 'c1', hole_number: 16, par: 3, distance_metres: null, is_active: true },
+    )
+    const { courses } = await (await GET()).json()
+    const holes = courses[0].holes as { hole_number: number; playable: boolean }[]
+    expect(holes.map(h => [h.hole_number, h.playable])).toEqual([[8, true], [12, true], [5, false], [16, false]])
   })
 })

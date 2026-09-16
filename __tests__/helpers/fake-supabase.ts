@@ -8,6 +8,12 @@
  * a plain Map so a test can seed state, run a handler, and read back exactly
  * what was written.
  *
+ * One-to-many embeds are modelled just far enough for `/api/courses`:
+ * `select('*, holes(id, par)')` attaches the child rows whose
+ * `<parent singular>_id` matches (`holes.course_id`), projected to the named
+ * columns, and a dotted filter such as `.eq('holes.is_active', true)` narrows
+ * those children as PostgREST does.
+ *
  * It deliberately does NOT model Row Level Security: these tests exercise the
  * handlers' own checks. RLS is covered separately by `rls.staging.test.ts`
  * against a real project.
@@ -93,12 +99,18 @@ export class Builder implements PromiseLike<Result> {
   private rangeN: [number, number] | null = null
   private orderBy: { col: string; asc: boolean }[] = []
   private returning = false
+  private embeds: { name: string; cols: string[] | null }[] = []
+  private childFilters = new Map<string, Filter[]>()
 
   constructor(private db: FakeDb, private table: string) {}
 
-  select(_cols?: string, opts?: { count?: string; head?: boolean }) {
+  select(cols?: string, opts?: { count?: string; head?: boolean }) {
     if (this.op !== 'select') this.returning = true
     if (opts?.count) this.wantCount = true
+    for (const m of (cols ?? '').matchAll(/(\w+)\(([^)]*)\)/g)) {
+      const inner = m[2].trim()
+      this.embeds.push({ name: m[1], cols: inner === '' || inner === '*' ? null : inner.split(',').map(c => c.trim()) })
+    }
     return this
   }
   insert(payload: Row | Row[]) { this.op = 'insert'; this.payload = payload; return this }
@@ -109,8 +121,16 @@ export class Builder implements PromiseLike<Result> {
   delete() { this.op = 'delete'; return this }
 
   // A filter on an embedded resource ('holes.is_active') shapes the child
-  // rows in PostgREST; the fake does not model children, so it is a no-op.
-  eq(col: string, val: unknown) { if (!col.includes('.')) this.filters.push(r => r[col] === val); return this }
+  // rows, not the parent's.
+  eq(col: string, val: unknown) {
+    const dot = col.indexOf('.')
+    if (dot === -1) this.filters.push(r => r[col] === val)
+    else {
+      const child = col.slice(0, dot), childCol = col.slice(dot + 1)
+      this.childFilters.set(child, [...(this.childFilters.get(child) ?? []), r => r[childCol] === val])
+    }
+    return this
+  }
   neq(col: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
   in(col: string, vals: unknown[]) { this.filters.push(r => vals.includes(r[col])); return this }
   is(col: string, val: unknown) { this.filters.push(r => (val === null ? r[col] == null : r[col] === val)); return this }
@@ -169,6 +189,20 @@ export class Builder implements PromiseLike<Result> {
     return rows
   }
 
+  /** Attach each embedded child table's matching rows (one-to-many by `<parent>_id`). */
+  private embed(row: Row): Row {
+    if (!this.embeds.length) return row
+    const fk = `${this.table.replace(/s$/, '')}_id`
+    const out: Row = { ...row }
+    for (const { name, cols } of this.embeds) {
+      const filters = this.childFilters.get(name) ?? []
+      out[name] = this.db.rows(name)
+        .filter(c => c[fk] === row.id && filters.every(f => f(c)))
+        .map(c => (cols ? Object.fromEntries(cols.map(k => [k, c[k]])) : { ...c }))
+    }
+    return out
+  }
+
   private uniqueViolation(row: Row, ignoreId?: unknown): PostgrestError | null {
     for (const col of UNIQUE[this.table] ?? []) {
       if (row[col] == null) continue
@@ -198,7 +232,7 @@ export class Builder implements PromiseLike<Result> {
   execute(): Result {
     switch (this.op) {
       case 'select':
-        return this.shape(this.matching())
+        return this.shape(this.matching().map(r => this.embed(r)))
 
       case 'insert': {
         const incoming = Array.isArray(this.payload) ? this.payload : [this.payload as Row]

@@ -11,6 +11,7 @@ import { BET_TIERS } from '@/lib/tiers'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
+import { MIN_HOLE_METRES, holeUnavailableReason, isHolePlayable } from '@/lib/holes'
 
 // ---------------------------------------------------------------------------
 // PayFast-mandated parameter order for signature generation
@@ -83,10 +84,10 @@ export async function POST(request: NextRequest) {
     const { tier, courseId, holeId, userName } = body.data
     const tierData = BET_TIERS.find(t => t.tier === tier)!
 
-    // ── The target must be a real, active par-3 hole at a partner course ──
+    // ── The target must be a real, active, long-enough par-3 at a partner course ──
     const { data: hole } = await supabase
       .from('holes')
-      .select('id, course_id, is_active')
+      .select('id, course_id, is_active, par, distance_metres')
       .eq('id', holeId)
       .maybeSingle()
     if (!hole || hole.course_id !== courseId) {
@@ -94,6 +95,12 @@ export async function POST(request: NextRequest) {
     }
     if (!hole.is_active) {
       return NextResponse.json({ error: 'That hole is not currently open for the challenge', code: 'HOLE_INACTIVE' }, { status: 400 })
+    }
+    if (!isHolePlayable(hole)) {
+      return NextResponse.json(
+        { error: `The challenge is played on par 3s of ${MIN_HOLE_METRES}m or more (${holeUnavailableReason(hole)})`, code: 'HOLE_NOT_ELIGIBLE' },
+        { status: 400 },
+      )
     }
     const { data: course } = await supabase
       .from('courses')

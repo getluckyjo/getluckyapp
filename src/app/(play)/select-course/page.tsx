@@ -11,12 +11,15 @@ import { SearchIcon, GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 import type { Course, Hole } from '@/context/BetContext'
 import { coursePhotoCandidates } from '@/lib/course-photo'
+import { MIN_HOLE_METRES, holeUnavailableReason, isHolePlayable } from '@/lib/holes'
 
 interface ApiHole {
   id: string
   hole_number: number
   par: number
   distance_metres: number | null
+  /** Set by /api/courses; recomputed here so an older cached response still obeys the rule. */
+  playable?: boolean
 }
 
 interface ApiCourse {
@@ -34,6 +37,16 @@ interface ApiCourse {
 
 /** Chip that narrows the list to courses open for the challenge. */
 const PARTNERS = 'Open to play'
+
+/** Par 3 of MIN_HOLE_METRES or more; the only holes the challenge is played on. */
+function playableHoles(c: ApiCourse): ApiHole[] {
+  return c.holes.filter(isHolePlayable)
+}
+
+/** Open for play: an open course with at least one long-enough par 3. */
+function isOpen(c: ApiCourse): boolean {
+  return c.is_partner && playableHoles(c).length > 0
+}
 
 function toContextCourse(c: ApiCourse): Course {
   return {
@@ -127,7 +140,7 @@ export default function SelectCoursePage() {
   for (const c of courses) {
     if (c.region) regionCounts.set(c.region, (regionCounts.get(c.region) ?? 0) + 1)
   }
-  const hasComingSoon = courses.some(c => !c.is_partner)
+  const hasComingSoon = courses.some(c => !isOpen(c))
   const regions = [
     'All',
     ...(hasComingSoon ? [PARTNERS] : []),
@@ -142,21 +155,21 @@ export default function SelectCoursePage() {
       !q ||
       c.name.toLowerCase().includes(q) ||
       (c.location_text ?? '').toLowerCase().includes(q)
-    const matchesFilter = filter === 'All' || (filter === PARTNERS ? c.is_partner : c.region === filter)
+    const matchesFilter = filter === 'All' || (filter === PARTNERS ? isOpen(c) : c.region === filter)
     return matchesSearch && matchesFilter
   })
 
   const selectedCourse = courses.find(c => c.id === selectedCourseId)
   const selectedHole = selectedCourse?.holes.find(h => h.id === selectedHoleId)
-    ?? selectedCourse?.holes[0]
+    ?? (selectedCourse ? playableHoles(selectedCourse)[0] ?? selectedCourse.holes[0] : undefined)
 
   function handleSelectCourse(c: ApiCourse) {
     setSelectedCourseId(c.id)
-    setSelectedHoleId(c.holes[0]?.id ?? null)
+    setSelectedHoleId((playableHoles(c)[0] ?? c.holes[0])?.id ?? null)
   }
 
   function handleContinue() {
-    if (!selectedCourse || !selectedHole || !selectedCourse.is_partner) return
+    if (!selectedCourse || !selectedHole || !isOpen(selectedCourse) || !isHolePlayable(selectedHole)) return
     selectCourse(toContextCourse(selectedCourse), toContextHole(selectedHole, selectedCourse.id))
     haptics.tap()
     track('course_selected', { partner: selectedCourse.is_partner })
@@ -228,13 +241,15 @@ export default function SelectCoursePage() {
             </div>
           ) : (
             filtered.map((c, i) => {
-              const first = c.holes[0]
-              const n = c.holes.length
+              const open = isOpen(c)
+              const playable = playableHoles(c)
+              const first = playable[0] ?? c.holes[0]
+              const n = playable.length
               return (
                 <button
                   key={c.id}
                   type="button"
-                  className={`cs-card${selectedCourseId === c.id ? ' is-selected' : ''}${c.is_partner ? '' : ' is-soon'}`}
+                  className={`cs-card${selectedCourseId === c.id ? ' is-selected' : ''}${open ? '' : ' is-soon'}`}
                   style={{ animationDelay: `${Math.min(i, 8) * 40}ms` }}
                   onClick={e => {
                     handleSelectCourse(c)
@@ -255,6 +270,8 @@ export default function SelectCoursePage() {
                   </div>
                   {!c.is_partner ? (
                     <span className="cs-badge cs-badge--soon">Coming soon</span>
+                  ) : !open ? (
+                    <span className="cs-badge cs-badge--soon">Under {MIN_HOLE_METRES}m</span>
                   ) : first?.distance_metres ? (
                     <span className="cs-badge" aria-hidden>
                       {first.distance_metres}<small>M</small>
@@ -285,31 +302,40 @@ export default function SelectCoursePage() {
               </button>
             </div>
 
-            {!selectedCourse.is_partner && (
+            {!selectedCourse.is_partner ? (
               <p className="cs-soon-note">
                 Not open for the challenge yet. We add partner courses all the time; pick one marked open to play today.
               </p>
-            )}
+            ) : !isOpen(selectedCourse) ? (
+              <p className="cs-soon-note">
+                The challenge is played on par 3s of {MIN_HOLE_METRES}m or more, and every par 3 here is shorter. Pick another course.
+              </p>
+            ) : null}
 
-            {selectedCourse.is_partner && selectedCourse.holes.length > 1 && (
+            {isOpen(selectedCourse) && selectedCourse.holes.length > 1 && (
               <div className="cs-holes" role="radiogroup" aria-label="Par-3 hole">
-                {selectedCourse.holes.map(h => (
-                  <button
-                    key={h.id}
-                    type="button"
-                    role="radio"
-                    aria-checked={selectedHole.id === h.id}
-                    className={`cs-hole${selectedHole.id === h.id ? ' is-active' : ''}`}
-                    onClick={() => setSelectedHoleId(h.id)}
-                  >
-                    Hole {h.hole_number}
-                    <small>{h.distance_metres ?? '—'}m</small>
-                  </button>
-                ))}
+                {selectedCourse.holes.map(h => {
+                  const reason = holeUnavailableReason(h)
+                  return (
+                    <button
+                      key={h.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={selectedHole.id === h.id}
+                      aria-disabled={reason !== null}
+                      disabled={reason !== null}
+                      className={`cs-hole${selectedHole.id === h.id ? ' is-active' : ''}`}
+                      onClick={() => setSelectedHoleId(h.id)}
+                    >
+                      Hole {h.hole_number}
+                      <small>{h.distance_metres ?? '—'}m{reason ? ` · ${reason.toLowerCase()}` : ''}</small>
+                    </button>
+                  )
+                })}
               </div>
             )}
 
-            {selectedCourse.is_partner ? (
+            {isOpen(selectedCourse) ? (
               <button type="button" className="btn-lime btn-lime--block" onClick={handleContinue}>
                 Continue
               </button>
