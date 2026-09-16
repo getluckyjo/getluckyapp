@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useIsStandalone } from '@/hooks/useIsStandalone'
 import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
+import { pwaAsset } from '@/lib/pwa/assets'
 
 /** The Chrome event that lets a page trigger the install dialog itself. */
 interface BeforeInstallPromptEvent extends Event {
@@ -127,7 +128,7 @@ export default function InstallPrompt() {
     return (
       <div className="install-card" role="dialog" aria-label="Install Get Lucky">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src="/icons/icon-192.png" alt="" width={48} height={48} className="install-card-icon" />
+        <img src={pwaAsset('/icons/icon-192.png')} alt="" width={48} height={48} className="install-card-icon" />
         <div className="install-card-text">
           <strong>Add Get Lucky to your home screen</strong>
           <span>Opens full screen, loads faster, and keeps your place on the course.</span>

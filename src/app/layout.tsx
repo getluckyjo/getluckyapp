@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContext'
 import PwaChrome from '@/components/pwa/PwaChrome'
 import FontLoader from '@/components/pwa/FontLoader'
 import splash from '@/lib/pwa/splash.json'
+import { pwaAsset } from '@/lib/pwa/assets'
 
 const GOOGLE_FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap'
 
@@ -33,10 +34,10 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: '/icons/favicon-32.png', sizes: '32x32', type: 'image/png' },
-      { url: '/icons/favicon-16.png', sizes: '16x16', type: 'image/png' },
+      { url: pwaAsset('/icons/favicon-32.png'), sizes: '32x32', type: 'image/png' },
+      { url: pwaAsset('/icons/favicon-16.png'), sizes: '16x16', type: 'image/png' },
     ],
-    apple: [{ url: '/icons/apple-touch-icon-180.png', sizes: '180x180', type: 'image/png' }],
+    apple: [{ url: pwaAsset('/icons/apple-touch-icon-180.png'), sizes: '180x180', type: 'image/png' }],
   },
 }
 
@@ -71,7 +72,7 @@ export default function RootLayout({
         </noscript>
         {/* iOS launch screens, one per device size. Generated: npm run pwa:assets. */}
         {splash.map(s => (
-          <link key={s.href} rel="apple-touch-startup-image" href={s.href} media={s.media} />
+          <link key={s.href} rel="apple-touch-startup-image" href={pwaAsset(s.href)} media={s.media} />
         ))}
       </head>
       <body>
