@@ -10,8 +10,14 @@ You need an invite. That is either:
 - an **email address** that has been added to the tester list (you sign in with it), or
 - an **invite code** that looks like `GL-7K4M9P2X` (you type it once on the first screen).
 
-The app runs at the address you were sent. During the beta that is the
-preview link; at launch it is `https://www.getluckyholeinone.com`.
+The app runs at `https://www.getluckyholeinone.com`, the same address it
+will have at launch, so what you install now is what you keep.
+
+**Entries in the beta are real money.** A bet costs what it says on the
+screen (use the R50 tier) and goes through the real PayFast checkout with
+your own card. Johannes refunds every beta entry from the PayFast dashboard
+within a few days. A hole-in-one in the beta is a real claim, so play it
+straight.
 
 ## Install on Android (Chrome)
 
@@ -47,7 +53,7 @@ Do these in order once, then use the app as you normally would.
 
 1. **Install** as above. Note whether the card or sheet appeared on its own, and whether the icon and splash screen look right.
 2. **Sign in** inside the installed app with the six-digit code.
-3. **Buy a bet** in the sandbox (no real money in beta; use the PayFast test card details you were sent). You should come back to the Record screen with a small buzz on Android.
+3. **Buy a bet** on the R50 tier with your own card; it is refunded afterwards. You should come back to the Record screen with a small buzz on Android.
 4. **Record** a shot, declare the result, and for a "hole-in-one" go through the claim with a friend as witness. The witness gets an email with one question.
 5. **Lock the phone** for 20 minutes, unlock, reopen the app: still signed in, same screen?
 6. **Turn on airplane mode** and open the app from the icon: you should see the green "You're offline" screen with a Try again button, not a browser error. Turn airplane mode off: it should come back by itself.
@@ -79,12 +85,12 @@ your phone model and a screenshot.
 - **Offline is read-only.** You can open the app and see the last screens, but buying a bet, uploading a shot or submitting a claim needs signal. A recorded shot stays on the phone until the upload succeeds, but only while the app stays open.
 - **Video upload on a weak signal** can take a few minutes. Keep the app in the foreground until the claim screen says it is submitted.
 - **The desktop view** shows a phone-shaped frame; that is by design for reviewers, not a bug.
-- **Preview links** used during the beta are not the final address. Installed apps point at the address they were installed from, so you will reinstall once at launch.
 
 ## For the person running the beta
 
+- **The beta runs on production with real money.** There is no staging project and previews cannot start without one, so the beta is the live site behind the gate, with the live PayFast account. Refund each tester's entry from the PayFast dashboard after their session; `/admin/bets` shows the `pf_payment_id` to match it against. Tell Indwe that beta entries are real entries.
 - **Both beta features are off by default.** The app launches looking launched: no gate, no feedback button. Turn them on only for a closed test.
-- **Turn the gate on**: Vercel → project → Settings → Environment Variables → `BETA_GATE` = `on` (Preview and/or Production) → Redeploy. Add your own email at `/admin/beta` **before** you do this; admins are not exempt.
+- **Turn the gate on**: Vercel → project → Settings → Environment Variables → `BETA_GATE` = `on` (Production) → Redeploy. Add your own email at `/admin/beta` **before** you do this; admins are not exempt.
 - **Show the feedback button**: `NEXT_PUBLIC_FEEDBACK` = `on`, then redeploy (it is baked in at build time).
 - **Add a tester**: `/admin/beta` → Email address → Add. Or Invite code → Create code, then copy the code to them. Removing a row locks them out on their next page view.
 - **Apply migration 016** to the database first (`supabase/migrations/016_beta.sql`), the same way as 002 to 015.
