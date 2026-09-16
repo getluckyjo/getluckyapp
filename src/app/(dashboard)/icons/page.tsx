@@ -26,7 +26,7 @@ const TEAMS: IconTeam[] = ['rsa', 'world']
  * Icons — "Back an Icon". Icons Cup South Africa, Team South Africa vs Team
  * World at The Links at Fancourt. The field by team, how many golfers back
  * each Icon, and the caller's own pick. One pick per golfer, changeable.
- * No prize is stated anywhere on this screen by design (src/lib/icons.ts).
+ * Prize copy comes from src/lib/icons.ts, one place to change it.
  */
 export default function IconsPage() {
   const router = useRouter()
@@ -100,6 +100,12 @@ export default function IconsPage() {
             {ICONS_EVENT.format} · {ICONS_EVENT.venue} · {ICONS_EVENT.dates}.
             {' '}Which Icon holes it on the signature par 3? Pick one. You can change your mind until the first tee.
           </p>
+
+          <div className="ic-prize">
+            <span className="ic-prize-head">{ICONS_EVENT.prizeHeadline}</span>
+            <span className="ic-prize-line">{ICONS_EVENT.fanPrizeLine}</span>
+            <span className="ic-prize-terms">{ICONS_EVENT.prizeTerms}</span>
+          </div>
 
           {mine && (
             <div className={`ic-mine is-${mine.team}`}>
