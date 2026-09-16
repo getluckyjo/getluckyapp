@@ -2095,7 +2095,7 @@ button, [role="button"], [role="tab"] {
 .inst-hero { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin-bottom: 18px; }
 .inst-icon { width: 72px; height: 72px; border-radius: 18px; box-shadow: 0 6px 20px rgba(52,82,49,0.18); }
 .inst-cta { margin: 0 0 14px; }
-.inst-steps { background: var(--white); border-radius: 14px; padding: 16px; margin: 0 0 12px; }
+.inst-steps { background: var(--white); color: var(--green); font-family: 'Inter', sans-serif; border-radius: 14px; padding: 16px; margin: 0 0 12px; }
 .inst-note { font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.5; color: var(--green); opacity: 0.85; margin: 0 0 14px; }
 .inst-url { font-family: 'Inter', sans-serif; font-size: 13px; word-break: break-all; color: var(--green); opacity: 0.8; margin: 0 0 14px; }
 .inst-warn { display: flex; flex-direction: column; gap: 4px; background: var(--green); color: var(--white); border-radius: 14px; padding: 14px 16px; margin: 0 0 14px; font-family: 'Inter', sans-serif; }
