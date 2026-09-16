@@ -20,11 +20,12 @@ initials. Add a photo URL in the admin once rights are confirmed.
 
 ## The field
 
-Migration 018 seeds the twelve Icons announced by 16 September 2026:
-Team South Africa, captain Ernie Els: AB de Villiers, Fourie du Preez,
-Schalk Burger, Butch James, Victor Matfield, Vernon Philander, Shaun
-Pollock. Team World, captain José María Olazábal: John Terry, Brian
-Lara, Ash Barty. Fourteen a side eventually; add the rest at
+Migration 018 seeds the sixteen Icons announced by 16 September 2026:
+Team South Africa, captain Ernie Els: Schalk Burger, AB de Villiers,
+Fourie du Preez, Butch James, Victor Matfield, Vernon Philander, Shaun
+Pollock. Team World, captain José María Olazábal: Jimmy Anderson, Ash
+Barty, George Gregan, Brian Lara, Yuvraj Singh, John Terry, Dwight
+Yorke. Fourteen a side eventually; add the rest at
 `/admin/icons` as they are announced (name is unique, re-running the
 migration is a no-op).
 

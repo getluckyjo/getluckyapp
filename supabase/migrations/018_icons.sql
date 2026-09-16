@@ -72,9 +72,13 @@ insert into public.icons (name, team, is_captain, tagline, sort_order) values
   ('Vernon Philander',     'rsa',   false, 'Proteas fast bowler',                         60),
   ('Shaun Pollock',        'rsa',   false, 'Proteas all-rounder and captain',             70),
   ('José María Olazábal',  'world', true,  'Captain · two-time Masters champion',         0),
-  ('John Terry',           'world', false, 'Chelsea and England captain',                 10),
-  ('Brian Lara',           'world', false, 'West Indies batting legend',                  20),
-  ('Ash Barty',            'world', false, 'Three-time Grand Slam champion',              30)
+  ('Jimmy Anderson',       'world', false, 'England''s record Test wicket-taker',         10),
+  ('Ash Barty',            'world', false, 'Three-time Grand Slam champion',              20),
+  ('George Gregan',        'world', false, 'Wallabies World Cup-winning captain',         30),
+  ('Brian Lara',           'world', false, 'West Indies batting legend',                  40),
+  ('Yuvraj Singh',         'world', false, 'India''s 2011 World Cup player of the tournament', 50),
+  ('John Terry',           'world', false, 'Chelsea and England captain',                 60),
+  ('Dwight Yorke',         'world', false, 'Manchester United treble winner',             70)
 on conflict (name) do nothing;
 
 -- Verify
