@@ -9,7 +9,7 @@ import { getInitials } from '@/lib/format'
 /**
  * Burger-menu drawer. The tab bar carries the five main surfaces; this holds
  * everything the V2 designs took off the tab bar and the home screen — bet
- * history, how it works, membership, legal — plus who's signed in.
+ * history, how it works, icons, legal — plus who's signed in.
  * The page you're on is picked out in lime.
  */
 const PRIMARY = [
@@ -17,7 +17,7 @@ const PRIMARY = [
   { label: 'Play',        path: '/select-course' },
   { label: 'My bets',     path: '/history' },
   { label: 'Winners',     path: '/leaderboard' },
-  { label: 'Club',        path: '/membership' },
+  { label: 'Icons',       path: '/icons' },
   { label: 'Account',     path: '/account' },
 ]
 

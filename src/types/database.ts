@@ -27,6 +27,7 @@ export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'ti
 export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
 export type LeadLane = 'partner' | 'investor'
+export type IconTeam = 'rsa' | 'world'
 export type BetaAccessKind = 'email' | 'code'
 
 export interface Database {
@@ -512,6 +513,49 @@ export interface Database {
         }
         Insert: { kind: string; payload: Json; attempts?: number; next_attempt_at?: string; last_error?: string | null; done_at?: string | null; failed_at?: string | null }
         Update: { attempts?: number; next_attempt_at?: string; last_error?: string | null; done_at?: string | null; failed_at?: string | null }
+        Relationships: []
+      }
+      icons: {
+        Row: {
+          id: string
+          name: string
+          team: IconTeam
+          is_captain: boolean
+          tagline: string | null
+          photo_url: string | null
+          sort_order: number
+          is_active: boolean
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          name: string
+          team?: IconTeam
+          is_captain?: boolean
+          tagline?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          is_active?: boolean
+          created_by?: string | null
+        }
+        Update: {
+          name?: string
+          team?: IconTeam
+          is_captain?: boolean
+          tagline?: string | null
+          photo_url?: string | null
+          sort_order?: number
+          is_active?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      icon_votes: {
+        Row: { user_id: string; icon_id: string; created_at: string; updated_at: string }
+        Insert: { user_id: string; icon_id: string; updated_at?: string }
+        Update: { icon_id?: string; updated_at?: string }
         Relationships: []
       }
       beta_access: {

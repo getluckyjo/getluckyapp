@@ -22,6 +22,7 @@ export type AnalyticsEvent =
   | 'result_declared'
   | 'claim_submitted'
   | 'feedback_sent'
+  | 'icon_backed'
 
 type Value = string | number | boolean | null
 

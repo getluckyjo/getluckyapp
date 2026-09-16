@@ -83,6 +83,7 @@ or has PayFast in live mode (`src/instrumentation.ts`).
 ```
 src/app/(play)/         the play flow: select course → stake → PayFast → record → declare → claim
 src/app/(admin)/        the admin panel (client-side gate; every /api/admin route re-checks)
+src/app/(dashboard)/    home, winners, my bets, account, and icons (Back an Icon, docs/icons.md)
 src/app/api/            route handlers; each validates with zod and fails through apiError()
 src/lib/claims/         the claim state machine: the only place a bet or claim changes status
 src/lib/payfast/        PayFast configuration and address list

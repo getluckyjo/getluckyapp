@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { haptics } from '@/lib/haptics'
 import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon } from '@/components/icons'
 
-export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'membership' | 'account' | 'play'
+export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'icons' | 'account' | 'play'
 
 /**
  * V2 tab bar — "Menu Bar Complete.svg".
@@ -20,7 +20,7 @@ const TABS = [
   { key: 'home',        label: 'Home',    path: '/home',          Icon: HomeIcon    },
   { key: 'leaderboard', label: 'Winners', path: '/leaderboard',   Icon: WinnersIcon },
   { key: 'play',        label: 'Play',    path: '/select-course', Icon: null        },
-  { key: 'membership',  label: 'Club',    path: '/membership',    Icon: ClubIcon    },
+  { key: 'icons',       label: 'Icons',   path: '/icons',         Icon: ClubIcon    },
   { key: 'account',     label: 'Account', path: '/account',       Icon: AccountIcon },
 ] as const
 

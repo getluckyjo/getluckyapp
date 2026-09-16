@@ -40,7 +40,7 @@ export function WinnersIcon({ size = 24, ...rest }: IconProps) {
   )
 }
 
-/** Tab bar — Club (star outline). */
+/** Tab bar — the star outline. Drawn for Club; now the Icons tab (Back an Icon). */
 export function ClubIcon({ size = 24, ...rest }: IconProps) {
   return (
     <svg {...base(size, '0 0 42.63 40.42', 42.63 / 40.42)} {...rest}>
