@@ -15,7 +15,7 @@ import { GET as listIcons } from '@/app/api/icons/route'
 import { POST as vote } from '@/app/api/icons/vote/route'
 import { GET as adminList, POST as adminCreate } from '@/app/api/admin/icons/route'
 import { PATCH as adminPatch, DELETE as adminDelete } from '@/app/api/admin/icons/[iconId]/route'
-import { withShares, iconInitials } from '@/lib/icons'
+import { withShares, iconInitials, sortIcons } from '@/lib/icons'
 
 const ICON_A = '55555555-5555-4555-8555-555555555555'
 const ICON_B = '66666666-6666-4666-8666-666666666666'
@@ -33,9 +33,9 @@ const post = (url: string, body: unknown) => jsonRequest(url, body)
 beforeEach(() => {
   db = new FakeDb()
   db.seed('icons',
-    { id: ICON_A, name: 'Ernie Els', tagline: 'The Big Easy', photo_url: null, sort_order: 1, is_active: true },
-    { id: ICON_B, name: 'Retief Goosen', tagline: null, photo_url: null, sort_order: 2, is_active: true },
-    { id: ICON_OFF, name: 'Hidden Icon', tagline: null, photo_url: null, sort_order: 3, is_active: false },
+    { id: ICON_B, name: 'John Terry', team: 'world', is_captain: false, tagline: null, photo_url: null, sort_order: 2, is_active: true },
+    { id: ICON_A, name: 'Ernie Els', team: 'rsa', is_captain: true, tagline: 'The Big Easy', photo_url: null, sort_order: 1, is_active: true },
+    { id: ICON_OFF, name: 'Hidden Icon', team: 'rsa', is_captain: false, tagline: null, photo_url: null, sort_order: 3, is_active: false },
   )
   serverClient.createClient.mockReset()
   adminClient.createAdminClient.mockImplementation(() => createFakeClient(db))
@@ -51,8 +51,9 @@ describe('GET /api/icons', () => {
     const res = await listIcons()
     expect(res.status).toBe(200)
     const json = await res.json()
-    expect(json.icons.map((i: { id: string }) => i.id)).toEqual([ICON_A, ICON_B])
-    expect(json.icons[0]).toMatchObject({ name: 'Ernie Els', votes: 2, percent: 67 })
+    expect(json.icons.map((i: { id: string }) => i.id)).toEqual([ICON_A, ICON_B])   // South Africa first, then World
+    expect(json.icons[0]).toMatchObject({ name: 'Ernie Els', team: 'rsa', isCaptain: true, votes: 2, percent: 67 })
+    expect(json.icons[0]).not.toHaveProperty('sortOrder')
     expect(json.icons[1]).toMatchObject({ votes: 1, percent: 33 })
     expect(json.totalVotes).toBe(3)
     expect(json.myVote).toBeNull()
@@ -121,14 +122,15 @@ describe('admin icons', () => {
     asAdmin()
     expect((await adminCreate(post('http://x/api/admin/icons', { name: '' }))).status).toBe(400)
     expect((await adminCreate(post('http://x/api/admin/icons', { name: 'Gary Player', photoUrl: 'not a url' }))).status).toBe(400)
-    const created = await adminCreate(post('http://x/api/admin/icons', { name: 'Gary Player', tagline: 'The Black Knight', sortOrder: 0 }))
+    expect((await adminCreate(post('http://x/api/admin/icons', { name: 'Gary Player', team: 'mars' }))).status).toBe(400)
+    const created = await adminCreate(post('http://x/api/admin/icons', { name: 'Gary Player', team: 'world', isCaptain: true, tagline: 'The Black Knight', sortOrder: 0 }))
     expect(created.status).toBe(201)
     const { data } = await created.json()
-    expect(data).toMatchObject({ name: 'Gary Player', tagline: 'The Black Knight', sort_order: 0, is_active: true })
+    expect(data).toMatchObject({ name: 'Gary Player', team: 'world', is_captain: true, tagline: 'The Black Knight', sort_order: 0, is_active: true })
 
-    const patched = await adminPatch(post(`http://x/api/admin/icons/${data.id}`, { isActive: false, tagline: '' }), params(data.id))
+    const patched = await adminPatch(post(`http://x/api/admin/icons/${data.id}`, { isActive: false, tagline: '', team: 'rsa', isCaptain: false }), params(data.id))
     expect(patched.status).toBe(200)
-    expect((await patched.json()).data).toMatchObject({ is_active: false, tagline: null })
+    expect((await patched.json()).data).toMatchObject({ is_active: false, tagline: null, team: 'rsa', is_captain: false })
     expect((await adminPatch(post(`http://x/api/admin/icons/${data.id}`, {}), params(data.id))).status).toBe(400)
     expect((await adminPatch(post('http://x/api/admin/icons/nope', { isActive: true }), params('nope'))).status).toBe(400)
 
@@ -141,6 +143,16 @@ describe('lib', () => {
   it('shares round to whole percents and are 0 with no picks', () => {
     expect(withShares([{ votes: 0 }, { votes: 0 }]).map(r => r.percent)).toEqual([0, 0])
     expect(withShares([{ votes: 1 }, { votes: 2 }]).map(r => r.percent)).toEqual([33, 67])
+  })
+  it('orders South Africa before World, captains first, then the admin order', () => {
+    const rows = [
+      { team: 'world' as const, isCaptain: false, sortOrder: 10, name: 'John Terry' },
+      { team: 'rsa' as const, isCaptain: false, sortOrder: 20, name: 'Fourie du Preez' },
+      { team: 'world' as const, isCaptain: true, sortOrder: 99, name: 'José María Olazábal' },
+      { team: 'rsa' as const, isCaptain: false, sortOrder: 10, name: 'AB de Villiers' },
+      { team: 'rsa' as const, isCaptain: true, sortOrder: 50, name: 'Ernie Els' },
+    ]
+    expect(sortIcons(rows).map(r => r.name)).toEqual(['Ernie Els', 'AB de Villiers', 'Fourie du Preez', 'José María Olazábal', 'John Terry'])
   })
   it('initials', () => {
     expect(iconInitials('Ernie Els')).toBe('EE')

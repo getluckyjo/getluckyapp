@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError } from '@/lib/api/http'
-import { ICONS_EVENT, withShares, type PublicIcon } from '@/lib/icons'
+import { ICONS_EVENT, sortIcons, withShares, type IconTeam, type PublicIcon } from '@/lib/icons'
 
 /**
  * GET /api/icons — the field, with how many golfers back each Icon, and the
@@ -20,7 +20,7 @@ export async function GET() {
     const admin = createAdminClient()
 
     const [{ data: icons, error: iconsErr }, { data: votes, error: votesErr }] = await Promise.all([
-      admin.from('icons').select('id, name, tagline, photo_url, sort_order').eq('is_active', true).order('sort_order').order('name'),
+      admin.from('icons').select('id, name, team, is_captain, tagline, photo_url, sort_order').eq('is_active', true),
       admin.from('icon_votes').select('icon_id'),
     ])
     if (iconsErr) throw iconsErr
@@ -29,9 +29,17 @@ export async function GET() {
     const counts = new Map<string, number>()
     for (const v of votes ?? []) counts.set(v.icon_id, (counts.get(v.icon_id) ?? 0) + 1)
 
-    const rows: PublicIcon[] = withShares((icons ?? []).map(i => ({
-      id: i.id, name: i.name, tagline: i.tagline ?? null, photoUrl: i.photo_url ?? null, votes: counts.get(i.id) ?? 0,
+    const ordered = sortIcons((icons ?? []).map(i => ({
+      id: i.id,
+      name: i.name,
+      team: (i.team ?? 'rsa') as IconTeam,
+      isCaptain: !!i.is_captain,
+      sortOrder: i.sort_order ?? 100,
+      tagline: i.tagline ?? null,
+      photoUrl: i.photo_url ?? null,
+      votes: counts.get(i.id) ?? 0,
     })))
+    const rows: PublicIcon[] = withShares(ordered).map(r => ({ id: r.id, name: r.name, team: r.team, isCaptain: r.isCaptain, tagline: r.tagline, photoUrl: r.photoUrl, votes: r.votes, percent: r.percent }))
 
     let myVote: string | null = null
     if (user) {

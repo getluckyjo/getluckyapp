@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
@@ -10,7 +11,7 @@ import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import { useAuth } from '@/context/AuthContext'
 import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
-import { ICONS_EVENT, iconInitials, withShares, type PublicIcon } from '@/lib/icons'
+import { ICONS_EVENT, TEAM_LABEL, iconInitials, withShares, type IconTeam, type PublicIcon } from '@/lib/icons'
 
 interface Payload {
   event: typeof ICONS_EVENT
@@ -19,11 +20,13 @@ interface Payload {
   myVote: string | null
 }
 
+const TEAMS: IconTeam[] = ['rsa', 'world']
+
 /**
- * Icons — "Back an Icon". The field for Icons Cup South Africa, how many
- * golfers back each one, and the caller's own pick. One pick per golfer,
- * changeable. No prize is stated anywhere on this screen by design (see
- * src/lib/icons.ts).
+ * Icons — "Back an Icon". Icons Cup South Africa, Team South Africa vs Team
+ * World at The Links at Fancourt. The field by team, how many golfers back
+ * each Icon, and the caller's own pick. One pick per golfer, changeable.
+ * No prize is stated anywhere on this screen by design (src/lib/icons.ts).
  */
 export default function IconsPage() {
   const router = useRouter()
@@ -43,11 +46,10 @@ export default function IconsPage() {
     return () => { cancelled = true }
   }, [refreshTick, user?.id])
 
+  const signIn = () => router.push(`/auth?next=${encodeURIComponent('/icons')}`)
+
   async function back(iconId: string) {
-    if (!user) {
-      router.push(`/auth?next=${encodeURIComponent('/icons')}`)
-      return
-    }
+    if (!user) { signIn(); return }
     if (!data || saving || data.myVote === iconId) return
     setSaving(iconId)
     setError(null)
@@ -64,7 +66,7 @@ export default function IconsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ iconId }),
       })
-      if (res.status === 401) { router.push(`/auth?next=${encodeURIComponent('/icons')}`); return }
+      if (res.status === 401) { signIn(); return }
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
         throw new Error(json.error ?? 'Could not save your pick')
@@ -89,21 +91,25 @@ export default function IconsPage() {
         <AppHeader tone="light" />
 
         <div className="vf-scroll">
+          <div className="ic-hero">
+            <Image src={ICONS_EVENT.hero} alt="Icons Cup South Africa, 11 to 13 December 2026, The Links at Fancourt" width={1200} height={675} sizes="480px" priority />
+          </div>
+
           <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Back an\nIcon'}</h1>
           <p className="vf-sub">
-            {ICONS_EVENT.name} · {ICONS_EVENT.venue} · {ICONS_EVENT.dates}.
+            {ICONS_EVENT.format} · {ICONS_EVENT.venue} · {ICONS_EVENT.dates}.
             {' '}Which Icon holes it on the signature par 3? Pick one. You can change your mind until the first tee.
           </p>
 
           {mine && (
-            <div className="ic-mine">
+            <div className={`ic-mine is-${mine.team}`}>
               <span className="ic-mine-label">You&rsquo;re backing</span>
               <span className="ic-mine-name">{mine.name}</span>
             </div>
           )}
 
           {!user && data && icons.length > 0 && (
-            <button type="button" className="btn-lime btn-lime--block ic-signin" onClick={() => router.push(`/auth?next=${encodeURIComponent('/icons')}`)}>
+            <button type="button" className="btn-lime btn-lime--block ic-signin" onClick={signIn}>
               Sign in to pick yours
             </button>
           )}
@@ -124,41 +130,60 @@ export default function IconsPage() {
             <p className="lb-note" style={{ marginTop: 24 }}>The field hasn&rsquo;t been announced yet. Check back soon.</p>
           )}
 
-          <div className="ic-list">
-            {icons.map(icon => {
-              const picked = data?.myVote === icon.id
-              return (
-                <button
-                  key={icon.id}
-                  type="button"
-                  className={`ic-card${picked ? ' is-picked' : ''}`}
-                  aria-pressed={picked}
-                  disabled={saving !== null}
-                  onClick={() => back(icon.id)}
-                >
-                  <span className="ic-avatar" aria-hidden>
-                    {icon.photoUrl
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={icon.photoUrl} alt="" loading="lazy" decoding="async" />
-                      : iconInitials(icon.name)}
-                  </span>
-                  <span className="ic-info">
-                    <span className="ic-name">{icon.name}</span>
-                    {icon.tagline && <span className="ic-tag">{icon.tagline}</span>}
-                    <span className="ic-bar" aria-hidden><span className="ic-bar-fill" style={{ width: `${icon.percent}%` }} /></span>
-                  </span>
-                  <span className="ic-pct">
-                    <span className="ic-pct-num">{icon.percent}%</span>
-                    <span className="ic-pct-sub">{picked ? 'Your pick' : `${icon.votes} backing`}</span>
-                  </span>
-                </button>
-              )
-            })}
-          </div>
+          {TEAMS.map(team => {
+            const members = icons.filter(i => i.team === team)
+            if (members.length === 0) return null
+            return (
+              <section key={team} className={`ic-team is-${team}`} aria-label={TEAM_LABEL[team]}>
+                <h2 className="ic-team-title"><span className="ic-team-dot" aria-hidden />{TEAM_LABEL[team]}</h2>
+                <div className="ic-list">
+                  {members.map(icon => {
+                    const picked = data?.myVote === icon.id
+                    return (
+                      <button
+                        key={icon.id}
+                        type="button"
+                        className={`ic-card${picked ? ' is-picked' : ''}`}
+                        aria-pressed={picked}
+                        disabled={saving !== null}
+                        onClick={() => back(icon.id)}
+                      >
+                        <span className="ic-avatar" aria-hidden>
+                          {icon.photoUrl
+                            // eslint-disable-next-line @next/next/no-img-element
+                            ? <img src={icon.photoUrl} alt="" loading="lazy" decoding="async" />
+                            : iconInitials(icon.name)}
+                        </span>
+                        <span className="ic-info">
+                          <span className="ic-name">
+                            {icon.name}
+                            {icon.isCaptain && <span className="ic-captain">Captain</span>}
+                          </span>
+                          {icon.tagline && <span className="ic-tag">{icon.tagline}</span>}
+                          <span className="ic-bar" aria-hidden><span className="ic-bar-fill" style={{ width: `${icon.percent}%` }} /></span>
+                        </span>
+                        <span className="ic-pct">
+                          <span className="ic-pct-num">{icon.percent}%</span>
+                          <span className="ic-pct-sub">{picked ? 'Your pick' : `${icon.votes} backing`}</span>
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })}
 
-          {data && data.totalVotes > 0 && (
-            <p className="lb-note">{data.totalVotes} {data.totalVotes === 1 ? 'golfer has' : 'golfers have'} picked so far. One pick per golfer.</p>
+          {data && icons.length > 0 && (
+            <p className="lb-note">
+              {data.totalVotes > 0
+                ? `${data.totalVotes} ${data.totalVotes === 1 ? 'golfer has' : 'golfers have'} picked so far. One pick per golfer. `
+                : 'One pick per golfer. '}
+              Fourteen a side; more Icons are added as they are announced.
+            </p>
           )}
+
+          <p className="ic-sponsor">{ICONS_EVENT.sponsorLine}</p>
         </div>
 
         <BottomTabBar active="icons" />

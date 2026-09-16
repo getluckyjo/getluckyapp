@@ -15,7 +15,9 @@
 
 create table if not exists public.icons (
   id          uuid primary key default gen_random_uuid(),
-  name        text not null check (char_length(name) between 1 and 80),
+  name        text not null unique check (char_length(name) between 1 and 80),
+  team        text not null default 'rsa' check (team in ('rsa', 'world')),
+  is_captain  boolean not null default false,
   tagline     text check (tagline is null or char_length(tagline) <= 120),
   photo_url   text check (photo_url is null or char_length(photo_url) <= 500),
   sort_order  integer not null default 100,
@@ -57,6 +59,23 @@ create policy "Users can view their own icon vote"
 -- No insert/update/delete policies: the anon and authenticated roles cannot
 -- write either table. The service role bypasses RLS.
 
+-- The field as announced publicly by 16 September 2026 (icons-series.com).
+-- Fourteen a side eventually; add the rest at /admin/icons as they are
+-- announced. Re-running is a no-op (unique name).
+insert into public.icons (name, team, is_captain, tagline, sort_order) values
+  ('Ernie Els',            'rsa',   true,  'Captain · four-time Major champion',          0),
+  ('AB de Villiers',       'rsa',   false, 'Proteas batting great',                       10),
+  ('Fourie du Preez',      'rsa',   false, 'Springbok World Cup-winning scrumhalf',       20),
+  ('Schalk Burger',        'rsa',   false, 'Springbok World Cup-winning flank',           30),
+  ('Butch James',          'rsa',   false, 'Springbok World Cup-winning flyhalf',         40),
+  ('Victor Matfield',      'rsa',   false, 'Springbok World Cup-winning lock',            50),
+  ('Vernon Philander',     'rsa',   false, 'Proteas fast bowler',                         60),
+  ('Shaun Pollock',        'rsa',   false, 'Proteas all-rounder and captain',             70),
+  ('José María Olazábal',  'world', true,  'Captain · two-time Masters champion',         0),
+  ('John Terry',           'world', false, 'Chelsea and England captain',                 10),
+  ('Brian Lara',           'world', false, 'West Indies batting legend',                  20),
+  ('Ash Barty',            'world', false, 'Three-time Grand Slam champion',              30)
+on conflict (name) do nothing;
+
 -- Verify
-select table_name from information_schema.tables
- where table_schema = 'public' and table_name in ('icons', 'icon_votes') order by 1;
+select team, count(*) from public.icons group by team order by team;

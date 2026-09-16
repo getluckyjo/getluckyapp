@@ -6,6 +6,8 @@ import { log } from '@/lib/observability/log'
 
 const Patch = z.object({
   name: z.string().trim().min(1).max(80).optional(),
+  team: z.enum(['rsa', 'world']).optional(),
+  isCaptain: z.boolean().optional(),
   tagline: z.string().trim().max(120).nullable().optional(),
   photoUrl: z.url().max(500).nullable().optional(),
   sortOrder: z.coerce.number().int().min(0).max(10000).optional(),
@@ -24,6 +26,8 @@ export async function PATCH(request: Request, { params }: Ctx) {
   try {
     const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
     if (body.data.name !== undefined) patch.name = body.data.name
+    if (body.data.team !== undefined) patch.team = body.data.team
+    if (body.data.isCaptain !== undefined) patch.is_captain = body.data.isCaptain
     if (body.data.tagline !== undefined) patch.tagline = body.data.tagline || null
     if (body.data.photoUrl !== undefined) patch.photo_url = body.data.photoUrl || null
     if (body.data.sortOrder !== undefined) patch.sort_order = body.data.sortOrder
@@ -32,7 +36,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
       .from('icons')
       .update(patch)
       .eq('id', iconId)
-      .select('id, name, tagline, photo_url, sort_order, is_active, created_at')
+      .select('id, name, team, is_captain, tagline, photo_url, sort_order, is_active, created_at')
       .maybeSingle()
     if (error) throw error
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })

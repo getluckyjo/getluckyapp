@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Trash2, Eye, EyeOff } from 'lucide-react'
 
-interface Row { id: string; name: string; tagline: string | null; photo_url: string | null; sort_order: number; is_active: boolean; created_at: string; votes: number }
+interface Row { id: string; name: string; team: 'rsa' | 'world'; is_captain: boolean; tagline: string | null; photo_url: string | null; sort_order: number; is_active: boolean; created_at: string; votes: number }
 
 /**
  * The field for Back an Icon. Add a name, a one-line tagline and an optional
@@ -15,6 +15,8 @@ export default function AdminIconsPage() {
   const [total, setTotal] = useState(0)
   const [loaded, setLoaded] = useState(false)
   const [name, setName] = useState('')
+  const [team, setTeam] = useState<'rsa' | 'world'>('rsa')
+  const [isCaptain, setIsCaptain] = useState(false)
   const [tagline, setTagline] = useState('')
   const [photoUrl, setPhotoUrl] = useState('')
   const [sortOrder, setSortOrder] = useState('')
@@ -42,6 +44,8 @@ export default function AdminIconsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
+          team,
+          isCaptain,
           tagline: tagline.trim() || undefined,
           photoUrl: photoUrl.trim() || undefined,
           sortOrder: sortOrder.trim() ? Number(sortOrder) : undefined,
@@ -49,7 +53,7 @@ export default function AdminIconsPage() {
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { setError(json.error ?? 'Could not add.'); return }
-      setName(''); setTagline(''); setPhotoUrl(''); setSortOrder('')
+      setName(''); setTagline(''); setPhotoUrl(''); setSortOrder(''); setIsCaptain(false)
       setRefresh(n => n + 1)
     } finally {
       setBusy(false)
@@ -85,6 +89,13 @@ export default function AdminIconsPage() {
 
       <form onSubmit={add} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
         <input value={name} onChange={e => setName(e.target.value)} placeholder="Name" required maxLength={80} style={{ ...input, minWidth: 200 }} />
+        <select value={team} onChange={e => setTeam(e.target.value as 'rsa' | 'world')} style={input}>
+          <option value="rsa">Team South Africa</option>
+          <option value="world">Team World</option>
+        </select>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#333' }}>
+          <input type="checkbox" checked={isCaptain} onChange={e => setIsCaptain(e.target.checked)} /> Captain
+        </label>
         <input value={tagline} onChange={e => setTagline(e.target.value)} placeholder="Tagline (e.g. Springbok legend)" maxLength={120} style={{ ...input, minWidth: 240 }} />
         <input value={photoUrl} onChange={e => setPhotoUrl(e.target.value)} placeholder="Photo URL (optional)" type="url" style={{ ...input, minWidth: 260 }} />
         <input value={sortOrder} onChange={e => setSortOrder(e.target.value)} placeholder="Order" type="number" min={0} style={{ ...input, width: 90 }} />
@@ -98,6 +109,7 @@ export default function AdminIconsPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
+              <th style={th}>Team</th>
               <th style={th}>Order</th>
               <th style={th}>Name</th>
               <th style={th}>Tagline</th>
@@ -109,11 +121,17 @@ export default function AdminIconsPage() {
           </thead>
           <tbody>
             {!loaded ? (
-              <tr><td colSpan={7} style={{ padding: 20, color: '#999' }}>Loading…</td></tr>
+              <tr><td colSpan={8} style={{ padding: 20, color: '#999' }}>Loading…</td></tr>
             ) : rows.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 20, color: '#999' }}>No Icons yet. The app shows &ldquo;The field hasn&rsquo;t been announced yet&rdquo; until you add one.</td></tr>
+              <tr><td colSpan={8} style={{ padding: 20, color: '#999' }}>No Icons yet. The app shows &ldquo;The field hasn&rsquo;t been announced yet&rdquo; until you add one.</td></tr>
             ) : rows.map(r => (
               <tr key={r.id} style={{ borderBottom: '1px solid #f0f0f0', opacity: r.is_active ? 1 : 0.55 }}>
+                <td style={td}>
+                  <select value={r.team} onChange={e => patch(r.id, { team: e.target.value })} style={{ ...input, padding: '4px 8px' }}>
+                    <option value="rsa">South Africa</option>
+                    <option value="world">World</option>
+                  </select>
+                </td>
                 <td style={td}>
                   <input
                     type="number"
@@ -123,7 +141,12 @@ export default function AdminIconsPage() {
                     style={{ ...input, width: 70, padding: '4px 8px' }}
                   />
                 </td>
-                <td style={{ ...td, color: '#111', fontWeight: 600 }}>{r.name}</td>
+                <td style={{ ...td, color: '#111', fontWeight: 600 }}>
+                  {r.name}
+                  <button type="button" onClick={() => patch(r.id, { isCaptain: !r.is_captain })} title={r.is_captain ? 'Unmark captain' : 'Mark as captain'} style={{ marginLeft: 8, padding: '2px 8px', borderRadius: 999, border: '1px solid #ddd', background: r.is_captain ? '#345231' : '#fff', color: r.is_captain ? '#fff' : '#666', fontSize: 11, cursor: 'pointer' }}>
+                    {r.is_captain ? 'Captain' : 'captain?'}
+                  </button>
+                </td>
                 <td style={{ ...td, color: '#666' }}>{r.tagline ?? ''}</td>
                 <td style={td}>
                   {r.photo_url
@@ -149,7 +172,7 @@ export default function AdminIconsPage() {
       </div>
 
       <p style={{ fontSize: 12, color: '#888', marginTop: 12 }}>
-        The app never states a prize on this screen. Event name, venue and dates come from <code>src/lib/icons.ts</code>.
+        The app never states a prize on this screen. Event name, venue, dates and the sponsor line come from <code>src/lib/icons.ts</code>. Player photos need rights; leave the URL blank for initials.
       </p>
     </div>
   )

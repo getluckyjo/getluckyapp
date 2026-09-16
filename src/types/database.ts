@@ -27,6 +27,7 @@ export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'ti
 export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
 export type LeadLane = 'partner' | 'investor'
+export type IconTeam = 'rsa' | 'world'
 export type BetaAccessKind = 'email' | 'code'
 
 export interface Database {
@@ -518,6 +519,8 @@ export interface Database {
         Row: {
           id: string
           name: string
+          team: IconTeam
+          is_captain: boolean
           tagline: string | null
           photo_url: string | null
           sort_order: number
@@ -529,6 +532,8 @@ export interface Database {
         Insert: {
           id?: string
           name: string
+          team?: IconTeam
+          is_captain?: boolean
           tagline?: string | null
           photo_url?: string | null
           sort_order?: number
@@ -537,6 +542,8 @@ export interface Database {
         }
         Update: {
           name?: string
+          team?: IconTeam
+          is_captain?: boolean
           tagline?: string | null
           photo_url?: string | null
           sort_order?: number

@@ -6,21 +6,37 @@ Icons Cup South Africa. One pick per golfer, changeable until the event.
 
 ## What the app states, and what it does not
 
-The proposal to the Icons Series is confidential and says no prize is
-announced before cover is confirmed in writing. The screen therefore names
-the event, the venue and the dates (`src/lib/icons.ts`, one place to change
-them) and asks one question. It never mentions a prize, a share, an
-insurer or a charity. Keep it that way until Johannes says otherwise.
+Get Lucky sponsors Icons Cup South Africa (Team South Africa vs Team
+World, The Links at Fancourt, 11–13 December 2026). The event is public
+(icons-series.com), so the screen shows the launch graphic, names the
+event and the teams, marks the captains and carries a sponsor line. All
+of that lives in `src/lib/icons.ts`. What the screen never mentions is a
+prize, a share, an insurer or a charity: the arrangement in the proposal
+is confidential and no prize is announced before cover is confirmed in
+writing. Keep it that way until Johannes says otherwise.
+
+Player photos need rights; the seed ships without them and the cards show
+initials. Add a photo URL in the admin once rights are confirmed.
+
+## The field
+
+Migration 018 seeds the twelve Icons announced by 16 September 2026:
+Team South Africa, captain Ernie Els: AB de Villiers, Fourie du Preez,
+Schalk Burger, Butch James, Victor Matfield, Vernon Philander, Shaun
+Pollock. Team World, captain José María Olazábal: John Terry, Brian
+Lara, Ash Barty. Fourteen a side eventually; add the rest at
+`/admin/icons` as they are announced (name is unique, re-running the
+migration is a no-op).
 
 ## Pieces
 
 | Piece | Where |
 |---|---|
-| Tables | migration 018: `icons` (the field), `icon_votes` (one row per golfer, primary key `user_id`) |
+| Tables | migration 018: `icons` (the field: team, captain flag, tagline, photo, order, active), `icon_votes` (one row per golfer, primary key `user_id`) |
 | Field management | `/admin/icons`: add, reorder, hide or delete; live pick counts |
 | Public read | `GET /api/icons`: active Icons, counts, shares, the caller's pick |
 | Pick | `POST /api/icons/vote { iconId }`: signed in, active Icon only, upsert on `user_id`, rate-limited |
-| Screen | `/icons`: list with a share bar per Icon; signed out sees the standings and a sign-in button |
+| Screen | `/icons`: hero, the field by team with a share bar per Icon; signed out sees the standings and a sign-in button |
 | Analytics | `icon_backed` with `icon_id` and whether it was a change |
 
 RLS: `icons` is readable by everyone; `icon_votes` is readable only by its
@@ -31,5 +47,4 @@ route counts with the service role.
 
 1. Migration 018 on production (`supabase/migrations/018_icons.sql`).
 2. Deploy.
-3. Add the field at `/admin/icons`. Until then the tab says "The field
-   hasn't been announced yet."
+3. The seeded field shows at once; add newly announced Icons at `/admin/icons`.
