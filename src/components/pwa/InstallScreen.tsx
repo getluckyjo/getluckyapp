@@ -8,6 +8,7 @@ import AppHeader from '@/components/layout/AppHeader'
 import { useIsStandalone } from '@/hooks/useIsStandalone'
 import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
+import { pwaAsset } from '@/lib/pwa/assets'
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>
@@ -124,7 +125,7 @@ export default function InstallScreen() {
         <div className="vf-scroll inst">
           <div className="inst-hero">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icons/icon-192.png" alt="" width={72} height={72} className="inst-icon" />
+            <img src={pwaAsset('/icons/icon-192.png')} alt="" width={72} height={72} className="inst-icon" />
             <h1 className="v2-title" style={{ marginBottom: 6 }}>{done ? 'You have\nthe app' : 'Get the\napp'}</h1>
             <p className="vf-sub" style={{ marginBottom: 0 }}>
               {done

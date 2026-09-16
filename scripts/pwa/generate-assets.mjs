@@ -26,6 +26,10 @@
  * Re-run with:  npm run pwa:assets   (or: node scripts/pwa/generate-assets.mjs)
  * The script is deterministic and idempotent: it overwrites all outputs and
  * needs only `sharp` (already a devDependency).
+ *
+ * After the artwork changes, bump PWA_ASSET_VERSION in src/lib/pwa/assets.ts:
+ * the service worker and iOS cache these paths for a year, so only a new
+ * query string gets the new files onto phones that have the old ones.
  */
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
