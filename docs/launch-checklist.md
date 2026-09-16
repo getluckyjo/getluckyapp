@@ -5,7 +5,7 @@ do it. Tick each line in the pull request that closes it, or here.
 
 ## 1. Database (production)
 
-- [ ] Migrations 001 to 015 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file).
+- [ ] Migrations 001 to 016 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file).
 - [ ] Point-in-Time Recovery on (Settings → Add-ons) and the restore drill done once against staging (`npm run staging:verify-restore`, `docs/restore-runbook.md`).
 - [ ] Authentication → Rate Limits: emails per hour raised from 30 to at least 500.
 - [ ] Authentication → URL Configuration: Site URL is `https://www.getluckyholeinone.com`; redirect URLs cover `www` and the bare domain.

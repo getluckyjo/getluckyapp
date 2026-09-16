@@ -43,6 +43,7 @@ const UNIQUE: Record<string, string[]> = {
   bets: ['payment_intent_id'],
   payfast_payments: ['m_payment_id'],
   verifications: ['bet_id'],
+  beta_access: ['value'],
 }
 
 export class FakeDb {
@@ -316,6 +317,14 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           byCourse.set(id, c)
         }
         return { data: [...byCourse.values()].sort((a, b) => b.revenue_cents - a.revenue_cents), error: null }
+      }
+      if (fn === 'beta_check') {
+        const { p_email, p_code } = args as { p_email: string | null; p_code: string | null }
+        const rows = db.rows('beta_access')
+        const hit = rows.some(r =>
+          (r.kind === 'email' && p_email && r.value === String(p_email).trim().toLowerCase()) ||
+          (r.kind === 'code' && p_code && r.value === String(p_code).trim().toLowerCase()))
+        return { data: hit, error: null }
       }
       if (fn === 'rate_limit_hit') {
         const { p_key, p_limit, p_window_seconds } = args as { p_key: string; p_limit: number; p_window_seconds: number }

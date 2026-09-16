@@ -11,8 +11,12 @@ import { log } from '@/lib/observability/log'
 // "dynamic server usage" bailout into the catch below and log it as an error.
 export const dynamic = 'force-dynamic'
 
-export default async function RootPage() {
+export default async function RootPage({ searchParams }: { searchParams: Promise<{ source?: string }> }) {
   let session = null
+  // The installed app launches at /?source=pwa; carry the marker through the
+  // redirect so the first screen can tell an icon launch from a browser visit.
+  const { source } = await searchParams
+  const suffix = source === 'pwa' ? '?source=pwa' : ''
 
   try {
     const supabase = await createClient()
@@ -24,8 +28,8 @@ export default async function RootPage() {
   }
 
   if (!session) {
-    redirect('/splash')
+    redirect(`/splash${suffix}`)
   }
 
-  redirect('/home')
+  redirect(`/home${suffix}`)
 }

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import PullToRefresh from '@/components/pwa/PullToRefresh'
+import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
 import { GolfBallIcon } from '@/components/icons'
@@ -65,6 +67,7 @@ export default function HistoryPage() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>('all')
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+  const refreshTick = useRefreshSignal()
 
   useEffect(() => {
     fetch('/api/bets?limit=200')
@@ -72,7 +75,7 @@ export default function HistoryPage() {
       .then(data => { if (data.bets) setAllBets(data.bets) })
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [refreshTick])
 
   const filtered = allBets.filter(b => matchesFilter(b, filter))
   const visible = filtered.slice(0, visibleCount)
@@ -90,6 +93,7 @@ export default function HistoryPage() {
   return (
     <PhoneFrame statusTheme="dark">
       <div className="v2-screen">
+        <PullToRefresh />
         <AppHeader tone="light" />
 
         <div className="vf-scroll">

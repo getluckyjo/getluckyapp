@@ -1,6 +1,8 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { haptics } from '@/lib/haptics'
 import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon } from '@/components/icons'
 
 export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'membership' | 'account' | 'play'
@@ -26,6 +28,17 @@ const TABS = [
 export default function BottomTabBar({ active }: { active?: ActiveTab }) {
   const router = useRouter()
 
+  // The five destinations are one tap away; have their code and route tree
+  // ready before the tap so a switch feels instant.
+  useEffect(() => {
+    for (const tab of TABS) router.prefetch(tab.path)
+  }, [router])
+
+  function go(path: string) {
+    haptics.tap()
+    router.push(path)
+  }
+
   return (
     <nav className="tabbar" aria-label="Main navigation">
       <div className="tabbar-pill" role="tablist">
@@ -41,7 +54,7 @@ export default function BottomTabBar({ active }: { active?: ActiveTab }) {
               aria-current={isActive ? 'page' : undefined}
               aria-label={tab.label}
               className={`tabbar-slot${isPlay ? ' tabbar-slot--play' : ''}${isActive ? ' is-active' : ''}`}
-              onClick={() => !isActive && router.push(tab.path)}
+              onClick={() => !isActive && go(tab.path)}
             >
               {isPlay ? (
                 <span className="tabbar-play" aria-hidden="true">

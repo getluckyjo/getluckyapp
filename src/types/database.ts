@@ -27,6 +27,7 @@ export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'ti
 export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
 export type LeadLane = 'partner' | 'investor'
+export type BetaAccessKind = 'email' | 'code'
 
 export interface Database {
   public: {
@@ -513,6 +514,38 @@ export interface Database {
         Update: { attempts?: number; next_attempt_at?: string; last_error?: string | null; done_at?: string | null; failed_at?: string | null }
         Relationships: []
       }
+      beta_access: {
+        Row: { id: number; kind: BetaAccessKind; value: string; note: string | null; added_by: string | null; created_at: string }
+        Insert: { kind: BetaAccessKind; value: string; note?: string | null; added_by?: string | null }
+        Update: { note?: string | null }
+        Relationships: []
+      }
+      feedback: {
+        Row: {
+          id: number
+          user_id: string | null
+          message: string
+          route: string | null
+          user_agent: string | null
+          standalone: boolean | null
+          app_version: string | null
+          build_date: string | null
+          screen: string | null
+          created_at: string
+        }
+        Insert: {
+          user_id?: string | null
+          message: string
+          route?: string | null
+          user_agent?: string | null
+          standalone?: boolean | null
+          app_version?: string | null
+          build_date?: string | null
+          screen?: string | null
+        }
+        Update: never
+        Relationships: []
+      }
       rate_limits: {
         Row: { key: string; count: number; window_start: string }
         Insert: never
@@ -577,6 +610,7 @@ export interface Database {
     Views: Record<string, never>
     Functions: {
       increment_attempts: { Args: { user_id: string }; Returns: undefined }
+      beta_check: { Args: { p_email: string | null; p_code: string | null }; Returns: boolean }
       rate_limit_hit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: { allowed: boolean; remaining: number; reset_at: string }[]

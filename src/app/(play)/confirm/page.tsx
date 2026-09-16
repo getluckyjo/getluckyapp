@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import { track } from '@/lib/analytics'
+import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
 import { useBet } from '@/context/BetContext'
 
@@ -32,11 +34,15 @@ export default function ConfirmPage() {
 
   function handleHoleInOne() {
     declareResult('hole_in_one')
+    haptics.success()
+    track('result_declared', { result: 'hole_in_one' })
     router.push('/result/claim')
   }
 
   function handleMiss() {
     declareResult('miss')
+    haptics.tap()
+    track('result_declared', { result: 'miss' })
     router.push('/result/miss')
   }
 

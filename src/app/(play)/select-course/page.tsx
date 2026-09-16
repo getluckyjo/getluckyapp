@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import { track } from '@/lib/analytics'
+import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { SearchIcon, GolfBallIcon } from '@/components/icons'
@@ -146,6 +148,8 @@ export default function SelectCoursePage() {
   function handleContinue() {
     if (!selectedCourse || !selectedHole) return
     selectCourse(toContextCourse(selectedCourse), toContextHole(selectedHole, selectedCourse.id))
+    haptics.tap()
+    track('course_selected', { partner: selectedCourse.is_partner })
     router.push('/choose-stake')
   }
 

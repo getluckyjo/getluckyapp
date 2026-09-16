@@ -18,14 +18,16 @@ import { log, errorMessage } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { sendWitnessRequests } from '@/lib/claims/confirmation'
 import { sendWelcomeEmail } from '@/lib/email/welcome'
+import { sendFeedbackEmail } from '@/lib/email/feedback'
 
 type Admin = SupabaseClient<Database>
 
-export type JobKind = 'witness_request' | 'welcome_email'
+export type JobKind = 'witness_request' | 'welcome_email' | 'feedback_email'
 
 export interface JobPayloads {
   witness_request: { betId: string }
   welcome_email: { email: string; name?: string | null }
+  feedback_email: { feedbackId: number }
 }
 
 /** Seconds until the next try, by attempt number so far. The last entry is the last try. */
@@ -41,6 +43,10 @@ const handlers: { [K in JobKind]: (admin: Admin, payload: JobPayloads[K]) => Pro
   },
   async welcome_email(_admin, { email, name }) {
     const r = await sendWelcomeEmail({ email, name })
+    if (!r.ok) throw new Error(r.error)
+  },
+  async feedback_email(admin, { feedbackId }) {
+    const r = await sendFeedbackEmail(admin, feedbackId)
     if (!r.ok) throw new Error(r.error)
   },
 }

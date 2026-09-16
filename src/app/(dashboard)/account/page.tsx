@@ -11,6 +11,7 @@ import MemberBadge from '@/components/membership/MemberBadge'
 import { MEMBERSHIP_PLANS } from '@/lib/membership'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/format'
+import { buildLabel } from '@/lib/version'
 
 const Chevron = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -279,6 +280,8 @@ export default function AccountPage() {
           >
             Sign out
           </button>
+
+          <p className="acct-version" aria-label="App version">Get Lucky · build {buildLabel()}</p>
 
           {/* ── Delete account ── */}
           <section className="acct-card" style={{ marginTop: 14 }}>
