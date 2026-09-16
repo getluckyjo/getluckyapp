@@ -83,7 +83,9 @@ your phone model and a screenshot.
 
 ## For the person running the beta
 
+- **Both beta features are off by default.** The app launches looking launched: no gate, no feedback button. Turn them on only for a closed test.
 - **Turn the gate on**: Vercel → project → Settings → Environment Variables → `BETA_GATE` = `on` (Preview and/or Production) → Redeploy. Add your own email at `/admin/beta` **before** you do this; admins are not exempt.
+- **Show the feedback button**: `NEXT_PUBLIC_FEEDBACK` = `on`, then redeploy (it is baked in at build time).
 - **Add a tester**: `/admin/beta` → Email address → Add. Or Invite code → Create code, then copy the code to them. Removing a row locks them out on their next page view.
 - **Apply migration 016** to the database first (`supabase/migrations/016_beta.sql`), the same way as 002 to 015.
 - **Read feedback**: it arrives by email (subject starts "Beta feedback #"), and sits in the `feedback` table.

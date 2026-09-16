@@ -69,6 +69,7 @@ the access token comes from). Every one of them refuses the production ref.
 | `RISK_HASH_SALT` | server | at least 16 random characters; salts the hashed IP, device and email used by the risk rules. Without it those rules stay quiet and the log says so once |
 | `BETA_GATE` | server | `on` closes the app to the testers listed at `/admin/beta` (emails or invite codes; migration 016). Unset or anything else: open. Sign-in, marketing, legal and the PayFast return stay reachable either way |
 | `NEXT_PUBLIC_BUILD_DATE` | build | set by `next.config.ts` at build time; shown on the Account screen as the build stamp with the commit SHA |
+| `NEXT_PUBLIC_FEEDBACK` | build | `on` shows the floating feedback button on every screen (closed-beta use). Unset: no button; the `/api/feedback` route still exists |
 | `RETENTION_DAYS` | server | footage of misses and documents of rejected claims are purged after this many days, default 90 |
 
 A preview deployment refuses to start if it points at the production database
