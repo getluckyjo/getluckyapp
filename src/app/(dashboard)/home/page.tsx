@@ -39,8 +39,8 @@ export default function HomePage() {
   // Keyed by user so a sign-out never shows the previous golfer's claim,
   // without an effect having to reset state.
   const [claim, setClaim] = useState<{ userId: string; bet: BetRecord | null } | null>(null)
-  // A payment PayFast confirmed that never became a bet, because the browser
-  // that came back from PayFast was not the one that left. One tap finishes it.
+  // A paid shot not yet recorded, because the browser that came back from
+  // PayFast was not the one that left. One tap opens the record screen.
   const [paid, setPaid] = useState<{ userId: string; payment: PendingPayment | null } | null>(null)
   const refreshTick = useRefreshSignal()
 
@@ -125,7 +125,7 @@ export default function HomePage() {
                   <span className="home-claim-sub" style={{ display: 'block' }}>
                     {paidShot.course?.name ?? 'Your entry'}
                     {paidShot.hole?.hole_number ? ` · Hole ${paidShot.hole.hole_number}` : ''}
-                    {` · R${Math.round(paidShot.amount_cents / 100)} paid · Tap to set it up`}
+                    {` · R${Math.round(paidShot.amount_cents / 100)} paid · Tap to record it`}
                   </span>
                 </span>
               </button>

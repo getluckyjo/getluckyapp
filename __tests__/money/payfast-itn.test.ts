@@ -232,6 +232,35 @@ describe('ledger writes', () => {
     expect(res.status).toBe(500)
   })
 
+  it('grants the bet from the ITN for an age-verified golfer, so no browser session is needed', async () => {
+    const { POST } = await loadRoute()
+    db.seed('profiles', { id: USER_A.id, age_verified_at: '2026-01-01T00:00:00Z', total_attempts: 0 })
+    const res = await POST(post(itn()) as never)
+    expect(res.status).toBe(200)
+    const bets = db.rows('bets')
+    expect(bets).toHaveLength(1)
+    expect(bets[0]).toMatchObject({
+      user_id: USER_A.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1',
+      stake_pence: 5000, payment_intent_id: 'gl_tier_1_1700000000000', pf_payment_id: '1089250', status: 'active',
+      created_ip_hash: null,
+    })
+    expect(db.rows('payfast_payments')[0].bet_id).toBe(bets[0].id)
+    expect(db.find('profiles', p => p.id === USER_A.id)!.total_attempts).toBe(1)
+    // Delivered twice: still one bet.
+    await POST(post(itn()) as never)
+    expect(db.rows('bets')).toHaveLength(1)
+  })
+
+  it('records the payment but grants nothing when the golfer is not age-verified or is suspended', async () => {
+    const { POST } = await loadRoute()
+    await POST(post(itn()) as never)                                   // no profile at all
+    expect(db.rows('bets')).toHaveLength(0)
+    db.seed('profiles', { id: USER_A.id, age_verified_at: '2026-01-01T00:00:00Z', suspended_at: '2026-09-01T00:00:00Z' })
+    await POST(post(itn({ m_payment_id: 'gl_tier_1_1700000000001' })) as never)
+    expect(db.rows('bets')).toHaveLength(0)
+    expect(db.rows('payfast_payments')).toHaveLength(2)
+  })
+
   it('attaches PayFast\'s id to an existing bet without rewriting our reference or touching status', async () => {
     const { POST } = await loadRoute()
     const [bet] = db.seed('bets', { user_id: USER_A.id, payment_intent_id: 'gl_tier_1_1700000000000', pf_payment_id: null, status: 'miss' })

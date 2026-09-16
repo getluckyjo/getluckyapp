@@ -5,13 +5,13 @@ import { apiError } from '@/lib/api/http'
 /**
  * GET /api/payments/pending
  *
- * The signed-in golfer's completed payments that have not become a bet
- * yet. Normally empty: the return page turns a payment into a bet within
- * seconds. It is not empty when the browser that came back from PayFast
- * was not the one that left (an installed iOS app opens PayFast in an
- * in-app browser with its own storage), or the return page was closed
- * before PayFast's confirmation landed. Home shows these so the golfer
- * can finish with one tap; nothing here creates anything.
+ * The signed-in golfer's paid shots that still need recording: completed
+ * payments with no bet yet, or whose bet (the ITN grants it) is still
+ * active with no video. Normally empty for a few seconds only. It is not
+ * empty when the browser that came back from PayFast was not the one that
+ * left (an installed iOS app opens PayFast in an in-app browser with its
+ * own storage), so the record screen never opened. Home shows these so
+ * the golfer can pick up with one tap; nothing here creates anything.
  */
 export async function GET() {
   try {
@@ -25,21 +25,22 @@ export async function GET() {
       .select('m_payment_id, tier, amount_cents, course_id, hole_id, created_at')
       .eq('user_id', user.id)
       .eq('status', 'complete')
-      .is('bet_id', null)
       .order('created_at', { ascending: false })
-      .limit(5)
+      .limit(10)
     if (error) throw error
     if (!rows?.length) return NextResponse.json({ pending: [] })
 
-    // The ledger link is best-effort at bet creation, so also exclude any
-    // payment a bet already references.
+    // A payment is done with once its bet has a recording (or a result).
+    // The ledger's bet_id link is best-effort, so match by reference.
     const refs = rows.map(r => r.m_payment_id)
     const { data: bets } = await supabase
       .from('bets')
-      .select('payment_intent_id')
+      .select('payment_intent_id, status, video_uploaded_at')
       .in('payment_intent_id', refs)
-    const taken = new Set((bets ?? []).map(b => b.payment_intent_id))
-    const open = rows.filter(r => !taken.has(r.m_payment_id))
+    const recorded = new Set(
+      (bets ?? []).filter(b => b.status !== 'active' || b.video_uploaded_at).map(b => b.payment_intent_id),
+    )
+    const open = rows.filter(r => !recorded.has(r.m_payment_id))
     if (!open.length) return NextResponse.json({ pending: [] })
 
     const courseIds = [...new Set(open.map(r => r.course_id).filter((v): v is string => !!v))]

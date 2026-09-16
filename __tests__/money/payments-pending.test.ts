@@ -1,7 +1,8 @@
 /**
- * GET /api/payments/pending — completed payments that have not become a bet.
+ * GET /api/payments/pending — paid shots not yet recorded: completed
+ * payments with no bet, or whose bet is still active with no video.
  * Read-only; the only thing at stake is that a golfer never sees another
- * golfer's payment and never sees one that already has its bet.
+ * golfer's payment and never sees one that is already recorded.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, USER_A, USER_B, COURSE_ID, HOLE_ID } from '../helpers/fake-supabase'
@@ -43,7 +44,8 @@ describe('GET /api/payments/pending', () => {
     ledgerRow()
     ledgerRow({ m_payment_id: 'gl_b', user_id: USER_B.id })          // someone else's
     ledgerRow({ m_payment_id: 'gl_c', status: 'amount_mismatch' })   // not complete
-    ledgerRow({ m_payment_id: 'gl_d', bet_id: 'bet-1' })             // linked already
+    ledgerRow({ m_payment_id: 'gl_d', bet_id: 'bet-1' })             // linked, and the bet is recorded
+    db.seed('bets', { id: 'bet-1', user_id: USER_A.id, payment_intent_id: 'gl_d', status: 'active', video_uploaded_at: '2026-09-16T09:20:00Z' })
     const res = await GET()
     expect(res.status).toBe(200)
     const { pending } = await res.json()
@@ -54,10 +56,18 @@ describe('GET /api/payments/pending', () => {
     }])
   })
 
-  it('excludes a payment a bet already references even when the ledger link failed', async () => {
+  it('keeps a payment whose bet exists but has no recording yet (the ITN granted it)', async () => {
     asUser()
     ledgerRow()
-    db.seed('bets', { id: 'bet-9', user_id: USER_A.id, payment_intent_id: 'gl_a', status: 'active' })
+    db.seed('bets', { id: 'bet-9', user_id: USER_A.id, payment_intent_id: 'gl_a', status: 'active', video_uploaded_at: null })
+    const { pending } = await (await GET()).json()
+    expect(pending.map((p: { m_payment_id: string }) => p.m_payment_id)).toEqual(['gl_a'])
+  })
+
+  it('excludes a payment whose bet is resolved, even when the ledger link failed', async () => {
+    asUser()
+    ledgerRow()
+    db.seed('bets', { id: 'bet-9', user_id: USER_A.id, payment_intent_id: 'gl_a', status: 'miss' })
     const { pending } = await (await GET()).json()
     expect(pending).toEqual([])
   })
