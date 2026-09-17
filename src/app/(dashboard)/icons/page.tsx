@@ -97,8 +97,8 @@ export default function IconsPage() {
             <Image src={ICONS_EVENT.hero} alt="Icons Cup South Africa, 11 to 13 December 2026, The Links at Fancourt" width={1200} height={675} sizes="480px" priority />
           </div>
 
-          <h1 className="v2-title" style={{ marginBottom: 8 }}>{'Back an\nIcon'}</h1>
-          <p className="vf-sub">{ICONS_EVENT.question} Pick one. Change it any time before the first tee.</p>
+          <h1 className="sr-only">Back an Icon</h1>
+          <p className="vf-sub ic-intro">{ICONS_EVENT.question} Pick one. Change it any time before the first tee.</p>
 
           <div className="ic-prize" aria-label={ICONS_EVENT.prizeTotal}>
             <div className="ic-prize-tiles">
