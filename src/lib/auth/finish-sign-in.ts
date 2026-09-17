@@ -5,15 +5,9 @@ import { sendWelcomeEmail } from '@/lib/email/welcome'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enqueue } from '@/lib/outbox'
 
-/**
- * Where a sign-in is allowed to land. Anything else falls back to /welcome so a
- * crafted `next` can never become an open redirect.
- */
-export const SAFE_NEXT_PATHS = ['/welcome', '/home', '/history', '/leaderboard', '/account', '/select-course', '/icons']
+import { safeNext } from './next-path'
 
-export function safeNext(raw: string | null | undefined): string {
-  return raw && SAFE_NEXT_PATHS.includes(raw) ? raw : '/welcome'
-}
+export { SAFE_NEXT_PATHS, safeNext } from './next-path'
 
 /**
  * Everything that has to happen once Supabase has a session for this browser,

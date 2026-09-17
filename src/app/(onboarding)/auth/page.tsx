@@ -8,6 +8,7 @@ import BottomTabBar from '@/components/layout/BottomTabBar'
 import StepBar from '@/components/layout/StepBar'
 import { GoogleIcon } from '@/components/icons'
 import { useAuth } from '@/context/AuthContext'
+import { safeNext } from '@/lib/auth/next-path'
 
 type Mode = 'idle' | 'email' | 'sent'
 
@@ -40,18 +41,22 @@ function AuthForm() {
   const [resent, setResent] = useState(false)
 
   const urlError = searchParams.get('error')
-  // Set by the proxy when it bounced someone off a signed-in-only route.
+  // Set by the proxy when it bounced someone off a signed-in-only route, and by
+  // the admin gate. Held to the same allow-list the server uses: this value
+  // comes from the query string, so an unchecked router.push would follow a
+  // crafted `next` straight off the site.
   const next = searchParams.get('next')
+  const landing = safeNext(next)
 
   useEffect(() => {
-    if (user && busy !== 'code') router.push(next ?? '/welcome')
-  }, [user, next, router, busy])
+    if (user && busy !== 'code') router.push(landing)
+  }, [user, landing, router, busy])
 
   async function handleGoogle() {
     setError(null)
     setBusy('google')
     try {
-      await signInWithGoogle(next ?? undefined)
+      await signInWithGoogle(landing)
     } catch {
       setError('Google sign-in is unavailable right now. Please try again.')
       setBusy(null)
@@ -112,7 +117,7 @@ function AuthForm() {
     // just received must reach the server so the callback can run the
     // post-sign-in steps (age check, welcome email) exactly like OAuth does.
     const target = new URL('/auth/callback', window.location.origin)
-    if (next) target.searchParams.set('next', next)
+    target.searchParams.set('next', landing)
     window.location.assign(target.toString())
   }
 
