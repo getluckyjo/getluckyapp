@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Ban, CheckCircle, User, Trophy, Ticket, CreditCard } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Ban, CheckCircle, User, Trophy, Ticket, CreditCard } from 'lucide-react'
 import StatCard from '@/components/admin/StatCard'
 import StatusBadge from '@/components/admin/StatusBadge'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import { formatZAR, timeAgo } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
-import type { AdminUserRecord, AdminBetRecord } from '@/types/admin'
+import type { AdminUserRecord, AdminBetRecord, AdminPaymentRecord } from '@/types/admin'
 
 export default function AdminUserDetailPage() {
   const params = useParams()
@@ -16,6 +16,7 @@ export default function AdminUserDetailPage() {
   const userId = params.userId as string
   const [user, setUser] = useState<AdminUserRecord | null>(null)
   const [bets, setBets] = useState<AdminBetRecord[]>([])
+  const [payments, setPayments] = useState<AdminPaymentRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [suspendModal, setSuspendModal] = useState(false)
   const [suspendReason, setSuspendReason] = useState('')
@@ -26,6 +27,7 @@ export default function AdminUserDetailPage() {
       .then(data => {
         setUser(data.user)
         setBets(data.bets || [])
+        setPayments(data.payments || [])
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -134,6 +136,95 @@ export default function AdminUserDetailPage() {
         <StatCard title="Handicap" value={user.handicap !== null ? String(user.handicap) : '—'} icon={User} accent="#4a7a3d" />
       </div>
 
+      {/* Age check and saved card: the two things support is asked about */}
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
+        <div style={{ flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #e5e5e5' }}>
+          <CheckCircle size={18} color={user.ageVerifiedAt ? '#1a7f37' : '#c0392b'} />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+              {user.ageVerifiedAt ? 'Age verified' : 'Age not verified'}
+            </div>
+            <div style={{ fontSize: 12, color: '#999' }}>
+              {user.ageVerifiedAt
+                ? new Date(user.ageVerifiedAt).toLocaleDateString('en-ZA')
+                : 'No bet can be granted until this passes'}
+            </div>
+          </div>
+        </div>
+        <div style={{ flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #e5e5e5' }}>
+          <CreditCard size={18} color="#335231" />
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+              {user.savedCard ? user.savedCard.label : 'No saved card'}
+            </div>
+            <div style={{ fontSize: 12, color: '#999' }}>
+              {user.savedCard
+                ? `Saved ${new Date(user.savedCard.savedAt).toLocaleDateString('en-ZA')}${user.savedCard.lastUsedAt ? ` · used ${timeAgo(user.savedCard.lastUsedAt)}` : ''} · held by PayFast`
+                : 'The golfer removes or adds this under Account'}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Payments: the money, and whether each one became a bet */}
+      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden', marginBottom: 24 }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e5e5' }}>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>Payments ({payments.length})</h3>
+        </div>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
+              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Course</th>
+              <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Amount</th>
+              <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Status</th>
+              <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Paid with</th>
+              <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Bet</th>
+              <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {payments.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: 30, textAlign: 'center', color: '#999' }}>No payments</td></tr>
+            ) : (
+              payments.map((payment) => {
+                const needsAttention = payment.status === 'complete' && !payment.betId
+                return (
+                  <tr key={payment.mPaymentId} style={{ borderBottom: '1px solid #f0f0f0', background: needsAttention ? '#fffdf5' : undefined }}>
+                    <td style={{ padding: '10px 14px', color: '#111' }}>
+                      {payment.courseName ? `${payment.courseName}${payment.holeNumber ? `, H${payment.holeNumber}` : ''}` : '—'}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#111' }}>{formatZAR(payment.amountCents)}</td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                      <StatusBadge status={payment.status} small variant={payment.status === 'complete' ? 'success' : payment.status === 'pending' ? 'warning' : 'danger'} />
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center', color: '#666', fontSize: 12 }}>
+                      {payment.source === 'saved_card' ? 'Saved card' : 'Checkout'}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
+                      {payment.betId ? (
+                        <button
+                          onClick={() => router.push(`/admin/bets/${payment.betId}`)}
+                          style={{ background: 'none', border: 'none', padding: 0, color: '#335231', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+                        >
+                          Open bet
+                        </button>
+                      ) : needsAttention ? (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#a07820', fontWeight: 600, fontSize: 12 }}>
+                          <AlertTriangle size={13} /> None
+                        </span>
+                      ) : (
+                        <span style={{ color: '#999' }}>—</span>
+                      )}
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#999', fontSize: 12 }}>{timeAgo(payment.createdAt)}</td>
+                  </tr>
+                )
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
       {/* PayFast payment method */}
       {user.paymentMethod && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #e5e5e5', marginBottom: 24 }}>
@@ -168,7 +259,12 @@ export default function AdminUserDetailPage() {
               <tr><td colSpan={6} style={{ padding: 30, textAlign: 'center', color: '#999' }}>No bets</td></tr>
             ) : (
               bets.map((bet) => (
-                <tr key={bet.id} className="admin-tr" style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <tr
+                  key={bet.id}
+                  className="admin-tr"
+                  style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                  onClick={() => router.push(`/admin/bets/${bet.id}`)}
+                >
                   <td style={{ padding: '10px 14px', color: '#111' }}>{bet.courseName}, H{bet.holeNumber}</td>
                   <td style={{ padding: '10px 14px', color: '#335231', fontWeight: 600, fontSize: 12 }}>{TIER_LABELS[bet.tier]}</td>
                   <td style={{ padding: '10px 14px', textAlign: 'right', color: '#111' }}>{formatZAR(bet.stakeCents)}</td>

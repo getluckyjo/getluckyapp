@@ -132,6 +132,43 @@ export interface AdminBetRecord {
   createdAt: string
 }
 
+/** A row of the PayFast ledger, as the admin sees it. */
+export interface AdminPaymentRecord {
+  mPaymentId: string
+  pfPaymentId: string | null
+  userId: string | null
+  userName: string | null
+  userEmail: string | null
+  courseName: string | null
+  holeNumber: number | null
+  tier: BetTier | null
+  amountCents: number
+  status: 'complete' | 'amount_mismatch' | 'pending' | 'failed'
+  /** The bet this payment produced; null is the one that needs a person. */
+  betId: string | null
+  /** 'saved_card' when charged against a token, else the hosted/onsite checkout. */
+  source: 'saved_card' | 'checkout'
+  createdAt: string
+}
+
+/** Everything the bet screen shows: the bet, its money, its risk, its history. */
+export interface AdminBetDetail extends AdminBetRecord {
+  expiresAt: string | null
+  payoutReference: string | null
+  videoSignedUrl: string | null
+  videoSha256: string | null
+  videoBytes: number | null
+  videoUploadedAt: string | null
+  riskScore: number
+  riskFlags: RiskFlag[]
+  payment: AdminPaymentRecord | null
+  /** The open or resolved claim, when the player declared a win. */
+  verificationId: string | null
+  verificationStatus: VerificationStatus | null
+  user: { id: string; name: string | null; email: string; suspendedAt: string | null; ageVerifiedAt: string | null; totalAttempts: number }
+  events: ClaimEvent[]
+}
+
 export interface AdminUserRecord {
   id: string
   name: string | null
@@ -145,6 +182,10 @@ export interface AdminUserRecord {
   suspendedAt: string | null
   suspendedReason: string | null
   createdAt: string
+  /** Set once the golfer has passed the 18+ check; null blocks every bet. */
+  ageVerifiedAt?: string | null
+  /** PayFast tokenization: present when the golfer saved a card. */
+  savedCard?: { label: string; savedAt: string; lastUsedAt: string | null } | null
 }
 
 export interface AdminCourseRecord extends CourseRow {
