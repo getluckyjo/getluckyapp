@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { Download } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import SearchInput from '@/components/admin/SearchInput'
@@ -10,6 +11,7 @@ import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
 
 export default function AdminBetsPage() {
+  const router = useRouter()
   const [data, setData] = useState<AdminBetRecord[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -146,7 +148,12 @@ export default function AdminBetsPage() {
               </tr>
             ) : (
               data.map((bet) => (
-                <tr key={bet.id} className="admin-tr" style={{ borderBottom: '1px solid #f0f0f0' }}>
+                <tr
+                  key={bet.id}
+                  className="admin-tr"
+                  style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
+                  onClick={() => router.push(`/admin/bets/${bet.id}`)}
+                >
                   <td style={{ padding: '12px 14px', fontWeight: 500, color: '#111' }}>
                     {bet.userName || 'Unknown'}
                   </td>
