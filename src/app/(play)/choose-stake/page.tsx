@@ -12,6 +12,8 @@ import { formatRand } from '@/lib/format'
 
 type LoadingStep = 'idle' | 'opening' | 'paying'
 
+interface SavedCard { label: string; savedAt: string; lastUsedAt: string | null }
+
 declare global {
   interface Window {
     /** PayFast's Onsite modal, defined by onsite/engine.js once loaded. */
@@ -66,12 +68,16 @@ function prizeShort(win: number) {
  */
 export default function ChooseStakePage() {
   const router = useRouter()
-  const { selectedCourse, selectedHole, selectTier } = useBet()
+  const { selectedCourse, selectedHole, selectTier, confirmPayment, setBetId } = useBet()
   const { user, profile } = useAuth()
   const [selected, setSelected]     = useState<BetTier | null>(null)
   const [confirming, setConfirming] = useState(false)
   const [step, setStep]             = useState<LoadingStep>('idle')
   const [errorMsg, setErrorMsg]     = useState('')
+  // undefined while loading; null when the golfer has no saved card.
+  const [savedCardState, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
+  const [saveCard, setSaveCard]     = useState(true)
+  const savedCard = user ? savedCardState : null
 
   const loading = step !== 'idle'
   const activeTier = BET_TIERS.find(t => t.tier === selected)
@@ -82,6 +88,56 @@ export default function ChooseStakePage() {
       router.replace('/select-course')
     }
   }, [selectedCourse, selectedHole, router])
+
+  // A saved card (PayFast tokenization) makes the entry one tap.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/payments/card')
+      .then(r => (r.ok ? r.json() : { card: null }))
+      .then((data: { card: SavedCard | null }) => { if (!cancelled) setSavedCard(data.card ?? null) })
+      .catch(() => { if (!cancelled) setSavedCard(null) })
+    return () => { cancelled = true }
+  }, [user])
+
+  /** One call charges the saved card; the bet comes back granted. */
+  async function handlePayWithSavedCard() {
+    if (!selected || !selectedCourse || !selectedHole) return
+    setStep('paying')
+    setErrorMsg('')
+    selectTier(selected)
+    try {
+      const res = await fetch('/api/payments/payfast/charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier: selected, courseId: selectedCourse.id, holeId: selectedHole.id }),
+      })
+      const data = await res.json().catch(() => ({})) as { betId?: string; m_payment_id?: string; error?: string; code?: string }
+      if (res.ok && data.betId && data.m_payment_id) {
+        confirmPayment(data.m_payment_id)
+        setBetId(data.betId)
+        track('payment_saved_card', { tier: selected })
+        router.push('/record')
+        return
+      }
+      if (res.status === 404) {
+        // The card is gone; fall back to the ordinary checkout without fuss.
+        setSavedCard(null)
+        setStep('idle')
+        return
+      }
+      if (res.status === 409 && data.m_payment_id) {
+        // Paid, but something else is missing (age check, for instance): the return page says what.
+        router.push(`/payment-return?ref=${encodeURIComponent(data.m_payment_id)}`)
+        return
+      }
+      setErrorMsg(data.error ?? 'Your saved card could not be charged. Pay another way below.')
+      setStep('idle')
+    } catch {
+      setErrorMsg('Your saved card could not be charged. Pay another way below.')
+      setStep('idle')
+    }
+  }
 
   function handleSelectTier(tier: BetTier) {
     if (loading) return
@@ -108,6 +164,8 @@ export default function ChooseStakePage() {
           // was actually paid for — the bet is built from that, not from here.
           courseId: selectedCourse?.id,
           holeId:   selectedHole?.id,
+          // Tokenize the card at PayFast so the next entry is one tap.
+          saveCard: !savedCard && saveCard,
         }),
       })
       const pfData = await pfRes.json()
@@ -257,15 +315,38 @@ export default function ChooseStakePage() {
                 <div className="auth-error" role="alert" style={{ marginBottom: 12 }}>{errorMsg}</div>
               )}
 
-              <button
-                type="button"
-                className="btn-lime btn-lime--block"
-                onClick={handleConfirmPayment}
-                disabled={loading}
-              >
-                <LockIcon />
-                {step === 'paying' ? 'Complete your payment…' : loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
-              </button>
+              {savedCard ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-lime btn-lime--block"
+                    onClick={handlePayWithSavedCard}
+                    disabled={loading}
+                  >
+                    <LockIcon />
+                    {step === 'paying' ? 'Charging your card…' : `Pay ${formatRand(activeTier.stakeZAR)} with saved card`}
+                  </button>
+                  <button type="button" className="btn-tile btn-tile--block stake-alt" onClick={handleConfirmPayment} disabled={loading}>
+                    {step === 'opening' ? 'Opening PayFast…' : 'Pay another way'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="btn-lime btn-lime--block"
+                    onClick={handleConfirmPayment}
+                    disabled={loading}
+                  >
+                    <LockIcon />
+                    {step === 'paying' ? 'Complete your payment…' : loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
+                  </button>
+                  <label className="stake-save">
+                    <input type="checkbox" checked={saveCard} onChange={e => setSaveCard(e.target.checked)} disabled={loading} />
+                    <span>Save my card with PayFast for one-tap entries next time. You can remove it under Account.</span>
+                  </label>
+                </>
+              )}
 
               <p className="stake-sheet-legal">
                 Secure payment via PayFast. Prizes fully insured by Indwe Risk Services (FSP 3425).{' '}

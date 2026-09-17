@@ -11,7 +11,7 @@ import { BET_TIERS } from '@/lib/tiers'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
-import { MIN_HOLE_METRES, holeUnavailableReason, isHolePlayable } from '@/lib/holes'
+import { checkTarget } from '@/lib/payfast/target'
 
 // ---------------------------------------------------------------------------
 // PayFast-mandated parameter order for signature generation
@@ -24,6 +24,8 @@ const PF_FIELD_ORDER = [
   'custom_int1', 'custom_int2', 'custom_int3', 'custom_int4', 'custom_int5',
   'custom_str1', 'custom_str2', 'custom_str3', 'custom_str4', 'custom_str5',
   'email_confirmation', 'confirmation_address', 'currency', 'payment_method',
+  'subscription_type', 'billing_date', 'recurring_amount', 'frequency', 'cycles',
+  'subscription_notify_email', 'subscription_notify_webhook', 'subscription_notify_buyer',
 ]
 
 /** URL-encode a value per PayFast's published sample: spaces → +, trimmed. */
@@ -105,6 +107,8 @@ const Body = z.object({
   courseId: uuid,
   holeId: uuid,
   userName: z.string().max(100).default(''),
+  /** Tokenize the card at PayFast so the next entry is one tap (migration 021). */
+  saveCard: z.boolean().default(false),
 })
 
 // ---------------------------------------------------------------------------
@@ -139,35 +143,12 @@ export async function POST(request: NextRequest) {
 
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
-    const { tier, courseId, holeId, userName } = body.data
+    const { tier, courseId, holeId, userName, saveCard } = body.data
     const tierData = BET_TIERS.find(t => t.tier === tier)!
 
     // ── The target must be a real, active, long-enough par-3 at a partner course ──
-    const { data: hole } = await supabase
-      .from('holes')
-      .select('id, course_id, is_active, par, distance_metres')
-      .eq('id', holeId)
-      .maybeSingle()
-    if (!hole || hole.course_id !== courseId) {
-      return NextResponse.json({ error: 'That hole is not available', code: 'HOLE_INVALID' }, { status: 400 })
-    }
-    if (!hole.is_active) {
-      return NextResponse.json({ error: 'That hole is not currently open for the challenge', code: 'HOLE_INACTIVE' }, { status: 400 })
-    }
-    if (!isHolePlayable(hole)) {
-      return NextResponse.json(
-        { error: `The challenge is played on par 3s of ${MIN_HOLE_METRES}m or more (${holeUnavailableReason(hole)})`, code: 'HOLE_NOT_ELIGIBLE' },
-        { status: 400 },
-      )
-    }
-    const { data: course } = await supabase
-      .from('courses')
-      .select('id, is_partner')
-      .eq('id', courseId)
-      .maybeSingle()
-    if (!course?.is_partner) {
-      return NextResponse.json({ error: 'That course is not a partner course', code: 'COURSE_NOT_PARTNER' }, { status: 400 })
-    }
+    const refused = await checkTarget(supabase, courseId, holeId)
+    if (refused) return refused
 
     // Sanitize userName to prevent injection into PayFast form fields
     const safeUserName = userName.replace(/[<>"'&]/g, '').slice(0, 100)
@@ -207,11 +188,14 @@ export async function POST(request: NextRequest) {
       custom_str3:   holeId,
       custom_str4:   tierData.tier,
     }
+    // Tokenization: PayFast stores the card and returns a token on the ITN,
+    // which /api/payments/payfast/notify keeps in payment_cards.
+    if (saveCard) data.subscription_type = '2'
 
     const signature = generateSignature(data, config.passphrase)
     const onsite = await onsiteIdentifier(config, pfParamString(data, signature), mPaymentId)
 
-    log.info('payfast.checkout.created', { user_id: user.id, tier: tierData.tier, amount, course_id: courseId, hole_id: holeId, sandbox: config.sandbox, m_payment_id: mPaymentId, onsite: !!onsite, origin })
+    log.info('payfast.checkout.created', { user_id: user.id, tier: tierData.tier, amount, course_id: courseId, hole_id: holeId, sandbox: config.sandbox, m_payment_id: mPaymentId, onsite: !!onsite, origin, save_card: saveCard })
 
     return NextResponse.json({
       redirectUrl:  config.processUrl,

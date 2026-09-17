@@ -59,6 +59,7 @@ Preview:
 ## 4. Content and people
 
 - [ ] Every partner course: `is_partner` on, its par-3 holes active with distances, latitude and longitude set (Admin → Courses), and at least one club contact.
+- [ ] Saved cards: migration 021 applied; PayFast Settings → Recurring Billing enabled with ad hoc payments (see `docs/payfast-go-live.md`).
 - [x] Only par 3s of 140 m or more are playable (`src/lib/holes.ts`; checkout refuses shorter holes, the app greys them out with the reason). Set by Johannes on 16 Sep 2026; 140 m counts.
 - [ ] Admin accounts: yours plus whoever reviews claims (`profiles.is_admin`, set in SQL, never through the app).
 - [ ] `support@getluckygolf.co.za` reaches a person, and someone owns the ops alert inbox.

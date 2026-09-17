@@ -1,11 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
+import { track } from '@/lib/analytics'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/format'
 import { buildLabel } from '@/lib/version'
@@ -92,6 +93,35 @@ export default function AccountPage() {
     } catch (err) {
       setDeleteStep('confirm')
       showToast(err instanceof Error ? err.message : 'Your account could not be deleted.')
+    }
+  }
+
+  // ── Saved card (PayFast tokenization) ──
+  const [cardState, setCard] = useState<{ label: string; savedAt: string } | null | undefined>(undefined)
+  const [removingCard, setRemovingCard] = useState(false)
+  const card = user ? cardState : null
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetch('/api/payments/card')
+      .then(r => (r.ok ? r.json() : { card: null }))
+      .then((data: { card: { label: string; savedAt: string } | null }) => { if (!cancelled) setCard(data.card ?? null) })
+      .catch(() => { if (!cancelled) setCard(null) })
+    return () => { cancelled = true }
+  }, [user])
+
+  async function removeCard() {
+    setRemovingCard(true)
+    try {
+      const res = await fetch('/api/payments/card', { method: 'DELETE' })
+      if (!res.ok) throw new Error(String(res.status))
+      setCard(null)
+      track('card_removed')
+      showToast('Saved card removed')
+    } catch {
+      showToast('Could not remove your card. Please try again.')
+    } finally {
+      setRemovingCard(false)
     }
   }
 
@@ -218,6 +248,28 @@ export default function AccountPage() {
                 </div>
               ))
             )}
+          </section>
+
+          {/* ── Payment ── */}
+          <section className="acct-card">
+            <header className="acct-card-head">
+              <h2>Payment</h2>
+              {card && (
+                <button type="button" className="acct-edit" onClick={removeCard} disabled={removingCard}>
+                  {removingCard ? 'Removing…' : 'Remove'}
+                </button>
+              )}
+            </header>
+            <div className="acct-row">
+              <span>
+                <span className="acct-row-title">{card ? card.label : 'No saved card'}</span>
+                <span className="acct-row-sub">
+                  {card
+                    ? `Saved ${new Date(card.savedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })} · one-tap entries. Held by PayFast; we never see the number.`
+                    : 'Tick "Save my card" at your next entry and the one after is one tap.'}
+                </span>
+              </span>
+            </div>
           </section>
 
           {/* ── Legal ── */}
