@@ -261,6 +261,35 @@ describe('ledger writes', () => {
     expect(db.rows('payfast_payments')).toHaveLength(2)
   })
 
+  it('keeps the token PayFast returns for a tokenized payment, as the golfer\'s saved card', async () => {
+    const { POST } = await loadRoute()
+    await POST(post(itn({ token: 'dc0521d3-55fe-269b-fa00-b647310d760f' })) as never)
+    const [card] = db.rows('payment_cards')
+    expect(card).toMatchObject({ user_id: USER_A.id, token: 'dc0521d3-55fe-269b-fa00-b647310d760f' })
+    // Again, for the same golfer: still one card, the newer token.
+    await POST(post(itn({ m_payment_id: 'gl_tier_1_1700000000009', token: 'new-token-0000000000' })) as never)
+    expect(db.rows('payment_cards')).toHaveLength(1)
+    expect(db.rows('payment_cards')[0].token).toBe('new-token-0000000000')
+  })
+
+  it('never re-targets a ledger row that already exists: a saved-card charge keeps its own hole', async () => {
+    const { POST } = await loadRoute()
+    const OTHER_HOLE = '77777777-7777-4777-8777-777777777777'
+    db.seed('profiles', { id: USER_A.id, age_verified_at: '2026-01-01T00:00:00Z', total_attempts: 0 })
+    db.seed('payfast_payments', {
+      m_payment_id: 'gl_tier_1_1700000000000', pf_payment_id: null, user_id: USER_A.id,
+      course_id: COURSE_ID, hole_id: OTHER_HOLE, tier: 'tier_1', amount_cents: 5000, status: 'pending', raw_payload: { source: 'saved_card' },
+    })
+    // PayFast's ITN for a token charge echoes the FIRST payment's custom fields (HOLE_ID here).
+    const res = await POST(post(itn()) as never)
+    expect(res.status).toBe(200)
+    const [row] = db.rows('payfast_payments')
+    expect(row).toMatchObject({ hole_id: OTHER_HOLE, status: 'complete', pf_payment_id: '1089250' })
+    expect(db.rows('payfast_payments')).toHaveLength(1)
+    const [bet] = db.rows('bets')
+    expect(bet).toMatchObject({ hole_id: OTHER_HOLE, payment_intent_id: 'gl_tier_1_1700000000000' })
+  })
+
   it('attaches PayFast\'s id to an existing bet without rewriting our reference or touching status', async () => {
     const { POST } = await loadRoute()
     const [bet] = db.seed('bets', { user_id: USER_A.id, payment_intent_id: 'gl_tier_1_1700000000000', pf_payment_id: null, status: 'miss' })

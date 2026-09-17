@@ -12,6 +12,9 @@
  * and keep the hand-maintained `members` block (the funnel's table, which
  * lives in the same project but is not defined by this repo's migrations).
  */
+/** payfast_payments.status (migration 005, widened by 021). */
+export type PaymentStatus = 'complete' | 'amount_mismatch' | 'pending' | 'failed'
+
 export type Json =
   | string
   | number
@@ -354,6 +357,30 @@ export interface Database {
         }
         Relationships: []
       }
+      payment_cards: {
+        Row: {
+          user_id: string
+          token: string
+          label: string
+          created_at: string
+          last_used_at: string | null
+        }
+        Insert: {
+          user_id: string
+          token: string
+          label?: string
+          created_at?: string
+          last_used_at?: string | null
+        }
+        Update: {
+          user_id?: string
+          token?: string
+          label?: string
+          created_at?: string
+          last_used_at?: string | null
+        }
+        Relationships: []
+      }
       payfast_payments: {
         Row: {
           id: string
@@ -364,7 +391,7 @@ export interface Database {
           hole_id: string | null
           tier: BetTier | null
           amount_cents: number
-          status: 'complete' | 'amount_mismatch'
+          status: PaymentStatus
           raw_payload: Json | null
           bet_id: string | null
           created_at: string
@@ -378,7 +405,7 @@ export interface Database {
           hole_id?: string | null
           tier?: BetTier | null
           amount_cents: number
-          status?: 'complete' | 'amount_mismatch'
+          status?: PaymentStatus
           raw_payload?: Json | null
           bet_id?: string | null
           created_at?: string
@@ -392,7 +419,7 @@ export interface Database {
           hole_id?: string | null
           tier?: BetTier | null
           amount_cents?: number
-          status?: 'complete' | 'amount_mismatch'
+          status?: PaymentStatus
           raw_payload?: Json | null
           bet_id?: string | null
           created_at?: string

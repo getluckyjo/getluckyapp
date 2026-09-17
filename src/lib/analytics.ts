@@ -20,6 +20,8 @@ export type AnalyticsEvent =
   | 'payment_started'
   | 'payment_onsite_opened'
   | 'payment_onsite_closed'
+  | 'payment_saved_card'
+  | 'card_removed'
   | 'bet_created'
   | 'result_declared'
   | 'claim_submitted'

@@ -59,6 +59,8 @@ const PF_ORDER = [
   'custom_int1', 'custom_int2', 'custom_int3', 'custom_int4', 'custom_int5',
   'custom_str1', 'custom_str2', 'custom_str3', 'custom_str4', 'custom_str5',
   'email_confirmation', 'confirmation_address', 'currency', 'payment_method',
+  'subscription_type', 'billing_date', 'recurring_amount', 'frequency', 'cycles',
+  'subscription_notify_email', 'subscription_notify_webhook', 'subscription_notify_buyer',
 ]
 
 /** Independent implementation of PayFast's signature spec, so the route is checked against the spec and not itself. */
@@ -198,6 +200,17 @@ describe('the signed checkout', () => {
     expect(redirectUrl).toBe('https://sandbox.payfast.co.za/eng/process')
 
     const { signature, ...fields } = formFields
+    expect(signature).toBe(payfastSignature(fields, 'unit-test-passphrase'))
+  })
+
+  it('asks PayFast to tokenize the card only when the golfer said so, and signs it in', async () => {
+    asUser(USER_A); seedTarget()
+    const plain = await (await checkout(good)).json()
+    expect(plain.formFields.subscription_type).toBeUndefined()
+
+    const saving = await (await checkout({ ...good, saveCard: true })).json()
+    expect(saving.formFields.subscription_type).toBe('2')
+    const { signature, ...fields } = saving.formFields
     expect(signature).toBe(payfastSignature(fields, 'unit-test-passphrase'))
   })
 

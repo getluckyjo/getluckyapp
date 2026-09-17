@@ -141,12 +141,30 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 6. Record the payment. This ledger is what /api/bets/create checks;
-    // until a row lands here, no bet exists for this payment. Upsert on
-    // m_payment_id makes a repeated ITN for the same transaction a no-op.
-    const { error: payErr } = await supabase
+    // until a row lands here, no bet exists for this payment. A repeated ITN
+    // for the same transaction is a no-op. A row that already exists (a
+    // charge against a saved card writes its own row, with the right hole,
+    // before asking PayFast) keeps its user, course, hole and tier: an ITN
+    // for a token charge echoes the FIRST payment's custom fields, which
+    // would otherwise attach this payment to the wrong hole.
+    const { data: existingRow } = await supabase
       .from('payfast_payments')
-      .upsert(
-        {
+      .select('m_payment_id, status, tier')
+      .eq('m_payment_id', mPaymentId)
+      .maybeSingle()
+    let payErr: { message: string } | null = null
+    if (existingRow) {
+      const rowCheck = verifyPaymentAmount(existingRow.tier ?? '', amountCents)
+      const nextStatus = existingRow.status === 'complete' ? 'complete' : rowCheck.ok ? 'complete' : 'amount_mismatch'
+      const { error } = await supabase
+        .from('payfast_payments')
+        .update({ pf_payment_id: pfPaymentId || null, status: nextStatus, raw_payload: params })
+        .eq('m_payment_id', mPaymentId)
+      payErr = error
+    } else {
+      const { error } = await supabase
+        .from('payfast_payments')
+        .insert({
           m_payment_id:  mPaymentId,
           pf_payment_id: pfPaymentId || null,
           user_id:       userId   || null,
@@ -156,9 +174,9 @@ export async function POST(request: NextRequest) {
           amount_cents:  amountCents,
           status:        check.ok ? 'complete' : 'amount_mismatch',
           raw_payload:   params,
-        },
-        { onConflict: 'm_payment_id' },
-      )
+        })
+      payErr = error
+    }
 
     if (payErr) {
       await alertOps({
@@ -171,7 +189,19 @@ export async function POST(request: NextRequest) {
       return new NextResponse('Ledger write failed', { status: 500 })
     }
 
-    log.info('payfast.itn.recorded', { m_payment_id: mPaymentId, pf_payment_id: pfPaymentId, user_id: userId, tier, amount_cents: amountCents, status: check.ok ? 'complete' : 'amount_mismatch' })
+    log.info('payfast.itn.recorded', { m_payment_id: mPaymentId, pf_payment_id: pfPaymentId, user_id: userId, tier, amount_cents: amountCents, status: check.ok ? 'complete' : 'amount_mismatch', existing: !!existingRow })
+
+    // ── 6b. A saved card: the golfer ticked "save my card" at checkout
+    // (subscription_type=2) and PayFast returned the token. Keep it so the
+    // next entry is one tap. The card itself never reaches us.
+    const token = (params.token ?? '').trim()
+    if (token && userId) {
+      const { error: cardErr } = await supabase
+        .from('payment_cards')
+        .upsert({ user_id: userId, token, last_used_at: new Date().toISOString() }, { onConflict: 'user_id' })
+      if (cardErr) log.warn('payfast.itn.card_save_failed', { user_id: userId, error: cardErr.message })
+      else log.info('payfast.itn.card_saved', { user_id: userId })
+    }
 
     // ── 7. Grant the bet now, so it exists whether or not the golfer's
     // browser comes back with a session (an installed iOS app returns from
@@ -179,7 +209,7 @@ export async function POST(request: NextRequest) {
     // bet it already made. Never fail the ITN over this: the ledger row is
     // written, and the return page or Home can finish what is left (an
     // unverified age, for instance).
-    if (check.ok) {
+    if (check.ok || existingRow) {
       try {
         const granted = await grantBetForPayment(supabase, mPaymentId, { source: 'itn', createdIpHash: null })
         if (!granted.ok) log.info('payfast.itn.bet_not_granted', { m_payment_id: mPaymentId, user_id: userId, reason: granted.reason })

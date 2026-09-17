@@ -120,6 +120,31 @@ The `return_url` and `cancel_url` follow the host the golfer is on
 another, so a return to a different host looks signed out. The ITN's
 `notify_url` still uses `NEXT_PUBLIC_SITE_URL`.
 
+## Saved cards (tokenization)
+
+A golfer who ticks "Save my card" at checkout pays with
+`subscription_type=2`; PayFast keeps the card and returns a **token** on
+the ITN, which the app stores in `payment_cards` (migration 021). The next
+entry is one tap: `/api/payments/payfast/charge` writes the ledger row first
+(user, course, hole, tier, `pending`), then charges the token with
+`POST https://api.payfast.co.za/subscriptions/{token}/adhoc`, marks the row
+`complete` and grants the bet on the spot. A refusal leaves the row
+`failed` and the golfer is offered the ordinary checkout. "Remove" under
+Account cancels the agreement at PayFast and deletes the row. The card
+number never reaches us.
+
+To switch it on at PayFast:
+
+1. PayFast dashboard → **Settings → Recurring Billing** → make sure Recurring
+   Billing is **enabled** and **Ad hoc payments** are allowed. If the section
+   is missing or greyed out, email support@payfast.co.za asking for
+   "Recurring Billing (tokenization / ad hoc agreements)" on your merchant id.
+2. The API calls are signed with the same **passphrase** as the checkout
+   (`PAYFAST_PASSPHRASE`); nothing else to configure.
+3. Run migration 021 in the Supabase SQL editor.
+4. Test with one R50 entry with the box ticked, then a second entry: the
+   stake sheet shows "Pay R50 with saved card".
+
 ## Step 3 — Redeploy
 
 Env-var changes only take effect on a new deployment. Redeploy production after
