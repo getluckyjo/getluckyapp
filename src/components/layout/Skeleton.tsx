@@ -27,8 +27,8 @@ export function ScreenSkeleton({ tone = 'surface', cards = 3 }: { tone?: 'surfac
           ))}
         </div>
         <div className="skeleton-tabbar" aria-hidden>
-          <div className="tabbar-pill" />
-          <div className="tabbar-labels" />
+          <div className="skeleton-pill" />
+          <div className="skeleton-band" />
         </div>
       </div>
     </PhoneFrame>

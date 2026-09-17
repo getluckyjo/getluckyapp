@@ -92,7 +92,7 @@
   /* ── PAGE PADDING & TAB BAR ── */
   --page-px: clamp(16px, 5vw, 24px);
   /* Pill (48) + its top overhang (10) + label band (50) + home indicator. */
-  --tab-bar-h: calc(108px + env(safe-area-inset-bottom, 0px));
+  --tab-bar-h: calc(100px + env(safe-area-inset-bottom, 0px));
   --tab-bar-pb: calc(var(--tab-bar-h) + clamp(12px, 2vw, 22px));
 
   /* ── BORDER RADIUS SCALE ── */
@@ -472,60 +472,68 @@ body {
 /* ── BOTTOM TAB BAR (V2 pill) ──
    Grey pill with five icon slots; Play is a lime disc overhanging the pill.
    Labels sit on an opaque white band below. Only the band is opaque, so the
-   pill floats over the screen's photo or surface exactly as in the comps. */
+   pill floats over the screen's photo or surface exactly as in the comps.
+   One button per tab spans icon and label (both tappable); the pill and the
+   band are backgrounds behind the buttons. Geometry from
+   design/00-reference/.../Menu Bar Complete.svg, scaled to a 48px pill. */
 .tabbar {
   position: absolute;
   bottom: 0; left: 0; right: 0;
   z-index: 50;
-  display: flex; flex-direction: column;
-  padding-top: 10px;              /* room for the Play disc's top overhang */
-  pointer-events: none;
+  padding-top: var(--tabbar-overhang);
+  --tabbar-overhang: 10px;
+  --tabbar-pill-h: 48px;
+  --tabbar-gutter: 20px;
+}
+.tabbar-band {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  top: calc(var(--tabbar-overhang) + var(--tabbar-pill-h) - 1px);
+  background: var(--white);
 }
 .tabbar-pill {
-  pointer-events: auto;
-  margin: 0 20px;
-  height: 48px;
+  position: absolute;
+  top: var(--tabbar-overhang); left: var(--tabbar-gutter); right: var(--tabbar-gutter);
+  height: var(--tabbar-pill-h);
   background: var(--surface);
-  border-radius: 10px;
-  display: flex; align-items: center;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.10);
+  border-radius: 7px;                /* flat, as the comp draws it: no shadow */
 }
-.tabbar-slot {
-  flex: 1; min-width: 0; height: 100%;
-  display: flex; align-items: center; justify-content: center;
+.tabbar-tabs {
+  position: relative;
+  display: flex;
+  margin: 0 var(--tabbar-gutter);
+  padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+}
+.tabbar-tab {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center;
   background: none; border: none; padding: 0;
   color: var(--green); cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+.tabbar-tab:active .tabbar-slot { transform: scale(0.94); }
+.tabbar-slot {
+  width: 100%; height: var(--tabbar-pill-h);
+  display: flex; align-items: center; justify-content: center;
   transition: transform 0.15s;
 }
-.tabbar-slot:active { transform: scale(0.94); }
-.tabbar-slot--play { overflow: visible; }
+.tabbar-tab--play .tabbar-slot { overflow: visible; }
 .tabbar-play {
-  width: 68px; height: 68px; border-radius: 50%;
+  width: 71px; height: 71px; border-radius: 50%;
   background: var(--lime);
   color: var(--green);
   display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  transform: translateY(3px);       /* the comp hangs the disc a touch lower than the pill's centre */
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
-.tabbar-slot--play:hover .tabbar-play { transform: scale(1.04); }
-.tabbar-labels {
-  pointer-events: auto;
-  background: var(--white);
-  display: flex;
-  padding: 24px 20px calc(14px + env(safe-area-inset-bottom, 0px));
-  margin-top: -1px;
-}
+.tabbar-tab--play:hover .tabbar-play { transform: translateY(3px) scale(1.04); }
 .tabbar-label {
-  flex: 1; min-width: 0; text-align: center;
-  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 500;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--green); white-space: nowrap; line-height: 14px;
+  margin-top: 12px;
+  font-family: var(--font-heading); font-size: 13px; font-weight: 800;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--green); opacity: 0.72; white-space: nowrap; line-height: 16px;
+  transition: opacity 0.15s;
 }
-.tabbar-label.is-active {
-  font-family: var(--font-heading); font-size: 14px; font-weight: 800;
-  letter-spacing: 0.02em;
-}
+.tabbar-tab.is-active .tabbar-label { opacity: 1; font-size: 14px; letter-spacing: 0.02em; }
 
 /* ── SCREEN HEADER (burger + corner sticker) ── */
 .app-header {
@@ -1893,10 +1901,10 @@ button, [role="button"], [role="tab"] {
 }
 @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 .skeleton-tabbar {
-  position: absolute; bottom: 0; left: 0; right: 0; padding-top: 10px;
-  display: flex; flex-direction: column;
+  position: absolute; bottom: 0; left: 0; right: 0; height: var(--tab-bar-h);
 }
-.skeleton-tabbar .tabbar-labels { height: calc(50px + env(safe-area-inset-bottom, 0px)); }
+.skeleton-tabbar .skeleton-pill { position: absolute; top: 10px; left: 20px; right: 20px; height: 48px; border-radius: 7px; background: var(--surface); }
+.skeleton-tabbar .skeleton-band { position: absolute; left: 0; right: 0; bottom: 0; top: 57px; background: var(--white); }
 
 /* Pull-to-refresh: the lime disc drops from behind the header. */
 .ptr {

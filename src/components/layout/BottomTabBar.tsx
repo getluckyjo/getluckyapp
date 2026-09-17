@@ -8,20 +8,25 @@ import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon } from '@/co
 export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'icons' | 'account' | 'play'
 
 /**
- * V2 tab bar — "Menu Bar Complete.svg".
+ * V2 tab bar — "Menu Bar Complete.svg" (design/00-reference).
  *
  * A soft grey pill holds five icons; the Play slot is a lime disc carrying the
- * golf ball, and it overhangs the pill top and bottom. Labels sit underneath
- * on a white band. The pill floats over whatever the screen has behind it
- * (a photo on Home, the grey surface elsewhere) — only the label band is
- * opaque, which is how the mockups draw it.
+ * golf ball, and it overhangs the pill top and bottom (a little more below,
+ * as the comp draws it). Labels sit underneath on a white band, in the
+ * display face. Each tab is ONE button spanning its icon and its label, so a
+ * tap on either works; the pill and the band are backgrounds behind them.
+ *
+ * Proportions come from the SVG: pill 672×94 with 14.2 corners (15% of the
+ * height), disc diameter 1.48× the pill height, icons 40–49 tall in a 94
+ * pill. At the app's 48px pill that is a 7px radius, a 71px disc and
+ * 21–25px icons.
  */
 const TABS = [
-  { key: 'home',        label: 'Home',    path: '/home',          Icon: HomeIcon    },
-  { key: 'leaderboard', label: 'Winners', path: '/leaderboard',   Icon: WinnersIcon },
-  { key: 'play',        label: 'Play',    path: '/select-course', Icon: null        },
-  { key: 'icons',       label: 'Icons',   path: '/icons',         Icon: ClubIcon    },
-  { key: 'account',     label: 'Account', path: '/account',       Icon: AccountIcon },
+  { key: 'home',        label: 'Home',    path: '/home',          Icon: HomeIcon,    size: 21 },
+  { key: 'leaderboard', label: 'Winners', path: '/leaderboard',   Icon: WinnersIcon, size: 25 },
+  { key: 'play',        label: 'Play',    path: '/select-course', Icon: null,        size: 0  },
+  { key: 'icons',       label: 'Icons',   path: '/icons',         Icon: ClubIcon,    size: 21 },
+  { key: 'account',     label: 'Account', path: '/account',       Icon: AccountIcon, size: 22 },
 ] as const
 
 /** `active` may be omitted on pages that belong to no tab (legal, not found). */
@@ -41,7 +46,9 @@ export default function BottomTabBar({ active }: { active?: ActiveTab }) {
 
   return (
     <nav className="tabbar" aria-label="Main navigation">
-      <div className="tabbar-pill" role="tablist">
+      <div className="tabbar-band" aria-hidden="true" />
+      <div className="tabbar-pill" aria-hidden="true" />
+      <div className="tabbar-tabs" role="tablist">
         {TABS.map(tab => {
           const isActive = active === tab.key
           const isPlay = tab.key === 'play'
@@ -52,30 +59,22 @@ export default function BottomTabBar({ active }: { active?: ActiveTab }) {
               role="tab"
               aria-selected={isActive}
               aria-current={isActive ? 'page' : undefined}
-              aria-label={tab.label}
-              className={`tabbar-slot${isPlay ? ' tabbar-slot--play' : ''}${isActive ? ' is-active' : ''}`}
+              className={`tabbar-tab${isPlay ? ' tabbar-tab--play' : ''}${isActive ? ' is-active' : ''}`}
               onClick={() => !isActive && go(tab.path)}
             >
-              {isPlay ? (
-                <span className="tabbar-play" aria-hidden="true">
-                  <GolfBallIcon size={40} />
-                </span>
-              ) : (
-                tab.Icon && <tab.Icon size={tab.key === 'leaderboard' ? 27 : 24} />
-              )}
+              <span className="tabbar-slot" aria-hidden="true">
+                {isPlay ? (
+                  <span className="tabbar-play">
+                    <GolfBallIcon size={46} />
+                  </span>
+                ) : (
+                  tab.Icon && <tab.Icon size={tab.size} />
+                )}
+              </span>
+              <span className="tabbar-label">{tab.label}</span>
             </button>
           )
         })}
-      </div>
-      <div className="tabbar-labels" aria-hidden="true">
-        {TABS.map(tab => (
-          <span
-            key={tab.key}
-            className={`tabbar-label${active === tab.key ? ' is-active' : ''}`}
-          >
-            {tab.label}
-          </span>
-        ))}
       </div>
     </nav>
   )
