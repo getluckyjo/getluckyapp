@@ -39,7 +39,18 @@ afterEach(() => { vi.restoreAllMocks() })
 describe('safeNext', () => {
   it('allows only the listed in-app paths and falls back to /welcome', () => {
     for (const p of SAFE_NEXT_PATHS) expect(safeNext(p)).toBe(p)
-    for (const bad of ['https://evil.example', '//evil.example', '/admin', '/select-course?x=1', '', null, undefined, '/home/../admin']) {
+    for (const bad of ['https://evil.example', '//evil.example', '/select-course?x=1', '', null, undefined, '/home/../admin']) {
+      expect(safeNext(bad), String(bad)).toBe('/welcome')
+    }
+  })
+
+  // /admin joined the list when the admin gate started sending a signed-out
+  // admin to sign in and back. Landing there grants nothing: the gate asks
+  // the server again on arrival, and a non-admin is told so on the screen.
+  // The match is exact, so nothing deeper in the admin is a landing place.
+  it('allows /admin itself but nothing built from it', () => {
+    expect(safeNext('/admin')).toBe('/admin')
+    for (const bad of ['/admin/payments', '/admin?x=1', '/adminx', '/admin/']) {
       expect(safeNext(bad), String(bad)).toBe('/welcome')
     }
   })
