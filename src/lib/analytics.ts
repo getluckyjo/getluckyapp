@@ -18,6 +18,8 @@ export type AnalyticsEvent =
   | 'course_selected'
   | 'stake_chosen'
   | 'payment_started'
+  | 'payment_onsite_opened'
+  | 'payment_onsite_closed'
   | 'bet_created'
   | 'result_declared'
   | 'claim_submitted'

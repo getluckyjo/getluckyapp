@@ -49,7 +49,7 @@ function seedTarget(over: { active?: boolean; partner?: boolean; par?: number; m
   })
 }
 
-const checkout = (body: unknown) => POST(jsonRequest('http://x/api/payments/payfast', body) as never)
+const checkout = (body: unknown, init: RequestInit = {}) => POST(jsonRequest('http://x/api/payments/payfast', body, init) as never)
 const good = { tier: 'tier_1', courseId: COURSE_ID, holeId: HOLE_ID }
 
 const PF_ORDER = [
@@ -73,11 +73,13 @@ beforeEach(() => {
   env()
   serverClient.createClient.mockReset()
   adminClient.createAdminClient.mockImplementation(() => createFakeClient(db))
+  // PayFast's Onsite endpoint is off the network here; the checkout must still work without it.
+  vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('offline') }))
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
   vi.spyOn(console, 'error').mockImplementation(() => {})
 })
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
+afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
 describe('configuration gate', () => {
   it('503 PAYMENTS_UNAVAILABLE when merchant credentials are missing: no built-in fallback', async () => {
@@ -197,6 +199,50 @@ describe('the signed checkout', () => {
 
     const { signature, ...fields } = formFields
     expect(signature).toBe(payfastSignature(fields, 'unit-test-passphrase'))
+  })
+
+  it('sends the golfer back to the host they are on, never to a stranger\'s', async () => {
+    asUser(USER_A); seedTarget()
+    const onWww = await checkout(good, { headers: { host: 'www.getluckyholeinone.com', 'x-forwarded-proto': 'https' } })
+    const { formFields: a } = await onWww.json()
+    expect(a.return_url).toBe(`https://www.getluckyholeinone.com/payment-return?ref=${a.m_payment_id}`)
+    expect(a.cancel_url).toBe('https://www.getluckyholeinone.com/choose-stake')
+    expect(a.notify_url).toBe('https://preview.example.com/api/payments/payfast/notify')
+
+    const onAlias = await checkout(good, { headers: { 'x-forwarded-host': 'get-lucky-golf.vercel.app' } })
+    const { formFields: b } = await onAlias.json()
+    expect(b.return_url).toBe(`https://get-lucky-golf.vercel.app/payment-return?ref=${b.m_payment_id}`)
+
+    const spoofed = await checkout(good, { headers: { host: 'evil.example.net' } })
+    const { formFields: c } = await spoofed.json()
+    expect(c.return_url).toBe(`https://preview.example.com/payment-return?ref=${c.m_payment_id}`)
+  })
+
+  it('returns an Onsite identifier when PayFast issues one, posting the signed fields with the signature last', async () => {
+    asUser(USER_A); seedTarget()
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ uuid: 'abc-123' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const res = await checkout(good)
+    const { onsite, formFields } = await res.json()
+    expect(onsite).toEqual({ uuid: 'abc-123', engineUrl: 'https://sandbox.payfast.co.za/onsite/engine.js' })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://sandbox.payfast.co.za/onsite/process')
+    expect(String(init.body)).toMatch(new RegExp(`^merchant_id=10012345&.*&signature=${formFields.signature}$`))
+  })
+
+  it('still answers the hosted-page fields when Onsite fails or is switched off', async () => {
+    asUser(USER_A); seedTarget()
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('nope', { status: 500 })))
+    const failed = await (await checkout(good)).json()
+    expect(failed.onsite).toBeNull()
+    expect(failed.redirectUrl).toBe('https://sandbox.payfast.co.za/eng/process')
+
+    env({ PAYFAST_ONSITE: 'off' })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const off = await (await checkout(good)).json()
+    expect(off.onsite).toBeNull()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('429 RATE_LIMITED after ten checkouts in ten minutes for one user', async () => {
