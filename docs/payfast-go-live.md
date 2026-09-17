@@ -104,6 +104,22 @@ Also confirm these are set (used by the ITN handler to write the bet):
 > are no built-in fallback credentials any more: previews need a PayFast
 > sandbox account of their own.
 
+## Onsite Payments (the modal) and the return leg
+
+Since 17 September 2026 the checkout asks PayFast for an **Onsite** payment
+identifier and, when it gets one, opens PayFast's modal on the stake screen:
+the golfer never leaves the app, so the session (and an installed iOS app's
+own storage) is never lost on the way back. When PayFast does not answer,
+or `PAYFAST_ONSITE=off` is set, the hidden form posts to the hosted page as
+before. Either way the bet is granted by the ITN the moment PayFast confirms,
+and the return page just finds it.
+
+The `return_url` and `cancel_url` follow the host the golfer is on
+(`www.getluckyholeinone.com` or a `.vercel.app` alias), not
+`NEXT_PUBLIC_SITE_URL`: a session cookie set on one host is not sent to
+another, so a return to a different host looks signed out. The ITN's
+`notify_url` still uses `NEXT_PUBLIC_SITE_URL`.
+
 ## Step 3 — Redeploy
 
 Env-var changes only take effect on a new deployment. Redeploy production after

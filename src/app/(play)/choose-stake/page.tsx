@@ -10,7 +10,38 @@ import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
 import { useAuth } from '@/context/AuthContext'
 import { formatRand } from '@/lib/format'
 
-type LoadingStep = 'idle' | 'opening'
+type LoadingStep = 'idle' | 'opening' | 'paying'
+
+declare global {
+  interface Window {
+    /** PayFast's Onsite modal, defined by onsite/engine.js once loaded. */
+    payfast_do_onsite_payment?: (
+      opts: { uuid: string; return_url?: string; cancel_url?: string },
+      callback?: (completed: boolean) => void,
+    ) => void
+  }
+}
+
+/** Load PayFast's Onsite script once; resolves when the modal function exists. */
+function loadOnsiteEngine(src: string, timeoutMs = 6000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.payfast_do_onsite_payment) { resolve(); return }
+    const timer = setTimeout(() => reject(new Error('PayFast Onsite script timed out')), timeoutMs)
+    const done = () => {
+      clearTimeout(timer)
+      if (window.payfast_do_onsite_payment) resolve()
+      else reject(new Error('PayFast Onsite script loaded without the modal'))
+    }
+    const existing = document.querySelector<HTMLScriptElement>(`script[src="${src}"]`)
+    if (existing) { existing.addEventListener('load', done, { once: true }); existing.addEventListener('error', () => reject(new Error('PayFast Onsite script failed')), { once: true }); return }
+    const script = document.createElement('script')
+    script.src = src
+    script.async = true
+    script.onload = done
+    script.onerror = () => { clearTimeout(timer); reject(new Error('PayFast Onsite script failed')) }
+    document.head.appendChild(script)
+  })
+}
 
 /** Short prize label for the badge: R25K, R100K, R1M. */
 function prizeShort(win: number) {
@@ -25,9 +56,13 @@ function prizeShort(win: number) {
  * Same surface and rhythm as Select Course: display title, the course line,
  * one white card per tier with the stake in display type and the prize in a
  * lime badge. Tapping a card opens the confirm sheet above the tab bar with
- * the lime PAY & PLAY button; that button hands off to PayFast exactly as
- * before (signed fields from /api/payments/payfast, session saved to
- * localStorage for the return leg, hidden-form POST).
+ * the lime PAY & PLAY button. That button asks /api/payments/payfast for the
+ * signed fields and, when PayFast also gave an Onsite identifier, opens
+ * PayFast's modal right here so nobody leaves the app (an installed iOS
+ * app that leaves for the hosted page comes back in a browser without
+ * its session). Without an identifier it posts the hidden form to the
+ * hosted page as before. Either way the reference is saved to
+ * localStorage for the return leg.
  */
 export default function ChooseStakePage() {
   const router = useRouter()
@@ -96,7 +131,30 @@ export default function ChooseStakePage() {
       track('stake_chosen', { tier: selected })
       track('payment_started', { tier: selected })
 
-      // ── 3. Build hidden form and submit → redirect to PayFast ─────────────
+      // ── 3a. PayFast's modal on this page, when we have an identifier ─────
+      if (pfData.onsite?.uuid && pfData.onsite?.engineUrl) {
+        try {
+          await loadOnsiteEngine(pfData.onsite.engineUrl)
+          setStep('paying')
+          track('payment_onsite_opened', { tier: selected })
+          window.payfast_do_onsite_payment!({ uuid: pfData.onsite.uuid }, completed => {
+            if (completed) {
+              // The ITN grants the bet; the return page finds it and opens the record screen.
+              router.push(`/payment-return?ref=${encodeURIComponent(pfData.m_payment_id)}`)
+            } else {
+              // Closed without paying. Nothing was charged; the sheet stays open.
+              track('payment_onsite_closed', { tier: selected })
+              setStep('idle')
+            }
+          })
+          return
+        } catch (onsiteErr) {
+          // The modal could not open; the hosted page still can.
+          console.warn('[PayFast] Onsite unavailable, using the hosted page:', onsiteErr)
+        }
+      }
+
+      // ── 3b. Build hidden form and submit → redirect to PayFast ────────────
       const form = document.createElement('form')
       form.method = 'POST'
       form.action = pfData.redirectUrl
@@ -206,7 +264,7 @@ export default function ChooseStakePage() {
                 disabled={loading}
               >
                 <LockIcon />
-                {loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
+                {step === 'paying' ? 'Complete your payment…' : loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
               </button>
 
               <p className="stake-sheet-legal">

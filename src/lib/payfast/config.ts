@@ -17,6 +17,9 @@ export interface PayfastConfig {
   passphrase: string
   sandbox: boolean
   siteUrl: string
+  /** Onsite Payments: the identifier endpoint and the modal script. */
+  onsiteProcessUrl: string
+  onsiteEngineUrl: string
   processUrl: string
   validateUrl: string
 }
@@ -57,6 +60,8 @@ export function resolvePayfastConfig(env: Record<string, string | undefined> = p
       merchantId, merchantKey, passphrase, sandbox, siteUrl,
       processUrl: `${host}/eng/process`,
       validateUrl: `${host}/eng/query/validate`,
+      onsiteProcessUrl: `${host}/onsite/process`,
+      onsiteEngineUrl: `${host}/onsite/engine.js`,
     },
   }
 }
