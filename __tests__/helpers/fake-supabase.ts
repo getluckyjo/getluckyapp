@@ -26,6 +26,7 @@ import { randomUUID } from 'node:crypto'
 
 type Row = Record<string, unknown>
 type Filter = (row: Row) => boolean
+interface WeekAgg { week_start: string; taken: number; matured: number; converted_7d: number }
 
 export interface FakeUser {
   id: string
@@ -360,6 +361,58 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           byCourse.set(id, c)
         }
         return { data: [...byCourse.values()].sort((a, b) => b.revenue_cents - a.revenue_cents), error: null }
+      }
+      // Mirrors migration 024. `free` is one row per golfer (migration 023),
+      // and a swing counts towards the seven-day rate only once its week has
+      // closed — the same `matured` rule the SQL uses.
+      if (fn === 'admin_free_swing_funnel' || fn === 'admin_free_swing_by_week') {
+        const now = Date.now()
+        const WEEK = 7 * 24 * 3_600_000
+        const at = (r: Row) => Date.parse(String(r.created_at))
+        const free = db.rows('bets').filter(b => b.tier === 'tier_free')
+        const paidAfter = (userId: unknown, freeAt: number) => db.rows('bets')
+          .filter(b => b.user_id === userId && b.tier !== 'tier_free' && at(b) > freeAt)
+        const firstPaidAt = (f: Row) => {
+          const times = paidAfter(f.user_id, at(f)).map(at)
+          return times.length ? Math.min(...times) : null
+        }
+        const matured = (f: Row) => at(f) <= now - WEEK
+        const converted7d = (f: Row) => {
+          const first = firstPaidAt(f)
+          return matured(f) && first !== null && first <= at(f) + WEEK
+        }
+
+        if (fn === 'admin_free_swing_by_week') {
+          const byWeek = new Map<string, WeekAgg>()
+          for (const f of free) {
+            const d = new Date(at(f))
+            // Monday-start weeks, as date_trunc('week', …) gives.
+            const monday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - ((d.getUTCDay() + 6) % 7)))
+            const key = monday.toISOString().slice(0, 10)
+            const w = byWeek.get(key) ?? { week_start: key, taken: 0, matured: 0, converted_7d: 0 }
+            w.taken++
+            if (matured(f)) w.matured++
+            if (converted7d(f)) w.converted_7d++
+            byWeek.set(key, w)
+          }
+          return { data: [...byWeek.values()].sort((a, b) => b.week_start.localeCompare(a.week_start)), error: null }
+        }
+
+        const revenue = free.reduce((sum, f) => sum + paidAfter(f.user_id, at(f)).reduce((s, b) => s + Number(b.stake_pence ?? 0), 0), 0)
+        const gaps = free.map(f => { const first = firstPaidAt(f); return first === null ? null : (first - at(f)) / 3_600_000 })
+          .filter((h): h is number => h !== null).sort((a, b) => a - b)
+        return { data: {
+          taken:          free.length,
+          taken_7d:       free.filter(f => at(f) >= now - WEEK).length,
+          taken_30d:      free.filter(f => at(f) >= now - 30 * 24 * 3_600_000).length,
+          matured:        free.filter(matured).length,
+          converted_7d:   free.filter(converted7d).length,
+          converted_ever: free.filter(f => firstPaidAt(f) !== null).length,
+          paid_bets_after_free: free.reduce((n, f) => n + paidAfter(f.user_id, at(f)).length, 0),
+          revenue_after_free_cents: revenue,
+          claimed:        free.filter(f => ['claimed', 'verified', 'paid'].includes(String(f.status))).length,
+          median_hours_to_first_paid: gaps.length ? gaps[Math.floor((gaps.length - 1) / 2)] : null,
+        }, error: null }
       }
       if (fn === 'beta_check') {
         const { p_email, p_code } = args as { p_email: string | null; p_code: string | null }
