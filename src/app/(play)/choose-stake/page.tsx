@@ -7,12 +7,16 @@ import { track } from '@/lib/analytics'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
+import { FREE_TIER, tierByKey } from '@/lib/tiers'
 import { useAuth } from '@/context/AuthContext'
 import { formatRand } from '@/lib/format'
 
 type LoadingStep = 'idle' | 'opening' | 'paying'
 
 interface SavedCard { label: string; savedAt: string; lastUsedAt: string | null }
+
+/** What /api/bets/free says about this golfer's one free swing. */
+interface FreeSwing { eligible: boolean; used: boolean; ageVerified: boolean }
 
 declare global {
   interface Window {
@@ -78,9 +82,13 @@ export default function ChooseStakePage() {
   const [savedCardState, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
   const [saveCard, setSaveCard]     = useState(true)
   const savedCard = user ? savedCardState : null
+  // Keyed by user, so a sign-out never offers the previous golfer's free swing.
+  const [freeSwing, setFreeSwing]   = useState<{ userId: string; value: FreeSwing } | null>(null)
 
   const loading = step !== 'idle'
-  const activeTier = BET_TIERS.find(t => t.tier === selected)
+  const activeTier = tierByKey(selected)
+  const freeSelected = selected === FREE_TIER.tier
+  const showFree = Boolean(user && freeSwing?.userId === user.id && freeSwing.value.eligible)
 
   // Guard: if no course selected, send back to select-course
   useEffect(() => {
@@ -99,6 +107,57 @@ export default function ChooseStakePage() {
       .catch(() => { if (!cancelled) setSavedCard(null) })
     return () => { cancelled = true }
   }, [user])
+
+  // The free swing: one per account, and the card is only offered while it
+  // is still there to take.
+  useEffect(() => {
+    if (!user) return
+    const userId = user.id
+    let cancelled = false
+    fetch('/api/bets/free')
+      .then(r => (r.ok ? r.json() : null))
+      .then((data: FreeSwing | null) => { if (!cancelled && data) setFreeSwing({ userId, value: data }) })
+      .catch(() => { /* no card offered; the paid tiers still work */ })
+    return () => { cancelled = true }
+  }, [user])
+
+  /** The free swing needs no payment at all: one call and the bet is live. */
+  async function handlePlayFree() {
+    if (!selectedCourse || !selectedHole) return
+    setStep('paying')
+    setErrorMsg('')
+    selectTier(FREE_TIER.tier)
+    try {
+      const res = await fetch('/api/bets/free', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ courseId: selectedCourse.id, holeId: selectedHole.id }),
+      })
+      const data = await res.json().catch(() => ({})) as { betId?: string; error?: string; code?: string }
+
+      if (res.ok && data.betId) {
+        setBetId(data.betId)
+        track('free_swing_started', { tier: FREE_TIER.tier })
+        router.push('/record')
+        return
+      }
+      if (data.code === 'AGE_NOT_VERIFIED') {
+        // 18+ first — the same gate every paid entry passes.
+        router.push('/age-check')
+        return
+      }
+      if (data.code === 'FREE_SWING_USED') {
+        // Already taken — on another device, or a second tap. The card goes
+        // away behind the sheet; the message in the sheet says why.
+        if (user) setFreeSwing({ userId: user.id, value: { eligible: false, used: true, ageVerified: true } })
+      }
+      setErrorMsg(data.error ?? 'Your free swing could not be started. Please try again.')
+      setStep('idle')
+    } catch {
+      setErrorMsg('Your free swing could not be started. Please try again.')
+      setStep('idle')
+    }
+  }
 
   /** One call charges the saved card; the bet comes back granted. */
   async function handlePayWithSavedCard() {
@@ -255,6 +314,27 @@ export default function ChooseStakePage() {
         </div>
 
         <div className={`cs-list stake-list${confirming ? ' cs-list--sheet-open' : ''}`} aria-label="Stake tiers">
+          {showFree && (
+            <button
+              type="button"
+              className={`stake-card stake-card--free${freeSelected ? ' is-selected' : ''}`}
+              onClick={() => handleSelectTier(FREE_TIER.tier)}
+              aria-pressed={freeSelected}
+              disabled={loading}
+            >
+              <span className="stake-flag stake-flag--free">Your free swing</span>
+              <span className="stake-amount">
+                FREE
+                <small>no card needed</small>
+              </span>
+              <span className="stake-mult">Once per golfer</span>
+              <span className="stake-win">
+                <small>win</small>
+                {prizeShort(FREE_TIER.winZAR)}
+              </span>
+            </button>
+          )}
+
           {BET_TIERS.map((tier, i) => {
             const isSelected = selected === tier.tier
             return (
@@ -297,7 +377,7 @@ export default function ChooseStakePage() {
             <div className="cs-sheet stake-sheet" role="dialog" aria-modal="true" aria-label="Confirm your entry">
               <div className="cs-sheet-top">
                 <div>
-                  <div className="stake-sheet-title">Confirm your entry</div>
+                  <div className="stake-sheet-title">{freeSelected ? 'Your free swing' : 'Confirm your entry'}</div>
                 </div>
                 {!loading && (
                   <button type="button" className="cs-sheet-close" aria-label="Cancel" onClick={() => setConfirming(false)}>×</button>
@@ -307,7 +387,7 @@ export default function ChooseStakePage() {
               <dl className="stake-rows">
                 <div><dt>Course</dt><dd>{selectedCourse.name}</dd></div>
                 <div><dt>Hole</dt><dd>Hole {selectedHole.holeNumber} · Par {selectedHole.par} · {selectedHole.distanceMetres}m</dd></div>
-                <div><dt>Your stake</dt><dd>{formatRand(activeTier.stakeZAR)}</dd></div>
+                <div><dt>Your stake</dt><dd>{freeSelected ? 'Free — no charge' : formatRand(activeTier.stakeZAR)}</dd></div>
                 <div className="stake-rows-win"><dt>You could win</dt><dd>{formatRand(activeTier.winZAR)}</dd></div>
               </dl>
 
@@ -315,7 +395,22 @@ export default function ChooseStakePage() {
                 <div className="auth-error" role="alert" style={{ marginBottom: 12 }}>{errorMsg}</div>
               )}
 
-              {savedCard ? (
+              {freeSelected ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-lime btn-lime--block"
+                    onClick={handlePlayFree}
+                    disabled={loading}
+                  >
+                    {step === 'paying' ? 'Setting up your shot…' : 'Play my free swing'}
+                  </button>
+                  <p className="stake-free-note">
+                    One free swing per golfer, on us. Same shot, same footage, same review —
+                    and a real {formatRand(FREE_TIER.winZAR)} if it goes in.
+                  </p>
+                </>
+              ) : savedCard ? (
                 <>
                   <button
                     type="button"
@@ -349,7 +444,9 @@ export default function ChooseStakePage() {
               )}
 
               <p className="stake-sheet-legal">
-                Secure payment via PayFast. Prizes fully insured by Indwe Risk Services (FSP 3425).{' '}
+                {freeSelected
+                  ? 'No payment, no card. Prizes fully insured by Indwe Risk Services (FSP 3425). '
+                  : 'Secure payment via PayFast. Prizes fully insured by Indwe Risk Services (FSP 3425). '}
                 <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
               </p>
             </div>

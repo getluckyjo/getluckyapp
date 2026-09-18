@@ -816,6 +816,8 @@ body {
   font-family: 'Inter', sans-serif;
   animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+.home-claim--free { background: var(--lime); }
+.home-claim--free .home-claim-dot { background: var(--green); box-shadow: 0 0 0 4px rgba(52,82,49,0.2); }
 .home-claim-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 4px rgba(214,251,75,0.35); flex-shrink: 0; }
 .home-claim-title { font-size: var(--text-body); font-weight: 700; }
 .home-claim-sub { font-size: var(--text-xs); opacity: 0.8; margin-top: 1px; }
@@ -1245,6 +1247,20 @@ body {
 }
 .stake-win small { font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
 .stake-card.is-selected .stake-win { box-shadow: 2px 3px 0 var(--green); }
+.stake-card--free {
+  /* The one card with a flag that has to sit on its own border, so this card
+     (unlike the paid ones) positions its own badge. */
+  position: relative;
+  border-color: var(--green);
+  background: linear-gradient(180deg, #ffffff 0%, #f4f9ef 100%);
+}
+.stake-card--free .stake-amount { letter-spacing: 0.02em; }
+.stake-card--free .stake-win { box-shadow: 2px 3px 0 var(--green); }
+.stake-flag--free { background: var(--lime); color: var(--green); }
+.stake-free-note {
+  margin: 10px 0 0; font-family: 'Inter', sans-serif; font-size: var(--text-xs); line-height: 1.5;
+  color: var(--green); opacity: 0.8; text-align: center;
+}
 .stake-trust {
   display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px;
   margin: 6px 0 0; font-family: 'Inter', sans-serif; font-size: var(--text-xs); line-height: 1.5;

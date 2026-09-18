@@ -7,6 +7,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS } from '@/context/BetContext'
+import { isFreeTier, tierByKey } from '@/lib/tiers'
 import { useAuth } from '@/context/AuthContext'
 import { useShareVideo } from '@/hooks/useShareVideo'
 
@@ -77,8 +78,13 @@ export default function TryAgainPage() {
     }
   }
 
-  const tierData = BET_TIERS.find(t => t.tier === selectedTier) ?? BET_TIERS[1]
-  const stakeLabel = `R${tierData.stakeZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}`
+  // tierByKey, not BET_TIERS: a free swing is a real bet with a real prize.
+  const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
+  // After the free swing there is no stake to repeat, so the button points at
+  // the cheapest paid entry — this is the moment the freemium try converts.
+  const stakeLabel = isFreeTier(selectedTier)
+    ? `from R${BET_TIERS[0].stakeZAR}`
+    : `R${tierData.stakeZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}`
   const totalAttempts = profile?.total_attempts ?? 0
 
   if (!betId) return null

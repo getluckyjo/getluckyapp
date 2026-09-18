@@ -30,6 +30,7 @@ an in-memory PostgREST fake.
 | Sign in | `/auth`, `/auth/callback`, `/auth/confirm` | Google or emailed code via Supabase Auth; `finishSignIn()` marks onboarding, queues the welcome email, sends first-timers to the age gate | Supabase session cookie; `safeNext()` allow-list stops open redirects |
 | Age gate | `POST /api/profile/age-check` | Date of birth → `profiles.age_verified_at`, `terms_accepted_at` | Server sets the columns; a client cannot (profile guard trigger, migration 006) |
 | Pick a hole | `/select-course`, `/choose-stake` | Partner courses with active par-3 holes; a stake tier | `GET /api/courses` shows partner courses only; checkout re-checks |
+| Free swing | `POST /api/bets/free` (card on `/choose-stake`, prompt on `/home`) | The freemium entry: one per account for life, no stake, R10,000 prize, then the ordinary record → claim → review path | `bets_one_free_swing_per_user` (migration 023) and the deterministic `free_<uid>` reference on the existing unique index; age check; suspension check; same target check as checkout; rate limit |
 | Pay | `POST /api/payments/payfast` → PayFast | Signs a checkout with our `gl_<uuid>` reference and the user, course, hole and tier inside the signed payload | PayFast credentials come from env with no fallback; production refuses sandbox (`instrumentation.ts`) |
 | ITN | `POST /api/payments/payfast/notify` | PayFast tells us it was paid. IP allow-list, signature, phone-home validation, merchant check, amount matched to tier; then a row in `payfast_payments` | Upsert on `m_payment_id`, so retries are no-ops; anything unexpected is a 500 so PayFast retries |
 | Bet | `POST /api/bets/create` (polled by `/payment-return`) | A bet exists only when the ledger holds a complete payment for this user; course, hole and tier come from the ledger, never the body | Unique `payment_intent_id`; age check; suspension check; rate limit |
@@ -47,7 +48,7 @@ service role; the admin layout's client-side gate is cosmetic.
 
 ## 3. Data model
 
-All in `public`, defined by `supabase/migrations/001…015`, typed by hand in
+All in `public`, defined by `supabase/migrations/001…023`, typed by hand in
 `src/types/database.ts` (regenerate after a migration; see README).
 
 | Table | One row per | Notes |
@@ -55,7 +56,7 @@ All in `public`, defined by `supabase/migrations/001…015`, typed by hand in
 | `profiles` | user | Name, handicap, email mirror, age and terms timestamps, `is_admin`, suspension. Server-managed columns are guarded by trigger; changes to them are logged to `account_events`. |
 | `courses`, `holes` | course, par-3 hole | `courses.lat/lng` for the distance check; `is_partner` gates checkout. |
 | `course_contacts` | club official per course | Asked to confirm the certificate on every claim at the course. |
-| `bets` | entry | Status, stake, prize, ledger reference, play window, footage path + hash + size + sealed-at, capture report, hashed IP/device, risk flags and score, payout reference, purge stamp. |
+| `bets` | entry | Status, stake, prize, ledger reference, play window, footage path + hash + size + sealed-at, capture report, hashed IP/device, risk flags and score, payout reference, purge stamp. `tier = 'tier_free'` is the free swing: stake 0, no ledger row, one per user by unique index. |
 | `payfast_payments` | payment the ITN accepted | The money ledger. Keeps amounts when a user is deleted (`user_id` nulled). |
 | `verifications` | claim | Document paths + hashes, review state, checklist, notes, reviewer, timestamps, purge stamp. One per bet. |
 | `claim_witnesses` | person named on a claim | Role, source (claimant or course), token hash, request and response with time, hashed IP, note. |

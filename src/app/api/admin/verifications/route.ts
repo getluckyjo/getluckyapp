@@ -4,12 +4,12 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseQuery, pagination } from '@/lib/api/http'
 import { betsForVerifications, namesForBets, toQueueItem, type VerificationRowLike } from '@/lib/admin/data'
 import { VERIFICATION_STATUSES } from '@/lib/claims/state-machine'
-import { BET_TIERS } from '@/lib/tiers'
+import { ALL_TIERS } from '@/lib/tiers'
 import type { VerificationQueueItem, PaginatedResponse } from '@/types/admin'
 
 const Query = pagination.extend({
   status: z.enum(VERIFICATION_STATUSES).optional(),
-  tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
+  tier: z.enum(ALL_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
   sort: z.enum(['oldest', 'newest', 'highest', 'risk']).default('oldest'),
 })
 

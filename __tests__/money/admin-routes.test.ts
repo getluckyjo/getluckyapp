@@ -4,6 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, COURSE_ID, HOLE_ID } from '../helpers/fake-supabase'
+import { ALL_TIERS } from '@/lib/tiers'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
 const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
@@ -165,6 +166,18 @@ describe('correct lists (Batch 6)', () => {
     // PostgREST delimiters in the term cannot break the filter
     const weird = await listBets(new Request('http://x/api/admin/bets?search=a),b.eq.(x') as never)
     expect(weird.status).toBe(200)
+  })
+
+  it('every tier in the table is a usable filter on both lists, so the admin dropdowns can be built from it', async () => {
+    seedPeople()
+    for (const t of ALL_TIERS) {
+      const bets = await listBets(new Request(`http://x/api/admin/bets?tier=${t.tier}`) as never)
+      expect(bets.status, `bets ?tier=${t.tier}`).toBe(200)
+      const queue = await listVerifications(new Request(`http://x/api/admin/verifications?tier=${t.tier}`) as never)
+      expect(queue.status, `verifications ?tier=${t.tier}`).toBe(200)
+    }
+    // …and only those: an invented tier is still a 400.
+    expect((await listBets(new Request('http://x/api/admin/bets?tier=tier_99') as never)).status).toBe(400)
   })
 
   it('verification queue: tier filter and highest-value sort give exact totals across pages', async () => {

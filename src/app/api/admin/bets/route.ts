@@ -4,12 +4,12 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseQuery, pagination, uuid, searchTerm, dateLike } from '@/lib/api/http'
 import { BET_SELECT, namesForBets, orSearchTerm, toAdminBetRecord, type BetRowLike } from '@/lib/admin/data'
 import { BET_STATUSES } from '@/lib/claims/state-machine'
-import { BET_TIERS } from '@/lib/tiers'
+import { ALL_TIERS } from '@/lib/tiers'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
 
 const Query = pagination.extend({
   status: z.enum(BET_STATUSES).optional(),
-  tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
+  tier: z.enum(ALL_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
   courseId: uuid.optional(),
   search: searchTerm.optional(),
   dateFrom: dateLike.optional(),

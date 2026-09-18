@@ -42,12 +42,16 @@ export default function HomePage() {
   // A paid shot not yet recorded, because the browser that came back from
   // PayFast was not the one that left. One tap opens the record screen.
   const [paid, setPaid] = useState<{ userId: string; payment: PendingPayment | null } | null>(null)
+  // The free swing, while this golfer still has it. The whole point of the
+  // freemium entry is that it is visible before anyone is asked for a card.
+  const [free, setFree] = useState<{ userId: string; eligible: boolean } | null>(null)
   const refreshTick = useRefreshSignal()
 
   const userId = user?.id
   const firstName = (profile?.name ?? user?.user_metadata?.full_name ?? '').split(' ')[0] || null
   const activeClaim = userId && claim?.userId === userId ? claim.bet : null
   const paidShot = userId && paid?.userId === userId ? paid.payment : null
+  const freeSwing = Boolean(userId && free?.userId === userId && free.eligible)
 
   useEffect(() => {
     if (!userId) return
@@ -70,6 +74,13 @@ export default function HomePage() {
         if (cancelled) return
         const list = (data?.pending ?? []) as PendingPayment[]
         setPaid({ userId, payment: list[0] ?? null })
+      })
+      .catch(() => {})
+    fetch('/api/bets/free')
+      .then(r => r.json())
+      .then((data: { eligible?: boolean }) => {
+        if (cancelled) return
+        setFree({ userId, eligible: Boolean(data?.eligible) })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -142,6 +153,22 @@ export default function HomePage() {
                   <span className="home-claim-title">Claim under review</span>
                   <span className="home-claim-sub" style={{ display: 'block' }}>
                     {activeClaim.courses?.name ?? 'Your hole-in-one'} · Tap to check status
+                  </span>
+                </span>
+              </button>
+            )}
+
+            {freeSwing && !paidShot && (
+              <button
+                type="button"
+                className="home-claim home-claim--free"
+                onClick={() => router.push('/select-course')}
+              >
+                <span className="home-claim-dot" aria-hidden />
+                <span>
+                  <span className="home-claim-title">Your free swing is waiting</span>
+                  <span className="home-claim-sub" style={{ display: 'block' }}>
+                    One shot at R10 000 · No card needed
                   </span>
                 </span>
               </button>

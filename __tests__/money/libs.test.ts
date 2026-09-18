@@ -4,7 +4,7 @@
  * real modules; the previous version of this file tested private copies.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { BET_TIERS, TIER_STAKE_CENTS, TIER_WIN_CENTS } from '@/lib/tiers'
+import { ALL_TIERS, BET_TIERS, FREE_TIER, TIER_LABELS, TIER_STAKE_CENTS, TIER_WIN_CENTS, isFreeTier, tierByKey } from '@/lib/tiers'
 import { verifyPaymentAmount, parseAmountToCents, expectedStakeCents } from '@/lib/payments'
 import { PAYFAST_IPS, isFromPayfast, isFromPayfastLive, resetResolvedPayfastIps } from '@/lib/payfast/ips'
 import { toCSV } from '@/lib/admin/csv'
@@ -29,6 +29,31 @@ describe('BET_TIERS', () => {
       expect(expectedStakeCents(t.tier)).toBe(t.stakeZAR * 100)
     }
     expect(expectedStakeCents('tier_99')).toBeNull()
+  })
+})
+
+describe('FREE_TIER', () => {
+  it('is a free entry for a real R10,000 prize', () => {
+    expect(FREE_TIER).toMatchObject({ tier: 'tier_free', stakeZAR: 0, winZAR: 10000 })
+    expect(TIER_WIN_CENTS.tier_free).toBe(1_000_000)
+    expect(TIER_STAKE_CENTS.tier_free).toBe(0)
+    expect(TIER_LABELS.tier_free).toBeTruthy()
+  })
+
+  it('is never sellable: the paid table and the payment check both reject it', () => {
+    expect(BET_TIERS.map(t => t.tier)).not.toContain('tier_free')
+    expect(expectedStakeCents('tier_free')).toBeNull()
+    expect(verifyPaymentAmount('tier_free', 0).ok).toBe(false)
+  })
+
+  it('is still a describable bet: ALL_TIERS and tierByKey know it', () => {
+    expect(ALL_TIERS).toHaveLength(BET_TIERS.length + 1)
+    expect(tierByKey('tier_free')).toBe(FREE_TIER)
+    expect(tierByKey('tier_1')?.stakeZAR).toBe(50)
+    expect(tierByKey('tier_99')).toBeUndefined()
+    expect(isFreeTier('tier_free')).toBe(true)
+    expect(isFreeTier('tier_1')).toBe(false)
+    expect(isFreeTier(null)).toBe(false)
   })
 })
 
