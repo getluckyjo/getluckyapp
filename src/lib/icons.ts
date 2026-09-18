@@ -14,10 +14,14 @@ export const ICONS_EVENT = {
   dates: '11–13 December 2026',
   /** The hole the Icons play for the prize. */
   holeName: 'the Get Lucky hole',
-  /** The one question the screen asks. */
-  question: 'Who holes it on the Get Lucky hole?',
-  /** The R10 million hole-in-one prize, as three tiles: amount, how many, who. */
+  /** The one line under the hero: what to do, and what is in it for the fan. */
+  intro: 'Vote for the Icon you think holes it on the Get Lucky hole. If they do, you are in the draw for one of three R1 million prizes.',
+  /** The prize card's headline, the amount and what it is for on two lines. */
+  prizeAmount: 'R10 million',
+  prizeKind: 'Hole in one',
+  /** For screen readers, and anywhere the prize needs one flat sentence. */
   prizeTotal: 'R10 million hole-in-one prize',
+  /** The breakdown under the headline: amount, how many, who. */
   prizes: [
     { amount: 'R1m', count: 3, who: 'Fans who backed the Icon' },
     { amount: 'R4m', count: 1, who: 'The Icon' },

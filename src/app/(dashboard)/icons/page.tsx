@@ -98,9 +98,13 @@ export default function IconsPage() {
           </div>
 
           <h1 className="sr-only">Back an Icon</h1>
-          <p className="vf-sub ic-intro">{ICONS_EVENT.question} Pick one. Change it any time before the first tee.</p>
+          <p className="vf-sub ic-intro">{ICONS_EVENT.intro}</p>
 
           <div className="ic-prize" aria-label={ICONS_EVENT.prizeTotal}>
+            <div className="ic-prize-head">
+              <span className="ic-prize-total">{ICONS_EVENT.prizeAmount}</span>
+              <span className="ic-prize-kind">{ICONS_EVENT.prizeKind}</span>
+            </div>
             <div className="ic-prize-tiles">
               {ICONS_EVENT.prizes.map(p => (
                 <div key={p.who} className="ic-prize-tile">
@@ -111,7 +115,7 @@ export default function IconsPage() {
                 </div>
               ))}
             </div>
-            <span className="ic-prize-terms">{ICONS_EVENT.prizeTotal} · {ICONS_EVENT.prizeTerms}</span>
+            <span className="ic-prize-terms">{ICONS_EVENT.prizeTerms}</span>
           </div>
 
           {mine && (
