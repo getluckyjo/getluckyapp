@@ -2115,7 +2115,20 @@ button, [role="button"], [role="tab"] {
   background: var(--green); color: var(--white); border-radius: 14px;
   padding: 14px 16px; margin: 0 0 14px;
 }
-.ic-prize-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+/* The prize leads with what it is worth; the split sits under it. */
+.ic-prize-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.ic-prize-total {
+  font-family: var(--font-heading); font-size: clamp(30px, 10vw, 40px); line-height: 1;
+  color: var(--lime); text-transform: uppercase; letter-spacing: 0.01em;
+}
+.ic-prize-kind {
+  font-family: var(--font-heading); font-size: clamp(15px, 4.6vw, 19px); line-height: 1;
+  color: var(--white); text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.9;
+}
+.ic-prize-tiles {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.18);
+}
 .ic-prize-tile { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ic-prize-tile + .ic-prize-tile { border-left: 1px solid rgba(255,255,255,0.18); padding-left: 10px; }
 .ic-prize-amt { font-family: var(--font-heading); font-size: clamp(22px, 7vw, 28px); line-height: 1; color: var(--lime); white-space: nowrap; }
