@@ -7,7 +7,7 @@ import StatusBadge from '@/components/admin/StatusBadge'
 import SearchInput from '@/components/admin/SearchInput'
 import Pagination from '@/components/admin/Pagination'
 import { formatZAR, timeAgo } from '@/lib/format'
-import { TIER_LABELS } from '@/lib/tiers'
+import { ALL_TIERS, TIER_LABELS } from '@/lib/tiers'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
 
 export default function AdminBetsPage() {
@@ -106,12 +106,11 @@ export default function AdminBetsPage() {
           style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }}
         >
           <option value="">All tiers</option>
-          <option value="tier_1">Tier 1 (R50)</option>
-          <option value="tier_2">Tier 2 (R100)</option>
-          <option value="tier_3">Tier 3 (R250)</option>
-          <option value="tier_4">Tier 4 (R500)</option>
-          <option value="tier_5">Tier 5 (R1,000)</option>
-          <option value="tier_free">Free swing (R0)</option>
+          {/* From the tier table, never a hand-kept copy: a hardcoded list
+              had been missing tier_6 since the day it was added. */}
+          {ALL_TIERS.map(t => (
+            <option key={t.tier} value={t.tier}>{TIER_LABELS[t.tier]}</option>
+          ))}
         </select>
       </div>
 
