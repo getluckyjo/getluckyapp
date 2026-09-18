@@ -111,6 +111,7 @@ export default function AdminBetsPage() {
           <option value="tier_3">Tier 3 (R250)</option>
           <option value="tier_4">Tier 4 (R500)</option>
           <option value="tier_5">Tier 5 (R1,000)</option>
+          <option value="tier_free">Free swing (R0)</option>
         </select>
       </div>
 

@@ -1,14 +1,31 @@
 /**
  * Shared tier definitions — importable from both client and server code.
  * (BetContext.tsx re-exports these for backward compatibility.)
+ *
+ * Two families, deliberately kept apart:
+ *
+ *   BET_TIERS  the paid entries. Every payment route validates against this
+ *              list, so nothing outside it can ever be sent to PayFast or
+ *              accepted back from it.
+ *   FREE_TIER  the free swing — one per account, no money, R10,000 prize.
+ *              It is NOT in BET_TIERS: a R0 checkout is not a thing, and a
+ *              free entry must never be reachable through the money path.
+ *              /api/bets/free grants it directly.
+ *
+ * Anything that merely *describes* a bet after the fact (admin labels, the
+ * result screens) reads ALL_TIERS, because a free bet is a real bet.
  */
 
-export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
+/** Tiers that are bought. */
+export type PaidBetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
+/** Every tier a bet row can carry, free included. */
+export type BetTier = PaidBetTier | 'tier_free'
 
 export interface BetTierData {
   tier: BetTier
   stakeZAR: number
   winZAR: number
+  /** Prize ÷ stake. Zero for the free swing, which has no stake to multiply. */
   multiplier: number
   label: string
 }
@@ -22,19 +39,44 @@ export const BET_TIERS: BetTierData[] = [
   { tier: 'tier_5', stakeZAR: 1000, winZAR: 1000000, multiplier: 1000, label: 'R1,000 → R1,000,000' },
 ]
 
+/**
+ * The free swing: the freemium way in. No stake, a real R10,000 prize, and
+ * the same shot, footage, claim and review as any paid entry — so a golfer
+ * can try the whole thing once before spending anything.
+ */
+export const FREE_TIER: BetTierData = {
+  tier: 'tier_free', stakeZAR: 0, winZAR: 10000, multiplier: 0, label: 'Free swing → R10,000',
+}
+
+/** How many free swings an account ever gets. */
+export const FREE_SWINGS_PER_ACCOUNT = 1
+
+/** Paid tiers plus the free one — every tier a bet row can carry. */
+export const ALL_TIERS: BetTierData[] = [...BET_TIERS, FREE_TIER]
+
+/** Look a tier up by key, free included. Undefined for a key we do not know. */
+export function tierByKey(tier: string | null | undefined): BetTierData | undefined {
+  return ALL_TIERS.find(t => t.tier === tier)
+}
+
+/** Is this the free swing? */
+export function isFreeTier(tier: string | null | undefined): boolean {
+  return tier === FREE_TIER.tier
+}
+
 // ── Derived maps for admin / API use ──
 
 /** Map of tier key → display label */
 export const TIER_LABELS: Record<BetTier, string> = Object.fromEntries(
-  BET_TIERS.map(t => [t.tier, t.label]),
+  ALL_TIERS.map(t => [t.tier, t.label]),
 ) as Record<BetTier, string>
 
 /** Map of tier key → stake in ZAR cents */
 export const TIER_STAKE_CENTS: Record<BetTier, number> = Object.fromEntries(
-  BET_TIERS.map(t => [t.tier, t.stakeZAR * 100]),
+  ALL_TIERS.map(t => [t.tier, t.stakeZAR * 100]),
 ) as Record<BetTier, number>
 
 /** Map of tier key → potential win in ZAR cents */
 export const TIER_WIN_CENTS: Record<BetTier, number> = Object.fromEntries(
-  BET_TIERS.map(t => [t.tier, t.winZAR * 100]),
+  ALL_TIERS.map(t => [t.tier, t.winZAR * 100]),
 ) as Record<BetTier, number>

@@ -7,6 +7,7 @@ import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
 import { useBet, BET_TIERS } from '@/context/BetContext'
+import { tierByKey } from '@/lib/tiers'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { useShareVideo } from '@/hooks/useShareVideo'
@@ -39,7 +40,8 @@ export default function ClaimPage() {
   const router = useRouter()
   const { betId, resetSession, videoBlob, selectedTier, selectedCourse, selectedHole } = useBet()
   const { user } = useAuth()
-  const tierData = BET_TIERS.find(t => t.tier === selectedTier) ?? BET_TIERS[1]
+  // tierByKey, not BET_TIERS: a free swing is a real bet with a real prize.
+  const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
   const [toast, setToast] = useState<string | null>(null)
 
   // Guard: require an active bet session

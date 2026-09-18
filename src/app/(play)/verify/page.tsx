@@ -6,6 +6,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS } from '@/context/BetContext'
+import { tierByKey } from '@/lib/tiers'
 
 type StepStatus = 'completed' | 'active' | 'pending' | 'failed'
 
@@ -68,7 +69,8 @@ export default function VerifyPage() {
     }
   }, [betId, router])
 
-  const tierData = BET_TIERS.find(t => t.tier === selectedTier) ?? BET_TIERS[1]
+  // tierByKey, not BET_TIERS: a free swing is a real bet with a real prize.
+  const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
   const payoutDate = new Date()
   payoutDate.setDate(payoutDate.getDate() + 7)
   const payoutEta = payoutDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })
