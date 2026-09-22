@@ -2144,7 +2144,8 @@ button, [role="button"], [role="tab"] {
   font-family: var(--font-heading); font-size: 20px; line-height: 1;
   color: var(--white); text-transform: uppercase; white-space: nowrap;
 }
-.ic-prize-split dd small { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; margin-left: 4px; opacity: 0.7; }
+/* The count reads before the amount — three prizes of R1m, not one of R1m times three. */
+.ic-prize-split dd small { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; margin-right: 5px; opacity: 0.7; }
 .ic-lead {
   display: inline-block; margin-left: 8px; padding: 2px 7px; border-radius: 999px; vertical-align: middle;
   background: var(--lime); color: var(--green); font-family: 'Inter', sans-serif; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;

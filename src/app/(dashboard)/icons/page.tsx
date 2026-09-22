@@ -119,7 +119,7 @@ export default function IconsPage() {
               {ICONS_EVENT.prizes.map(p => (
                 <div key={p.who}>
                   <dt>{p.who}</dt>
-                  <dd>{p.amount}{p.count > 1 && <small>×{p.count}</small>}</dd>
+                  <dd>{p.count > 1 && <small>{p.count} ×</small>}{p.amount}</dd>
                 </div>
               ))}
             </dl>
