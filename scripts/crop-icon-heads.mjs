@@ -45,8 +45,9 @@ const MAP = [
 
 /** Framing overrides where the default misreads a portrait. Olazábal's file
  *  is already cropped tight and he wears a cap, so the figure height
- *  understates his head and the circle cut his mouth off. */
-const OVERRIDE = { olazabal: { scale: 0.62, pad: 0.04 } }
+ *  understates his head — at the default his face fills the circle and the
+ *  chin goes over the edge. */
+const OVERRIDE = { olazabal: { scale: 0.80, pad: 0.03 } }
 
 const TEAM_BG = { rsa: { r: 0x34, g: 0x52, b: 0x31 }, world: { r: 0x2b, g: 0x7d, b: 0xe9 } }
 const OUT_DIR = 'public/marketing/icons/headshots'
@@ -72,8 +73,11 @@ async function headBox(file, over = {}) {
     if (alpha(x, y) > 24) { sum += x; n++ }
   }
   const cx = n ? Math.round(sum / n) : Math.round((left + right) / 2)
-  const side = Math.round(figureH * (over.scale ?? 0.42))
-  const pad = Math.round(side * (over.pad ?? 0.10))
+  // 0.56 of the figure: the head plus enough shoulder that the circle does
+  // not clip the chin. Tighter and the jaw is cut; looser and the face is
+  // too small to recognise at 44px.
+  const side = Math.round(figureH * (over.scale ?? 0.56))
+  const pad = Math.round(side * (over.pad ?? 0.06))
   return {
     left: Math.max(0, Math.min(w - side, Math.round(cx - side / 2))),
     top: Math.max(0, top - pad),
