@@ -130,7 +130,7 @@ export default function TryAgainPage() {
                 {isSharing ? 'Sharing…' : hasVideo ? 'Share my shot' : 'Share my attempt'}
               </button>
               <button type="button" className="miss-link" onClick={() => { resetSession(); router.push('/history') }}>
-                See all my bets
+                See all my shots
               </button>
             </div>
           </div>

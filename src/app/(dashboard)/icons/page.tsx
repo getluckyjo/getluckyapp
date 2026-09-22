@@ -11,12 +11,14 @@ import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import { useAuth } from '@/context/AuthContext'
 import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
-import { ICONS_EVENT, TEAM_LABEL, iconInitials, withStandings, type IconTeam, type PublicIcon } from '@/lib/icons'
+import { ICONS_EVENT, TEAM_LABEL, iconInitials, shouldRevealVotes, withStandings, type IconTeam, type PublicIcon } from '@/lib/icons'
 
 interface Payload {
   event: typeof ICONS_EVENT
   icons: PublicIcon[]
   totalVotes: number
+  /** Are there enough picks for the counts to be worth showing? */
+  revealVotes?: boolean
   myVote: string | null
 }
 
@@ -29,6 +31,11 @@ const TEAMS: IconTeam[] = ['rsa', 'world']
  * makes a percentage misleading), and the caller's own pick. One pick per
  * golfer, changeable. Prize copy comes from src/lib/icons.ts, one place to
  * change it.
+ *
+ * The counts stay hidden until the field has enough picks to mean something
+ * (VOTE_REVEAL_THRESHOLD). Before that the page is a field to pick from
+ * rather than a scoreboard of zeros — "your pick" still shows, because that
+ * is the golfer's own state and not a standing.
  */
 export default function IconsPage() {
   const router = useRouter()
@@ -61,7 +68,8 @@ export default function IconsPage() {
       ...i,
       votes: i.votes + (i.id === iconId ? 1 : 0) - (i.id === data.myVote ? 1 : 0),
     }))
-    setData({ ...data, icons: withStandings(moved), myVote: iconId, totalVotes: data.totalVotes + (data.myVote ? 0 : 1) })
+    const totalVotes = data.totalVotes + (data.myVote ? 0 : 1)
+    setData({ ...data, icons: withStandings(moved), myVote: iconId, totalVotes, revealVotes: shouldRevealVotes(totalVotes) })
     try {
       const res = await fetch('/api/icons/vote', {
         method: 'POST',
@@ -85,6 +93,8 @@ export default function IconsPage() {
 
   const icons = data?.icons ?? []
   const mine = icons.find(i => i.id === data?.myVote) ?? null
+  // The server decides; the fallback keeps an older payload behaving.
+  const reveal = data ? (data.revealVotes ?? shouldRevealVotes(data.totalVotes)) : false
 
   return (
     <PhoneFrame statusTheme="dark">
@@ -105,17 +115,14 @@ export default function IconsPage() {
               <span className="ic-prize-total">{ICONS_EVENT.prizeAmount}</span>
               <span className="ic-prize-kind">{ICONS_EVENT.prizeKind}</span>
             </div>
-            <div className="ic-prize-tiles">
+            <dl className="ic-prize-split">
               {ICONS_EVENT.prizes.map(p => (
-                <div key={p.who} className="ic-prize-tile">
-                  <span className="ic-prize-amt">
-                    {p.amount}{p.count > 1 && <small>×{p.count}</small>}
-                  </span>
-                  <span className="ic-prize-who">{p.who}</span>
+                <div key={p.who}>
+                  <dt>{p.who}</dt>
+                  <dd>{p.amount}{p.count > 1 && <small>×{p.count}</small>}</dd>
                 </div>
               ))}
-            </div>
-            <span className="ic-prize-terms">{ICONS_EVENT.prizeTerms}</span>
+            </dl>
           </div>
 
           {mine && (
@@ -176,15 +183,19 @@ export default function IconsPage() {
                           <span className="ic-name">
                             {icon.name}
                             {icon.isCaptain && <span className="ic-captain">Captain</span>}
-                            {icon.isLeader && <span className="ic-lead">Fan favourite</span>}
+                            {reveal && icon.isLeader && <span className="ic-lead">Fan favourite</span>}
                           </span>
                           {icon.tagline && <span className="ic-tag">{icon.tagline}</span>}
-                          <span className="ic-bar" aria-hidden><span className="ic-bar-fill" style={{ width: `${icon.share}%` }} /></span>
+                          {reveal && <span className="ic-bar" aria-hidden><span className="ic-bar-fill" style={{ width: `${icon.share}%` }} /></span>}
                         </span>
-                        <span className="ic-pct">
-                          <span className="ic-pct-num">{icon.votes}</span>
-                          <span className="ic-pct-sub">{picked ? 'Your pick' : 'backing'}</span>
-                        </span>
+                        {reveal ? (
+                          <span className="ic-pct">
+                            <span className="ic-pct-num">{icon.votes}</span>
+                            <span className="ic-pct-sub">{picked ? 'Your pick' : 'backing'}</span>
+                          </span>
+                        ) : picked ? (
+                          <span className="ic-pct ic-pct--pick"><span className="ic-pct-sub">Your pick</span></span>
+                        ) : null}
                       </button>
                     )
                   })}
@@ -194,8 +205,8 @@ export default function IconsPage() {
           })}
 
           <p className="ic-sponsor">
-            {data && data.totalVotes > 0 && <>{data.totalVotes} {data.totalVotes === 1 ? 'golfer has' : 'golfers have'} picked · </>}
-            {ICONS_EVENT.sponsorLine}
+            {reveal && data && <>{data.totalVotes} golfers have picked · </>}
+            {ICONS_EVENT.sponsorLine} · {ICONS_EVENT.prizeTerms}
           </p>
         </div>
 

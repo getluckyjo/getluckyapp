@@ -49,7 +49,7 @@ export function buildWelcomeHtml(firstName: string): string {
 
   return emailShell({
     title: 'Welcome to Get Lucky',
-    preheader: `${firstName}, you're in. Choose a par 3, bet on yourself, win up to R1 million.`,
+    preheader: `${firstName}, you're in. Choose a par 3, back yourself, win up to R1 million.`,
     body:
       headline(`Welcome,<br/>${escapeHtml(firstName)}.`) +
       paragraph('You’re in. Next time you stand on a par-3 tee, your swing could be worth up to <strong>R1 000 000</strong>.') +

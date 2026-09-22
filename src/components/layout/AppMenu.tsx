@@ -15,7 +15,7 @@ import { getInitials } from '@/lib/format'
 const PRIMARY = [
   { label: 'Home',        path: '/home' },
   { label: 'Play',        path: '/select-course' },
-  { label: 'My bets',     path: '/history' },
+  { label: 'My shots',    path: '/history' },
   { label: 'Winners',     path: '/leaderboard' },
   { label: 'Icons',       path: '/icons' },
   { label: 'Account',     path: '/account' },

@@ -139,7 +139,7 @@ function AuthForm() {
                 : mode === 'email'
                   ? 'Enter your email and we’ll\nsend you a code.'
                   : next
-                    ? 'Sign in to place your bet.\nIt takes one tap.'
+                    ? 'Sign in to back yourself.\nIt takes one tap.'
                     : 'Sign in &\nJoin 15 000+\nGolfers already playing...'}
             </p>
 

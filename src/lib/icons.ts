@@ -57,6 +57,22 @@ export interface PublicIcon {
 }
 
 /**
+ * How many picks the field needs before the counts are shown at all.
+ *
+ * A page of "0 backing" next to every name, with one early voter crowned
+ * fan favourite off a single pick, reads as an empty room — and an empty
+ * room is the best reason anyone has not to vote. Until the field gets
+ * there the page shows the Icons and asks for a pick; the votes are
+ * counted the whole time, they are just not on display.
+ */
+export const VOTE_REVEAL_THRESHOLD = 50
+
+/** Are there enough picks for the counts to mean anything yet? */
+export function shouldRevealVotes(totalVotes: number): boolean {
+  return totalVotes >= VOTE_REVEAL_THRESHOLD
+}
+
+/**
  * Standings for the list. One pick per golfer, so the honest number is how
  * many golfers back each Icon, not a percentage: three picks would read as
  * "67%" and mislead. The bar is drawn against the leader so the favourite
@@ -69,6 +85,41 @@ export function withStandings<T extends { votes: number }>(rows: T[]): (T & { sh
     share: top ? Math.round((r.votes / top) * 100) : 0,
     isLeader: top > 0 && r.votes === top,
   }))
+}
+
+/**
+ * Committed headshots, by Icon name. The Icons Series portraits, cut to the
+ * head and set on the team colour, so an avatar is one small file from our
+ * own origin rather than a hotlink to someone else's CDN.
+ *
+ * `icons.photo_url` (Admin → Icons) still wins when it is set; this is the
+ * fallback, so a photo can be swapped without a deploy.
+ */
+const ICON_PHOTOS: Record<string, string> = {
+  'ernie els':           'els',
+  'josé maría olazábal': 'olazabal',
+  'ab de villiers':      'de-villiers',
+  'john terry':          'terry',
+  'butch james':         'james',
+  'vernon philander':    'philander',
+  'fourie du preez':     'du-preez',
+  'brian lara':          'lara',
+  'ash barty':           'barty',
+  'dwight yorke':        'yorke',
+  'shaun pollock':       'pollock',
+  'yuvraj singh':        'singh',
+  'schalk burger':       'burger',
+  'george gregan':       'gregan',
+  'jimmy anderson':      'anderson',
+  'victor matfield':     'matfield',
+  'christian cullen':    'cullen',
+  'roland schoeman':     'schoeman',
+}
+
+/** The committed headshot for an Icon, or null when we do not have one. */
+export function iconPhoto(name: string): string | null {
+  const slug = ICON_PHOTOS[name.trim().toLowerCase()]
+  return slug ? `/marketing/icons/headshots/${slug}.webp` : null
 }
 
 /** Initials for the avatar when an Icon has no photo: "Ernie Els" → "EE". */
