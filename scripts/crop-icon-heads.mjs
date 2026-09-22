@@ -38,6 +38,9 @@ const MAP = [
   ['Shalk Burger',   'burger',      'Schalk Burger',       'rsa'],
   ['Gregan',         'gregan',      'George Gregan',       'world'],
   ['Jimmy Anderson', 'anderson',    'Jimmy Anderson',      'world'],
+  ['Player Images (1)', 'matfield', 'Victor Matfield',    'rsa'],
+  ['Christian Cullen','cullen',    'Christian Cullen',    'world'],
+  ['Ronald Schoeman', 'schoeman',  'Roland Schoeman',     'rsa'],
 ]
 
 /** Framing overrides where the default misreads a portrait. Olazábal's file

@@ -90,7 +90,7 @@ export default function PaymentReturnPage() {
       const err = await res.json().catch(() => ({ error: 'Unknown error' }))
 
       console.error('[PaymentReturn] Bet creation failed:', err)
-      throw new Error(err.error ?? 'Could not register your bet. Please contact support.')
+      throw new Error(err.error ?? 'Could not register your shot. Please contact support.')
     }
 
     throw new PaymentTimeout(payload.m_payment_id)
@@ -269,7 +269,7 @@ export default function PaymentReturnPage() {
                     Play now
                   </button>
                   <button type="button" className="btn-tile" onClick={() => router.push('/history')}>
-                    My bets
+                    My shots
                   </button>
                 </div>
               </>

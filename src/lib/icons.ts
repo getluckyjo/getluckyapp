@@ -111,6 +111,9 @@ const ICON_PHOTOS: Record<string, string> = {
   'schalk burger':       'burger',
   'george gregan':       'gregan',
   'jimmy anderson':      'anderson',
+  'victor matfield':     'matfield',
+  'christian cullen':    'cullen',
+  'roland schoeman':     'schoeman',
 }
 
 /** The committed headshot for an Icon, or null when we do not have one. */

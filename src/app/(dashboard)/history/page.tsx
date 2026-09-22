@@ -56,7 +56,7 @@ function formatDate(iso: string) {
 const PAGE_SIZE = 20
 
 /**
- * My bets — every attempt the golfer has made, in the V2 system.
+ * My shots — every attempt the golfer has made, in the V2 system.
  * Display title, three stat tiles, a row of filter pills, then white
  * cards: a ball disc (lime when it went in), course and hole, an outcome
  * badge, and the stake / prize line underneath.
@@ -98,7 +98,7 @@ export default function HistoryPage() {
 
         <div className="vf-scroll">
           <header className="page-head" style={{ padding: 0 }}>
-            <h1 className="v2-title" style={{ marginBottom: 0 }}>My bets</h1>
+            <h1 className="v2-title" style={{ marginBottom: 0 }}>My shots</h1>
             <div className="page-sub" style={{ whiteSpace: 'nowrap', paddingBottom: 6 }}>
               {loading ? '—' : allBets.length} total
             </div>
@@ -134,7 +134,7 @@ export default function HistoryPage() {
           </div>
 
           {/* Filter chips */}
-          <div className="hist-filters" role="group" aria-label="Filter bets">
+          <div className="hist-filters" role="group" aria-label="Filter shots">
             {FILTERS.map(f => (
               <button
                 key={f.key}
@@ -170,7 +170,7 @@ export default function HistoryPage() {
               <div className="hist-empty">
                 <span className="nf-ball" aria-hidden><GolfBallIcon size={38} /></span>
                 <div className="hist-empty-title">
-                  {filter === 'all' ? 'No bets yet' : `No ${FILTERS.find(f => f.key === filter)?.label.toLowerCase()} yet`}
+                  {filter === 'all' ? 'No shots yet' : `No ${FILTERS.find(f => f.key === filter)?.label.toLowerCase()} yet`}
                 </div>
                 <div className="hist-empty-sub">
                   {filter === 'all'
