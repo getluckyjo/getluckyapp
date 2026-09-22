@@ -91,13 +91,17 @@ export default function HomePage() {
       <div className="v2-screen v2-screen--photo">
         <PullToRefresh />
         <Image
-          src="/marketing/hero-bg.webp"
+          /* The Links at Fancourt. Its own file rather than an overwritten
+             hero-bg: the service worker caches by URL, so replacing the old
+             file would leave installed phones on the old artwork. Composed
+             portrait, so cover trims the sides, never the sky or the green. */
+          src="/marketing/hero-fancourt.webp"
           alt=""
           fill
           priority
           sizes="480px"
           className="v2-photo"
-          style={{ objectPosition: '58% 100%' }}
+          style={{ objectPosition: 'center' }}
         />
         <div
           className="v2-photo-scrim"
