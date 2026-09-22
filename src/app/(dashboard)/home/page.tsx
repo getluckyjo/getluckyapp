@@ -118,7 +118,7 @@ export default function HomePage() {
             <h1 className="v2-title">{'1 Shot,\nR1 Million.'}</h1>
             <p className="v2-sub">
               Choose a PAR 3.{'\n'}
-              Bet On Yourself.{'\n'}
+              Back Yourself.{'\n'}
               WIN up to <strong>R1 Million!</strong>
             </p>
             <button
