@@ -91,11 +91,12 @@ export default function HomePage() {
       <div className="v2-screen v2-screen--photo">
         <PullToRefresh />
         <Image
-          /* The Links at Fancourt. Its own file rather than an overwritten
-             hero-bg: the service worker caches by URL, so replacing the old
-             file would leave installed phones on the old artwork. Composed
-             portrait, so cover trims the sides, never the sky or the green. */
-          src="/marketing/hero-fancourt.webp"
+          /* The Links at Fancourt, the 11th. Each hero gets its own file
+             rather than overwriting the last: the service worker caches by
+             URL, so a replaced file would leave installed phones on the old
+             artwork. Composed portrait, so cover trims the sides, never the
+             sky or the green. */
+          src="/marketing/hero-fancourt-11th.webp"
           alt=""
           fill
           priority
