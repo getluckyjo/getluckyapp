@@ -61,6 +61,17 @@ describe('GET /api/icons', () => {
     expect(json.event.name).toBe('Icons Cup South Africa')
   })
 
+  it('falls back to the committed headshot, and lets an admin photo win', async () => {
+    asUser(null)
+    const json = await (await listIcons()).json()
+    const els = json.icons.find((i: { name: string }) => i.name === 'Ernie Els')
+    expect(els.photoUrl).toBe('/marketing/icons/headshots/els.webp')
+    // An Icon we have no headshot for falls through to initials, not a 404.
+    db.seed('icons', { id: 'x1', name: 'Someone Else', team: 'rsa', is_active: true, sort_order: 90 })
+    const second = await (await listIcons()).json()
+    expect(second.icons.find((i: { name: string }) => i.name === 'Someone Else').photoUrl).toBeNull()
+  })
+
   it('withholds the counts until the field has enough picks to mean something', async () => {
     asUser(null)
     db.seed('icon_votes', { user_id: USER_A.id, icon_id: ICON_A })

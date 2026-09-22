@@ -115,17 +115,14 @@ export default function IconsPage() {
               <span className="ic-prize-total">{ICONS_EVENT.prizeAmount}</span>
               <span className="ic-prize-kind">{ICONS_EVENT.prizeKind}</span>
             </div>
-            <div className="ic-prize-tiles">
+            <dl className="ic-prize-split">
               {ICONS_EVENT.prizes.map(p => (
-                <div key={p.who} className="ic-prize-tile">
-                  <span className="ic-prize-amt">
-                    {p.amount}{p.count > 1 && <small>×{p.count}</small>}
-                  </span>
-                  <span className="ic-prize-who">{p.who}</span>
+                <div key={p.who}>
+                  <dt>{p.who}</dt>
+                  <dd>{p.amount}{p.count > 1 && <small>×{p.count}</small>}</dd>
                 </div>
               ))}
-            </div>
-            <span className="ic-prize-terms">{ICONS_EVENT.prizeTerms}</span>
+            </dl>
           </div>
 
           {mine && (
@@ -208,8 +205,8 @@ export default function IconsPage() {
           })}
 
           <p className="ic-sponsor">
-            {data && data.totalVotes > 0 && <>{data.totalVotes} {data.totalVotes === 1 ? 'golfer has' : 'golfers have'} picked · </>}
-            {ICONS_EVENT.sponsorLine}
+            {reveal && data && <>{data.totalVotes} golfers have picked · </>}
+            {ICONS_EVENT.sponsorLine} · {ICONS_EVENT.prizeTerms}
           </p>
         </div>
 

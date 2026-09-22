@@ -87,6 +87,38 @@ export function withStandings<T extends { votes: number }>(rows: T[]): (T & { sh
   }))
 }
 
+/**
+ * Committed headshots, by Icon name. The Icons Series portraits, cut to the
+ * head and set on the team colour, so an avatar is one small file from our
+ * own origin rather than a hotlink to someone else's CDN.
+ *
+ * `icons.photo_url` (Admin → Icons) still wins when it is set; this is the
+ * fallback, so a photo can be swapped without a deploy.
+ */
+const ICON_PHOTOS: Record<string, string> = {
+  'ernie els':           'els',
+  'josé maría olazábal': 'olazabal',
+  'ab de villiers':      'de-villiers',
+  'john terry':          'terry',
+  'butch james':         'james',
+  'vernon philander':    'philander',
+  'fourie du preez':     'du-preez',
+  'brian lara':          'lara',
+  'ash barty':           'barty',
+  'dwight yorke':        'yorke',
+  'shaun pollock':       'pollock',
+  'yuvraj singh':        'singh',
+  'schalk burger':       'burger',
+  'george gregan':       'gregan',
+  'jimmy anderson':      'anderson',
+}
+
+/** The committed headshot for an Icon, or null when we do not have one. */
+export function iconPhoto(name: string): string | null {
+  const slug = ICON_PHOTOS[name.trim().toLowerCase()]
+  return slug ? `/marketing/icons/headshots/${slug}.webp` : null
+}
+
 /** Initials for the avatar when an Icon has no photo: "Ernie Els" → "EE". */
 export function iconInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)

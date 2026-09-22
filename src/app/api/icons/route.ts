@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError } from '@/lib/api/http'
-import { ICONS_EVENT, shouldRevealVotes, sortIcons, withStandings, type IconTeam, type PublicIcon } from '@/lib/icons'
+import { ICONS_EVENT, iconPhoto, shouldRevealVotes, sortIcons, withStandings, type IconTeam, type PublicIcon } from '@/lib/icons'
 
 /**
  * GET /api/icons — the field, with how many golfers back each Icon, and the
@@ -40,7 +40,8 @@ export async function GET() {
       isCaptain: !!i.is_captain,
       sortOrder: i.sort_order ?? 100,
       tagline: i.tagline ?? null,
-      photoUrl: i.photo_url ?? null,
+      // Admin → Icons wins; the committed headshot is the fallback.
+      photoUrl: i.photo_url ?? iconPhoto(i.name),
       votes: counts.get(i.id) ?? 0,
     })))
     const rows: PublicIcon[] = withStandings(ordered).map(r => ({ id: r.id, name: r.name, team: r.team, isCaptain: r.isCaptain, tagline: r.tagline, photoUrl: r.photoUrl, votes: r.votes, share: r.share, isLeader: r.isLeader }))
