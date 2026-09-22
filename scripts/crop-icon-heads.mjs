@@ -43,11 +43,17 @@ const MAP = [
   ['Ronald Schoeman', 'schoeman',  'Roland Schoeman',     'rsa'],
 ]
 
-/** Framing overrides where the default misreads a portrait. Olazábal's file
- *  is already cropped tight and he wears a cap, so the figure height
- *  understates his head — at the default his face fills the circle and the
- *  chin goes over the edge. */
-const OVERRIDE = { olazabal: { scale: 0.80, pad: 0.03 } }
+/** Framing overrides where the default misreads a portrait.
+ *
+ * Both of these files are framed differently from the fourteen standard
+ * 983x1297 portraits: they are cut closer, head-to-chest rather than to the
+ * waist, so `figureH` understates the head and the default slice comes out
+ * far too tight. Their scales are set by eye against a standard portrait —
+ * the test is that every head reads the same size in the list. */
+const OVERRIDE = {
+  olazabal: { scale: 0.80, pad: 0.03 },
+  els:      { scale: 0.84, pad: 0.06 },
+}
 
 const TEAM_BG = { rsa: { r: 0x34, g: 0x52, b: 0x31 }, world: { r: 0x2b, g: 0x7d, b: 0xe9 } }
 const OUT_DIR = 'public/marketing/icons/headshots'
