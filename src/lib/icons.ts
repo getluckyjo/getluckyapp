@@ -57,6 +57,22 @@ export interface PublicIcon {
 }
 
 /**
+ * How many picks the field needs before the counts are shown at all.
+ *
+ * A page of "0 backing" next to every name, with one early voter crowned
+ * fan favourite off a single pick, reads as an empty room — and an empty
+ * room is the best reason anyone has not to vote. Until the field gets
+ * there the page shows the Icons and asks for a pick; the votes are
+ * counted the whole time, they are just not on display.
+ */
+export const VOTE_REVEAL_THRESHOLD = 50
+
+/** Are there enough picks for the counts to mean anything yet? */
+export function shouldRevealVotes(totalVotes: number): boolean {
+  return totalVotes >= VOTE_REVEAL_THRESHOLD
+}
+
+/**
  * Standings for the list. One pick per golfer, so the honest number is how
  * many golfers back each Icon, not a percentage: three picks would read as
  * "67%" and mislead. The bar is drawn against the leader so the favourite

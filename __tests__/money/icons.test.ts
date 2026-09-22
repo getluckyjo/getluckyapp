@@ -12,6 +12,7 @@ vi.mock('@/lib/supabase/server', () => serverClient)
 vi.mock('@/lib/supabase/admin', () => adminClient)
 
 import { GET as listIcons } from '@/app/api/icons/route'
+import { VOTE_REVEAL_THRESHOLD } from '@/lib/icons'
 import { POST as vote } from '@/app/api/icons/vote/route'
 import { GET as adminList, POST as adminCreate } from '@/app/api/admin/icons/route'
 import { PATCH as adminPatch, DELETE as adminDelete } from '@/app/api/admin/icons/[iconId]/route'
@@ -58,6 +59,26 @@ describe('GET /api/icons', () => {
     expect(json.totalVotes).toBe(3)
     expect(json.myVote).toBeNull()
     expect(json.event.name).toBe('Icons Cup South Africa')
+  })
+
+  it('withholds the counts until the field has enough picks to mean something', async () => {
+    asUser(null)
+    db.seed('icon_votes', { user_id: USER_A.id, icon_id: ICON_A })
+    const json = await (await listIcons()).json()
+    // The numbers still ride along — the screen is what hides them — so the
+    // moment the threshold is crossed every client has the right standings.
+    expect(json.revealVotes).toBe(false)
+    expect(json.totalVotes).toBe(1)
+    expect(json.icons[0].votes).toBe(1)
+  })
+
+  it('reveals the counts once the threshold is reached', async () => {
+    asUser(null)
+    const votes = Array.from({ length: VOTE_REVEAL_THRESHOLD }, (_, n) => ({ user_id: `u${n}`, icon_id: ICON_A }))
+    db.seed('icon_votes', ...votes)
+    const json = await (await listIcons()).json()
+    expect(json.totalVotes).toBe(VOTE_REVEAL_THRESHOLD)
+    expect(json.revealVotes).toBe(true)
   })
 
   it('includes the caller\'s own pick when signed in', async () => {

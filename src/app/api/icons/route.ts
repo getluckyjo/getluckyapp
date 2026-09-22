@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError } from '@/lib/api/http'
-import { ICONS_EVENT, sortIcons, withStandings, type IconTeam, type PublicIcon } from '@/lib/icons'
+import { ICONS_EVENT, shouldRevealVotes, sortIcons, withStandings, type IconTeam, type PublicIcon } from '@/lib/icons'
 
 /**
  * GET /api/icons — the field, with how many golfers back each Icon, and the
  * caller's own pick when signed in. Public: signed-out golfers see the
  * standings and are asked to sign in to pick.
+ *
+ * `revealVotes` says whether the counts are worth showing yet
+ * (VOTE_REVEAL_THRESHOLD). The numbers ride along either way, so the moment
+ * the field crosses it every client already has the right standings.
  *
  * Totals are counted with the service role because golfers can only read
  * their own vote row. At this scale (one row per golfer) counting in the
@@ -47,10 +51,12 @@ export async function GET() {
       myVote = mine?.icon_id ?? null
     }
 
+    const totalVotes = rows.reduce((s, r) => s + r.votes, 0)
     return NextResponse.json({
       event: ICONS_EVENT,
       icons: rows,
-      totalVotes: rows.reduce((s, r) => s + r.votes, 0),
+      totalVotes,
+      revealVotes: shouldRevealVotes(totalVotes),
       myVote,
     })
   } catch (err) {
