@@ -206,7 +206,7 @@ textarea.adm-input { line-height: 1.5; resize: vertical; }
   position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
   padding: 20px; background: rgba(13, 22, 15, 0.55);
 }
-.adm-modal { width: 100%; max-width: 460px; background: var(--white); border-radius: 18px; padding: 24px; color: var(--green); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3); }
+.adm-modal { width: 100%; max-width: 460px; max-height: calc(100dvh - 40px); overflow-y: auto; background: var(--white); border-radius: 18px; padding: 24px; color: var(--green); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.3); }
 
 /* ── Spinner ── */
 .adm-spinner { width: 40px; height: 40px; border-radius: 50%; border: 3px solid var(--cream-dark); border-top-color: var(--green); animation: adm-spin 0.8s linear infinite; }

@@ -426,3 +426,71 @@ describe('failures', () => {
     expect(db.rows('courses')).toHaveLength(0)
   })
 })
+
+describe('users: totals over every bet, and a golfer\'s page', () => {
+  const USER_C = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+  const userDetail = async (id: string, qs = '') => {
+    const { GET } = await import('@/app/api/admin/users/[userId]/route')
+    return GET(new Request(`http://x/api/admin/users/${id}${qs}`), params({ userId: id }))
+  }
+  function seedGolfers() {
+    asAdmin()
+    db.seed('profiles',
+      { id: USER_B.id, name: 'Mallory Mokoena', email: 'mallory@example.test', created_at: '2026-09-02T00:00:00Z' },
+      { id: USER_C, name: 'Thabo Reyneke', email: 'thabo@example.test', created_at: '2026-09-03T00:00:00Z' },
+    )
+    db.seed('courses', { id: COURSE_ID, name: 'Leopard Creek' })
+    db.seed('holes', { id: HOLE_ID, hole_number: 4 })
+  }
+
+  it('the list and the golfer\'s page agree, past the 1,000-row cap and the latest 50', async () => {
+    seedGolfers()
+    const bet = (status: string, i: number) => ({ user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status, stake_pence: 5000, potential_win_pence: 2_500_000, created_at: `2026-09-10T00:${String(Math.floor(i / 60) % 60).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}Z` })
+    db.seed('bets', ...Array.from({ length: 1100 }, (_, i) => bet(i < 2 ? 'verified' : 'miss', i)))
+    db.seed('bets', { user_id: USER_C, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'miss', stake_pence: 10000, potential_win_pence: 2_500_000 })
+
+    const listed = await (await listUsers(new Request('http://x/api/admin/users') as never)).json()
+    const mallory = listed.data.find((u: { id: string }) => u.id === USER_B.id)
+    expect(mallory).toMatchObject({ totalStaked: 1100 * 5000, totalWon: 2 * 2_500_000 })
+    expect(listed.data.find((u: { id: string }) => u.id === USER_C)).toMatchObject({ totalStaked: 10000, totalWon: 0 })
+
+    const res = await userDetail(USER_B.id)
+    expect(res.status).toBe(200)
+    const page1 = await res.json()
+    expect(page1.user).toMatchObject({ totalStaked: mallory.totalStaked, totalWon: mallory.totalWon })
+    expect(page1).toMatchObject({ betsPage: 1, betsPerPage: 50 })
+    expect(page1.bets).toHaveLength(50)
+    const page2 = await (await userDetail(USER_B.id, '?betsPage=2')).json()
+    expect(page2.bets).toHaveLength(50)
+    expect(page2.bets[0].id).not.toBe(page1.bets[0].id)
+    expect((await userDetail(USER_B.id, '?betsPage=0')).status).toBe(400)
+  })
+
+  it('shows each bet\'s claim and names the payments from the profile already read', async () => {
+    seedGolfers()
+    const [claimed] = db.seed('bets', { user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'claimed', stake_pence: 5000, potential_win_pence: 2_500_000 })
+    db.seed('bets', { user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', status: 'miss', stake_pence: 5000, potential_win_pence: 2_500_000 })
+    const [claim] = db.seed('verifications', { bet_id: claimed.id, status: 'documents_received' })
+    db.seed('payfast_payments', { m_payment_id: 'GL-1', user_id: USER_B.id, course_id: COURSE_ID, hole_id: HOLE_ID, tier: 'tier_1', amount_cents: 5000, status: 'complete', bet_id: claimed.id, raw_payload: {} })
+
+    const json = await (await userDetail(USER_B.id)).json()
+    expect(json.bets.find((b: { id: string }) => b.id === claimed.id)).toMatchObject({ courseName: 'Leopard Creek', holeNumber: 4, userName: 'Mallory Mokoena', claim: { id: claim.id, status: 'documents_received' } })
+    expect(json.bets.find((b: { id: string }) => b.id !== claimed.id).claim).toBeNull()
+    expect(json.payments[0]).toMatchObject({ userName: 'Mallory Mokoena', userEmail: 'mallory@example.test', courseName: 'Leopard Creek', holeNumber: 4, betId: claimed.id })
+  })
+
+  it('404 only for a golfer who is not there; a failed read is a 500', async () => {
+    seedGolfers()
+    expect((await userDetail('dddddddd-dddd-4ddd-8ddd-dddddddddddd')).status).toBe(404)
+    expect((await userDetail('not-a-uuid')).status).toBe(404)
+    adminClient.createAdminClient.mockImplementation(() => createFakeClient(db, { failTable: { bets: { code: '57014', message: 'timeout' } } }))
+    expect((await userDetail(USER_B.id)).status).toBe(500)
+    expect((await listUsers(new Request('http://x/api/admin/users') as never)).status).toBe(500)
+  })
+
+  it('finds a golfer by their whole email address', async () => {
+    seedGolfers()
+    const found = await (await listUsers(new Request('http://x/api/admin/users?search=thabo@example.test') as never)).json()
+    expect(found.data.map((u: { id: string }) => u.id)).toEqual([USER_C])
+  })
+})
