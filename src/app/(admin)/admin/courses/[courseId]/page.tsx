@@ -244,8 +244,8 @@ export default function AdminEditCoursePage() {
       </div>
     )
   }
-  if (loadError) return <LoadError what="The course" detail={loadError.detail} onRetry={() => { setLoadError(null); setAttempt(n => n + 1) }} />
-  if (!course || !form) return <p className="adm-muted">Loading…</p>
+  if (loadError) return <><title>Course · Get Lucky admin</title><LoadError what="The course" detail={loadError.detail} onRetry={() => { setLoadError(null); setAttempt(n => n + 1) }} /></>
+  if (!course || !form) return <><title>Course · Get Lucky admin</title><p className="adm-muted">Loading…</p></>
 
   const lastOfficial = contacts.length === 1
   const noOfficial = course.is_partner && contacts.length === 0

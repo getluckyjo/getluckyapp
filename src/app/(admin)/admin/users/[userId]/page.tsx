@@ -95,8 +95,8 @@ export default function AdminUserDetailPage() {
       </div>
     )
   }
-  if (loadError && !loading) return <LoadError what="This golfer" detail={loadError.detail} onRetry={() => setAttempt(n => n + 1)} />
-  if (!detail) return <p className="adm-muted">Loading…</p>
+  if (loadError && !loading) return <><title>User · Get Lucky admin</title><LoadError what="This golfer" detail={loadError.detail} onRetry={() => setAttempt(n => n + 1)} /></>
+  if (!detail) return <><title>User · Get Lucky admin</title><p className="adm-muted">Loading…</p></>
 
   const { user, bets, payments, betsTotal, betsPerPage } = detail
   const name = user.name || 'No name'
