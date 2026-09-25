@@ -54,6 +54,11 @@ Ask for anything missing. Do not guess the date, prize or venue.
   Example: Royal West 17 is 185 m from yellow and 161 m from white.
 - The app stores one distance per hole. If the day plays another tee,
   change that hole's distance in Admin → Courses to match.
+- A day on one course can have a single hole (SaSwazi: Umdoni Park 16).
+  The screen then says "Hole 16", and the copy speaks of "the hole".
+- When the published cards disagree, count the par 3s: a par 72 with four
+  par 5s has four par 3s. Hole19 listed three for Umdoni Park; GolfPass's
+  full card had the fourth.
 
 ## 3. Create it
 
@@ -86,9 +91,19 @@ Use the next free migration number. Add a row to
 
 ## 4. Brand it (optional)
 
-1. Put the photo in `public/golf-days/<slug>/hero.jpg`, about 1000 px wide.
-   Brighten it if asked. Lift the shadows more than the highlights so the
-   sky does not blow out:
+1. The picture at the top is the theme's `hero`: `{ src, alt, width,
+   height, kind }`, with `width` and `height` the file's own.
+   - **A photo** (`kind: 'photo'`, Bomb Squad's): fills a rounded frame and
+     the label overlaps its foot. Put it in `public/golf-days/<slug>/hero.jpg`,
+     about 1000 px wide.
+   - **A logo** (`kind: 'logo'`, SaSwazi's sticker): shown whole, with its
+     transparent background, above the label. A crop would lose its edges
+     and banner. Save it as `public/golf-days/<slug>/logo.webp`, about
+     900 px wide, keeping the alpha. Don't repeat the logo's own slogan in
+     the `tagline`.
+
+   Brighten a photo if asked. Lift the shadows more than the highlights so
+   the sky does not blow out:
 
    ```bash
    node -e "require('sharp')('<source>').resize({ width: 1000 }).modulate({ brightness: 1.18, saturation: 1.06 }).gamma(2.2, 1.9).jpeg({ quality: 82, mozjpeg: true }).toFile('public/golf-days/<slug>/hero.jpg')"
@@ -107,7 +122,8 @@ Use the next free migration number. Add a row to
    work in `src/components/icons/index.tsx`, like `BombSquadIcon` (stroke
    2.6 in a 40-wide viewBox, `currentColor`), and key it by slug in
    `GOLF_DAY_ICONS` in `src/components/layout/BottomTabBar.tsx`. Without
-   one the tab shows a pin flag. Compare it with the artwork at full size
+   one the tab shows a pin flag, which is right for a logo that is a whole
+   scene (SaSwazi's). Compare it with the artwork at full size
    and at tab size (about 27 px) before keeping it.
 5. Check it in a browser at 320 px and 390 px wide, and on a computer (the
    app sits in a 375 px phone frame there), signed out and on the day. See

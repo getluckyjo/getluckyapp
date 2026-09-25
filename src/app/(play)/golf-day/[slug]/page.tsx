@@ -22,7 +22,7 @@ import { golfDayEvent, googleCalendarUrl } from '@/lib/golf-days/calendar'
 import { siteUrl } from '@/lib/email/layout'
 import { CalendarIcon } from '@/components/icons'
 import {
-  formatGolfDayDate, golfDayPath, golfDayVenue, shortCourseName,
+  formatGolfDayDate, golfDayPath, golfDayVenue, oneCourse, shortCourseName,
   type GolfDayHole, type GolfDayMe, type PublicGolfDay,
 } from '@/lib/golf-days/rules'
 
@@ -48,13 +48,15 @@ function CourseName({ name, venue }: { name: string; venue: string | null }) {
   return <>{venue && dash !== -1 ? `${venue} – ${name.slice(dash + 3)}` : name}</>
 }
 
-/** "Bomb Squad Golf Day" sets as the host, then GOLF DAY on a line of its own. */
+/** "Bomb Squad Golf Day" sets as the host, then GOLF DAY on a line of its own; a Golf Trek or Golf Tour too. */
 function nameLines(name: string): [string, string | null] {
-  const m = /^(.*\S)\s+(golf day)$/i.exec(name.trim())
+  const m = /^(.*\S)\s+(golf (?:day|trek|tour))$/i.exec(name.trim())
   return m ? [m[1], m[2]] : [name, null]
 }
 
+/** "East · Hole 16" over two courses; "Hole 16" when there is only the one (its club is on the label). */
 function holeTitle(hole: GolfDayHole, all: GolfDayHole[]): string {
+  if (oneCourse(all)) return `Hole ${hole.holeNumber}`
   const course = shortCourseName(hole.course.name, all.map(h => h.course.name))
   return `${course} · Hole ${hole.holeNumber}`
 }
@@ -214,14 +216,14 @@ export default function GolfDayPage() {
 
   return (
     <PhoneFrame statusTheme="dark">
-      <div className={`v2-screen gd-screen${theme.heroImage ? ' gd-branded' : ''}`} style={vars}>
+      <div className={`v2-screen gd-screen${theme.hero ? ' gd-branded' : ''}`} style={vars}>
         <PullToRefresh />
         <AppHeader tone="light" />
 
         <div className="vf-scroll gd-scroll">
-          {theme.heroImage && (
-            <div className="gd-hero">
-              <Image src={theme.heroImage} alt={theme.heroAlt} width={1000} height={1244} sizes="480px" priority />
+          {theme.hero && (
+            <div className={`gd-hero gd-hero--${theme.hero.kind}`}>
+              <Image src={theme.hero.src} alt={theme.hero.alt} width={theme.hero.width} height={theme.hero.height} sizes="480px" priority />
             </div>
           )}
 
@@ -274,7 +276,7 @@ export default function GolfDayPage() {
                     <li key={h.holeId}><strong>{holeTitle(h, golfDay.holes)}</strong><span>{holeMeta(h)}</span></li>
                   ))}
                 </ul>
-                <p className="gd-small">Play your swing on whichever of these your round takes you to.</p>
+                <p className="gd-small">{golfDay.holes.length === 1 ? 'Play your swing when your round gets there.' : 'Play your swing on whichever of these your round takes you to.'}</p>
               </section>
 
               <section className="gd-card">
@@ -288,7 +290,7 @@ export default function GolfDayPage() {
               </section>
 
               <p className="gd-rules">
-                One swing per player, on {formatGolfDayDate(golfDay.playsOn)} only, on the holes above, filmed in the app.
+                One swing per player, on {formatGolfDayDate(golfDay.playsOn)} only, on the {golfDay.holes.length === 1 ? 'hole' : 'holes'} above, filmed in the app.
                 18+ only. A hole-in-one is paid after our review and confirmation from the club and your playing partners.
                 The prize is paid by Get Lucky. <a href="/terms">Terms</a>
               </p>
@@ -425,7 +427,7 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
   if (golfDay.phase === 'upcoming') {
     return (
       <>
-        <p className="gd-status"><strong>You&rsquo;re in.</strong> Your swing opens on {date}. Come back to this tab when you reach one of the holes below.</p>
+        <p className="gd-status"><strong>You&rsquo;re in.</strong> Your swing opens on {date}. Come back to this tab when you reach {golfDay.holes.length === 1 ? 'the hole' : 'one of the holes'} below.</p>
         <AddToCalendar golfDay={golfDay} venue={venue} />
         {onInstall && <button type="button" className="gd-link" onClick={onInstall}>Put Get Lucky on your home screen</button>}
       </>

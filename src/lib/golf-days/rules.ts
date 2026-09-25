@@ -167,6 +167,11 @@ export function golfDayVenue(holes: GolfDayHole[]): string {
   return clubs.length === 1 ? clubs[0] : names.join(' · ')
 }
 
+/** Every hole is on the one course, so a hole needs no course named beside it ("Hole 16"). */
+export function oneCourse(holes: GolfDayHole[]): boolean {
+  return new Set(holes.map(h => h.course.id)).size <= 1
+}
+
 /** Course names carry the club: "Royal Johannesburg & Kensington – East" reads "East" next to its sibling. */
 export function shortCourseName(name: string, siblings: string[]): string {
   const dash = name.lastIndexOf(' – ')

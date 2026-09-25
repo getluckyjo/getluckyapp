@@ -8,7 +8,7 @@
  * Calendar ignores reminders in a link; the phone's default one applies.
  */
 import { formatRand } from '@/lib/format'
-import { golfDayPath, golfDayVenue, shortCourseName, type PublicGolfDay } from './rules'
+import { golfDayPath, golfDayVenue, oneCourse, shortCourseName, type PublicGolfDay } from './rules'
 
 export type CalendarDay = Pick<PublicGolfDay, 'slug' | 'name' | 'tabLabel' | 'playsOn' | 'prizeZAR' | 'holes'>
 
@@ -49,7 +49,8 @@ export function golfDayEvent(day: CalendarDay, { site, venue }: { site: string; 
   const url = `${site.replace(/\/$/, '')}${golfDayPath(day.slug)}`
   const prize = formatRand(day.prizeZAR)
   const names = day.holes.map(h => h.course.name)
-  const holes = day.holes.map(h => `${shortCourseName(h.course.name, names)} ${h.holeNumber}${h.distanceMetres ? ` (${h.distanceMetres} m)` : ''}`)
+  const single = oneCourse(day.holes)
+  const holes = day.holes.map(h => `${single ? 'hole' : shortCourseName(h.course.name, names)} ${h.holeNumber}${h.distanceMetres ? ` (${h.distanceMetres} m)` : ''}`)
   const where = day.holes.find(h => h.course.location)?.course.location
   const club = venue ?? golfDayVenue(day.holes)
 

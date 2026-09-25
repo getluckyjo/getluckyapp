@@ -538,6 +538,16 @@ body {
    never wider than its column, so it cannot run into Account. */
 .tabbar-tab--long .tabbar-label,
 .tabbar-tab--long.is-active .tabbar-label { font-size: 10.5px; letter-spacing: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+/* A narrow bar (a 320–360 px phone, or the computer's 375 px phone frame):
+   five columns of 56–64 px, where a seven-letter label (WINNERS, ACCOUNT,
+   a golf day's SASWAZI) at 13–14 px runs into its neighbour. The gutters
+   narrow and every label steps down a size. Sized by the bar itself, not
+   the window, so the phone frame on a computer gets it too. */
+.tabbar { container: tabbar / inline-size; }
+@container tabbar (max-width: 370px) {
+  .tabbar-pill, .tabbar-tabs { --tabbar-gutter: 12px; }
+  .tabbar-tab:not(.tabbar-tab--long) .tabbar-label { font-size: 12px; letter-spacing: 0.01em; }
+}
 
 /* ── SCREEN HEADER (burger + corner sticker) ── */
 .app-header {
@@ -2217,6 +2227,10 @@ button, [role="button"], [role="tab"] {
   container-type: inline-size;
 }
 .gd-hero + .gd-label { margin-top: -46px; }
+/* A logo is shown whole: no frame, no crop, and the label below it rather than over its foot. */
+.gd-hero--logo { aspect-ratio: auto; width: 72%; max-width: 300px; margin: 0 auto; background: none; border-radius: 0; overflow: visible; }
+.gd-hero--logo img { height: auto; object-fit: contain; }
+.gd-hero--logo + .gd-label { margin-top: 6px; }
 .gd-kicker {
   margin: 0 auto 10px; padding-bottom: 8px; width: max-content; max-width: 100%;
   border-bottom: 2px solid var(--gd-accent);
