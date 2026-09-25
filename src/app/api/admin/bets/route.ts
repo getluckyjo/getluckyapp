@@ -1,17 +1,14 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
-import { apiError, parseQuery, pagination, uuid, searchTerm, dateLike } from '@/lib/api/http'
-import { BET_SELECT, namesForBets, orSearchTerm, toAdminBetRecord, type BetRowLike } from '@/lib/admin/data'
-import { BET_STATUSES } from '@/lib/claims/state-machine'
-import { ALL_TIERS } from '@/lib/tiers'
+import { apiError, parseQuery, pagination, uuid, dateLike } from '@/lib/api/http'
+import { BET_SELECT, namesForBets, toAdminBetRecord, type BetRowLike } from '@/lib/admin/data'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
+import { betFilters, betSearchConditions } from './filters'
 
 const Query = pagination.extend({
-  status: z.enum(BET_STATUSES).optional(),
-  tier: z.enum(ALL_TIERS.map(t => t.tier) as [string, ...string[]]).optional(),
+  ...betFilters,
   courseId: uuid.optional(),
-  search: searchTerm.optional(),
   dateFrom: dateLike.optional(),
   dateTo: dateLike.optional(),
   sort: z.enum(['created_at', 'stake_pence']).default('created_at'),
@@ -35,19 +32,9 @@ export async function GET(request: Request) {
     if (dateTo) query = query.lte('created_at', dateTo)
 
     if (search) {
-      // Resolve the search to ids first, then filter in the query so the
-      // count and the pages are right (it used to post-filter one page).
-      const s = orSearchTerm(search)
-      const [users, courses] = await Promise.all([
-        admin.from('profiles').select('id').or(`name.ilike.*${s}*,email.ilike.*${s}*`).limit(100),
-        admin.from('courses').select('id').ilike('name', `%${search}%`).limit(50),
-      ])
-      const conds: string[] = []
-      if (uuid.safeParse(search).success) conds.push(`id.eq.${search}`)
-      const userIds = ((users.data ?? []) as { id: string }[]).map(u => u.id)
-      const courseIds = ((courses.data ?? []) as { id: string }[]).map(c => c.id)
-      if (userIds.length) conds.push(`user_id.in.(${userIds.join(',')})`)
-      if (courseIds.length) conds.push(`course_id.in.(${courseIds.join(',')})`)
+      // Resolved to ids first, then filtered in the query so the count and
+      // the pages are right (it used to post-filter one page).
+      const conds = await betSearchConditions(admin, search)
       if (!conds.length) {
         const empty: PaginatedResponse<AdminBetRecord> = { data: [], total: 0, page, limit, totalPages: 0 }
         return NextResponse.json(empty)
@@ -55,7 +42,8 @@ export async function GET(request: Request) {
       query = query.or(conds.join(','))
     }
 
-    query = query.order(sort, { ascending: order === 'asc' })
+    // id breaks ties, so a bet cannot appear on two pages or on none.
+    query = query.order(sort, { ascending: order === 'asc' }).order('id')
     const offset = (page - 1) * limit
     query = query.range(offset, offset + limit - 1)
 

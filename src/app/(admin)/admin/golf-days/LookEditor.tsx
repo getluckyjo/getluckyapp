@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ImagePlus, Trash2 } from 'lucide-react'
 import { GolfDayHeroArt, GolfDayLabel, themeVars } from '@/components/golf-days/GolfDayCard'
 import { HEX_COLOUR, alcoholFootnote, contrast, type GolfDayLook, type Palette } from '@/lib/golf-days/look'
@@ -108,6 +108,7 @@ export default function LookEditor({ form, onChange, name, prizeZAR, playsOn, ho
 }) {
   const [uploading, setUploading] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const set = <K extends keyof LookForm>(key: K, value: LookForm[K]) => onChange({ ...form, [key]: value })
 
   async function upload(file: File) {
@@ -130,94 +131,94 @@ export default function LookEditor({ form, onChange, name, prizeZAR, playsOn, ho
 
   const theme = previewTheme(form)
   const readable = contrast(theme.ink, theme.paper)
-  const input: React.CSSProperties = { padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }
-  const label: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, color: '#666' }
 
   return (
     <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-      <div style={{ display: 'grid', gap: 12, flex: '1 1 340px', maxWidth: 560 }}>
-        <div style={label}>
-          Picture: the host&rsquo;s logo, or a photo
+      <div className="adm-stack" style={{ flex: '1 1 340px', maxWidth: 560 }}>
+        <div className="adm-field">
+          Picture <span className="adm-hint">The host&rsquo;s logo, or a photo</span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 8, border: '1px dashed #9bb09a', color: '#335231', fontSize: 13, cursor: uploading ? 'wait' : 'pointer', background: '#f7faf6' }}>
-              <ImagePlus size={15} /> {uploading ? 'Uploading…' : form.hero ? 'Replace picture' : 'Upload picture'}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={uploading}
-                style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }}
-              />
-            </label>
+            {/* A real button, so the keyboard reaches it; the file input itself is never shown. */}
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} aria-busy={uploading} className="adm-btn adm-btn--green" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+              <ImagePlus size={15} aria-hidden /> {uploading ? 'Uploading…' : form.hero ? 'Replace picture' : 'Upload picture'}
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              tabIndex={-1}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }}
+            />
             {form.hero && (
               <>
-                <select value={form.hero.kind} onChange={e => set('hero', { ...form.hero!, kind: e.target.value as 'photo' | 'logo' })} style={input} aria-label="How the picture is shown">
+                <select value={form.hero.kind} onChange={e => set('hero', { ...form.hero!, kind: e.target.value as 'photo' | 'logo' })} className="adm-input" aria-label="How the picture is shown">
                   <option value="logo">Logo: shown whole</option>
                   <option value="photo">Photo: fills the top</option>
                 </select>
-                <button type="button" onClick={() => set('hero', null)} style={{ ...input, display: 'inline-flex', alignItems: 'center', gap: 4, color: '#b00020', cursor: 'pointer' }}>
-                  <Trash2 size={14} /> Remove
+                <button type="button" onClick={() => set('hero', null)} className="adm-btn adm-btn--quiet adm-btn--danger">
+                  <Trash2 size={14} aria-hidden /> Remove
                 </button>
               </>
             )}
           </div>
           {form.hero && (
-            <input value={form.hero.alt} onChange={e => set('hero', { ...form.hero!, alt: e.target.value })} placeholder="Describe it, for screen readers (optional)" maxLength={200} style={input} />
+            <input value={form.hero.alt} onChange={e => set('hero', { ...form.hero!, alt: e.target.value })} placeholder="Describe it, for screen readers (optional)" maxLength={200} className="adm-input" aria-label="Picture description" />
           )}
-          <span style={{ color: '#999' }}>A logo with a see-through background is shown whole; a photo fills the top. Colours are suggested from it.</span>
-          {problem && <span role="alert" style={{ color: '#b00020' }}>{problem}</span>}
+          <span className="adm-hint">A logo with a see-through background is shown whole; a photo fills the top. Colours are suggested from it.</span>
+          {problem && <span role="alert" className="adm-error">{problem}</span>}
         </div>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <label style={{ ...label, flex: '1 1 200px' }}>
-            Host (reads &ldquo;Host × Get Lucky&rdquo;)
-            <input value={form.host} onChange={e => set('host', e.target.value)} placeholder="Bomb Squad Lager" maxLength={60} style={input} />
+          <label className="adm-field" style={{ flex: '1 1 200px' }}>
+            Host <span className="adm-hint">Reads &ldquo;Host × Get Lucky&rdquo;</span>
+            <input value={form.host} onChange={e => set('host', e.target.value)} placeholder="Bomb Squad Lager" maxLength={60} className="adm-input" />
           </label>
-          <label style={{ ...label, flex: '1 1 160px' }}>
+          <label className="adm-field" style={{ flex: '1 1 160px' }}>
             Venue on the label
-            <input value={form.venue} onChange={e => set('venue', e.target.value)} placeholder="Royal Johannesburg" maxLength={40} style={input} />
+            <input value={form.venue} onChange={e => set('venue', e.target.value)} placeholder="Royal Johannesburg" maxLength={40} className="adm-input" />
           </label>
         </div>
-        <label style={label}>
+        <label className="adm-field">
           Line under the prize
-          <input value={form.tagline} onChange={e => set('tagline', e.target.value)} placeholder={DEFAULT_THEME.tagline} maxLength={120} style={input} />
+          <input value={form.tagline} onChange={e => set('tagline', e.target.value)} placeholder={DEFAULT_THEME.tagline} maxLength={120} className="adm-input" />
         </label>
-        <label style={label}>
-          Small print (optional)
-          <input value={form.footnote} onChange={e => set('footnote', e.target.value)} placeholder="None" maxLength={200} style={input} />
+        <label className="adm-field">
+          Small print <span className="adm-hint">Optional</span>
+          <input value={form.footnote} onChange={e => set('footnote', e.target.value)} placeholder="None" maxLength={200} className="adm-input" />
           <span>
-            <button type="button" onClick={() => set('footnote', alcoholFootnote(form.host || name))} style={{ border: 'none', background: 'none', padding: 0, color: '#335231', textDecoration: 'underline', cursor: 'pointer', fontSize: 12 }}>
+            <button type="button" onClick={() => set('footnote', alcoholFootnote(form.host || name))} className="adm-link" style={{ fontSize: 12 }}>
               Alcohol brand? Add the 18+ line
             </button>
           </span>
         </label>
 
-        <div style={label}>
+        <div className="adm-field">
           Colours
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             {COLOURS.map(c => (
-              <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#333' }} title={c.hint}>
-                <input type="color" value={HEX_COLOUR.test(form[c.key]) ? form[c.key] : '#000000'} onChange={e => set(c.key, e.target.value)} style={{ width: 34, height: 30, padding: 0, border: '1px solid #e5e5e5', borderRadius: 6, background: '#fff' }} />
+              <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }} title={c.hint}>
+                <input type="color" value={HEX_COLOUR.test(form[c.key]) ? form[c.key] : '#000000'} onChange={e => set(c.key, e.target.value)} style={{ width: 38, height: 34, padding: 2, border: '1.5px solid var(--cream-dark)', borderRadius: 10, background: 'var(--white)', cursor: 'pointer' }} />
                 <span style={{ display: 'flex', flexDirection: 'column' }}>
                   {c.label}
-                  <span style={{ color: '#999', fontSize: 11 }}>{c.hint}</span>
+                  <span className="adm-hint" style={{ fontSize: 11 }}>{c.hint}</span>
                 </span>
               </label>
             ))}
           </div>
           {readable < 7 && (
-            <span role="alert" style={{ color: '#a35200' }}>
+            <span role="alert" className="adm-warn">
               Ink on the card reads at {readable.toFixed(1)}:1; the label needs 7:1. Darken the ink or lighten the card.
             </span>
           )}
         </div>
       </div>
 
-      <div style={{ flex: '0 0 auto' }}>
-        <div style={{ fontSize: 12, color: '#666', marginBottom: 6 }}>Preview</div>
+      <div style={{ flex: '0 1 340px', minWidth: 0 }}>
+        <div className="adm-h3" style={{ marginBottom: 8 }}>Preview</div>
         <div
           className={`gd-screen${theme.hero ? ' gd-branded' : ''}`}
-          style={{ ...themeVars(theme), width: 340, padding: '14px 14px 18px', borderRadius: 24, border: '8px solid #111', maxHeight: 760, overflowY: 'auto' }}
+          style={{ ...themeVars(theme), width: 'min(340px, 100%)', padding: '14px 14px 18px', borderRadius: 24, border: '8px solid #111', maxHeight: 760, overflowY: 'auto' }}
         >
           {theme.hero && <GolfDayHeroArt hero={theme.hero} />}
           <GolfDayLabel theme={theme} name={name || 'Your Golf Day'} prizeZAR={prizeZAR || 0} playsOn={playsOn} holes={holes} />

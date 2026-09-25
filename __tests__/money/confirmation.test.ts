@@ -258,6 +258,16 @@ describe('admin', () => {
     expect(pack.payments).toMatchObject([{ m_payment_id: 'gl_1' }])
   })
 
+  it('evidence pack and resend: 404 only for a claim that does not exist; a failed read is a 500', async () => {
+    const unknown = vp('99999999-9999-4999-8999-999999999999')
+    expect((await evidencePack(new Request('http://x') as never, unknown)).status).toBe(404)
+    expect((await resendRequests(jsonRequest('http://x', {}) as never, unknown)).status).toBe(404)
+    const down = { code: '57014', message: 'canceling statement due to statement timeout', details: '', hint: '' }
+    adminAuth.requireAdmin.mockImplementation(async () => ({ ok: true, user: { id: USER_B.id }, adminClient: createFakeClient(db, { failTable: { verifications: down } }) }))
+    expect((await evidencePack(new Request('http://x') as never, unknown)).status).toBe(500)
+    expect((await resendRequests(jsonRequest('http://x', {}) as never, unknown)).status).toBe(500)
+  })
+
   it('course contacts: add (lowercased, no duplicates), remove', async () => {
     const cp = { params: Promise.resolve({ courseId: COURSE_ID }) }
     const add = (body: unknown) => addContact(jsonRequest('http://x', body) as never, cp)

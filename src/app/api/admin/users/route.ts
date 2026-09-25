@@ -1,53 +1,32 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { apiError, parseQuery, pagination, boolString, searchTerm } from '@/lib/api/http'
-import { orSearchTerm } from '@/lib/admin/data'
+import { apiError, parseQuery, pagination } from '@/lib/api/http'
 import type { AdminUserRecord, PaginatedResponse } from '@/types/admin'
+import { betTotals, filterUsers, userFilters } from './queries'
 
-const Query = pagination.extend({
-  search: searchTerm.optional(),
-  suspended: boolString.optional(),
-})
+const Query = pagination.extend(userFilters)
 
 interface ProfileRow { id: string; name: string | null; email: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; suspended_reason: string | null; created_at: string }
-interface BetTotals { user_id: string; stake_pence: number | null; potential_win_pence: number | null; status: string }
+
+const COLUMNS = 'id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, suspended_reason, created_at'
 
 export async function GET(request: Request) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const q = parseQuery(request.url, Query)
   if (!q.ok) return q.response
-  const { search, suspended, page, limit } = q.data
+  const { page, limit, ...filters } = q.data
 
   try {
-    let query = auth.adminClient.from('profiles').select('id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, suspended_reason, created_at', { count: 'exact' })
-    if (suspended === true) query = query.not('suspended_at', 'is', null)
-    if (suspended === false) query = query.is('suspended_at', null)
-    if (search) {
-      // In the query, so the count and the pages are right.
-      const s = orSearchTerm(search)
-      query = query.or(`name.ilike.*${s}*,email.ilike.*${s}*`)
-    }
-    query = query.order('created_at', { ascending: false })
     const offset = (page - 1) * limit
-    query = query.range(offset, offset + limit - 1)
-
-    const { data, count, error } = await query
+    const { data, count, error } = await filterUsers(auth.adminClient.from('profiles').select(COLUMNS, { count: 'exact' }), filters)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
     if (error) throw error
-    const profiles = (data ?? []) as ProfileRow[]
+    const profiles = (data ?? []) as unknown as ProfileRow[]
 
-    // One query for the page's bet totals instead of one per user.
-    const ids = profiles.map(p => p.id)
-    const { data: betsRaw } = ids.length
-      ? await auth.adminClient.from('bets').select('user_id, stake_pence, potential_win_pence, status').in('user_id', ids)
-      : { data: [] as BetTotals[] }
-    const totals = new Map<string, { staked: number; won: number }>()
-    for (const b of (betsRaw ?? []) as BetTotals[]) {
-      const t = totals.get(b.user_id) ?? { staked: 0, won: 0 }
-      t.staked += b.stake_pence ?? 0
-      if (b.status === 'paid' || b.status === 'verified') t.won += b.potential_win_pence ?? 0
-      totals.set(b.user_id, t)
-    }
+    // Totals over every bet of the page's golfers, the same figures their own page shows.
+    const totals = await betTotals(auth.adminClient, profiles.map(p => p.id))
 
     const records: AdminUserRecord[] = profiles.map(p => ({
       id: p.id,

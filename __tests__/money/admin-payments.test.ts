@@ -95,6 +95,41 @@ describe('GET /api/admin/payments', () => {
     expect(data).toHaveLength(0)
   })
 
+  it('"Paid, but no bet" leaves out a payment whose bet is linked only by reference, and counts only the rest', async () => {
+    asAdmin(); asGolfer()
+    ledger({ m_payment_id: 'gl_has_bet', pf_payment_id: '900002', created_at: '2026-09-17T09:00:00Z' })   // bet_id never written
+    db.seed('bets', { id: BET_ID, user_id: USER_B.id, payment_intent_id: 'gl_has_bet', status: 'active' })
+    ledger({ m_payment_id: 'gl_orphan' })
+    const res = await (await list('?unmatched=true')).json()
+    expect(res.data.map((p: { mPaymentId: string }) => p.mPaymentId)).toEqual(['gl_orphan'])
+    expect(res.total).toBe(1)
+  })
+
+  it('"Paid, but no bet" includes an amount mismatch: money was taken', async () => {
+    asAdmin(); asGolfer()
+    ledger({ m_payment_id: 'gl_short', status: 'amount_mismatch' })
+    const { data } = await (await list('?unmatched=true')).json()
+    expect(data.map((p: { mPaymentId: string }) => p.mPaymentId)).toEqual(['gl_short'])
+  })
+
+  it('a status narrows "Paid, but no bet" rather than emptying it, and search works inside it', async () => {
+    asAdmin(); asGolfer()
+    ledger({ m_payment_id: 'gl_orphan' })
+    ledger({ m_payment_id: 'gl_short', pf_payment_id: '900002', status: 'amount_mismatch', created_at: '2026-09-17T09:00:00Z' })
+    const ids = async (qs: string) => (await (await list(qs)).json()).data.map((p: { mPaymentId: string }) => p.mPaymentId)
+    expect(await ids('?unmatched=true')).toEqual(['gl_short', 'gl_orphan'])
+    expect(await ids('?unmatched=true&status=amount_mismatch')).toEqual(['gl_short'])
+    expect(await ids('?unmatched=true&status=complete')).toEqual(['gl_orphan'])
+    expect(await ids('?unmatched=true&search=900002')).toEqual(['gl_short'])
+  })
+
+  it('a failed read of "Paid, but no bet" is a 500, never an empty queue', async () => {
+    asAdmin(); asGolfer()
+    ledger()
+    adminClient.createAdminClient.mockImplementation(() => createFakeClient(db, { failTable: { admin_unmatched_payments: { code: '42P01', message: 'relation "admin_unmatched_payments" does not exist' } } }))
+    expect((await list('?unmatched=true')).status).toBe(500)
+  })
+
   it('filters by status', async () => {
     asAdmin(); asGolfer()
     ledger({ m_payment_id: 'gl_ok' })
@@ -124,6 +159,13 @@ describe('GET /api/admin/bets/[betId]', () => {
   it('404s on a non-UUID rather than querying', async () => {
     asAdmin()
     expect((await getBet(new Request('http://x') as never, params({ betId: 'not-a-uuid' }))).status).toBe(404)
+  })
+
+  it('404 only for a bet that does not exist; a failed read is a 500, which the screen shows as a load error', async () => {
+    asAdmin()
+    expect((await getBet(new Request('http://x') as never, params({ betId: BET_ID }))).status).toBe(404)
+    adminClient.createAdminClient.mockImplementation(() => createFakeClient(db, { failTable: { bets: { code: '57014', message: 'canceling statement due to statement timeout' } } }))
+    expect((await getBet(new Request('http://x') as never, params({ betId: BET_ID }))).status).toBe(500)
   })
 
   it('returns the bet with its payment, its golfer and its history', async () => {

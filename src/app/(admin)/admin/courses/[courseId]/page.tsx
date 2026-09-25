@@ -1,372 +1,516 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, Save, Plus, Trash2, ToggleLeft, ToggleRight } from 'lucide-react'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
+import { AlertTriangle, ArrowLeft, Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import ConfirmModal from '@/components/admin/ConfirmModal'
+import LoadError from '@/components/admin/LoadError'
 import type { CourseRow, HoleRow } from '@/types/admin'
 import { MIN_HOLE_METRES, holeUnavailableReason } from '@/lib/holes'
+import { OFFLINE, REGIONS, parseCoords, reasonFrom } from '../course-fields'
 
-const REGIONS = ['Western Cape', 'Gauteng', 'KwaZulu-Natal', 'Mpumalanga', 'North West', 'Eastern Cape', 'Free State', 'Limpopo', 'Northern Cape']
+type ContactRow = { id: string; name: string; email: string; role: string; created_at: string }
+
+/** The course fields the form edits, as typed (coordinates as text so a half-typed "-33." is not NaN). */
+interface CourseForm { name: string; location_text: string; region: string; is_partner: boolean; lat: string; lng: string }
+
+const formFrom = (c: CourseRow): CourseForm => ({
+  name: c.name,
+  location_text: c.location_text ?? '',
+  region: c.region ?? '',
+  is_partner: c.is_partner,
+  lat: c.lat != null ? String(c.lat) : '',
+  lng: c.lng != null ? String(c.lng) : '',
+})
+
+/** A change that needs a yes first: it takes something away that golfers or claims rely on. */
+interface Pending { title: string; message: string; confirmLabel: string; section: 'contacts' | 'holes'; request: () => Promise<Response> }
+
+const STALE = 'Saved, but the list could not be refreshed. Reload the page to see it.'
+
+const send = (url: string, method: string, body?: unknown) => fetch(url, {
+  method,
+  headers: body ? { 'Content-Type': 'application/json' } : undefined,
+  body: body ? JSON.stringify(body) : undefined,
+})
 
 export default function AdminEditCoursePage() {
   const params = useParams()
-  const router = useRouter()
   const courseId = params.courseId as string
 
+  // `course` is the saved copy (the heading, the warnings); `form` is what is being typed.
   const [course, setCourse] = useState<CourseRow | null>(null)
+  const [form, setForm] = useState<CourseForm | null>(null)
   const [holes, setHoles] = useState<HoleRow[]>([])
-  type ContactRow = { id: string; name: string; email: string; role: string; created_at: string }
   const [contacts, setContacts] = useState<ContactRow[]>([])
-  const [newContact, setNewContact] = useState({ name: '', email: '' })
-  const [contactError, setContactError] = useState('')
-  const [addingContact, setAddingContact] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<{ notFound: boolean; detail: string | null } | null>(null)
+  const [attempt, setAttempt] = useState(0)
+
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [saved, setSaved] = useState(false)
+
+  const [newContact, setNewContact] = useState({ name: '', email: '' })
+  const [contactError, setContactError] = useState('')
+  const [addingContact, setAddingContact] = useState(false)
+
   const [newHole, setNewHole] = useState({ hole_number: '', par: '3', distance_metres: '' })
+  const [holeError, setHoleError] = useState('')
   const [addingHole, setAddingHole] = useState(false)
-  // Coordinates are edited as text so a half-typed "-33." is not a NaN in state.
-  const [coords, setCoords] = useState({ lat: '', lng: '' })
+  const [holeEdit, setHoleEdit] = useState<{ id: string; par: string; distance: string } | null>(null)
+  const [holeEditError, setHoleEditError] = useState('')
+  const [holeBusy, setHoleBusy] = useState<string | null>(null)
+
+  const [pending, setPending] = useState<Pending | null>(null)
+  const [pendingBusy, setPendingBusy] = useState(false)
+  const [pendingError, setPendingError] = useState<string | null>(null)
 
   useEffect(() => {
+    let cancelled = false
     fetch(`/api/admin/courses/${courseId}`)
-      .then(r => r.json())
-      .then(data => {
-        setCourse(data.course)
-        setCoords({ lat: data.course?.lat != null ? String(data.course.lat) : '', lng: data.course?.lng != null ? String(data.course.lng) : '' })
-        setHoles(data.holes || [])
-        setContacts(data.contacts || [])
+      .then(async res => {
+        const json = await res.json().catch(() => ({}))
+        if (cancelled) return
+        if (!res.ok) { setLoadError({ notFound: res.status === 404, detail: json.error ?? null }); return }
+        setLoadError(null)
+        setCourse(json.course)
+        setForm(formFrom(json.course))
+        setHoles(json.holes ?? [])
+        setContacts(json.contacts ?? [])
       })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [courseId])
+      .catch(() => { if (!cancelled) setLoadError({ notFound: false, detail: OFFLINE }) })
+    return () => { cancelled = true }
+  }, [courseId, attempt])
 
-  const handleSave = async () => {
-    if (!course) return
+  /** Re-read the holes and officials after a change, leaving the details form as typed. */
+  async function refreshLists(): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/admin/courses/${courseId}`)
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) return false
+      setHoles(json.holes ?? [])
+      setContacts(json.contacts ?? [])
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form) return
+    const coords = parseCoords(form.lat, form.lng)
+    if (!coords.ok) { setError(coords.error); return }
     setSaving(true)
     setError('')
-    const parseCoord = (v: string) => (v.trim() === '' ? null : Number(v))
-    const lat = parseCoord(coords.lat)
-    const lng = parseCoord(coords.lng)
-    if ((lat !== null && !Number.isFinite(lat)) || (lng !== null && !Number.isFinite(lng)) || (lat === null) !== (lng === null)) {
-      setError('Latitude and longitude must both be numbers, or both be empty')
-      setSaving(false)
-      return
+    const fields = {
+      name: form.name.trim(),
+      location_text: form.location_text.trim() || null,
+      region: form.region || null,
+      is_partner: form.is_partner,
+      lat: coords.lat,
+      lng: coords.lng,
     }
     try {
-      const res = await fetch(`/api/admin/courses/${courseId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: course.name,
-          location_text: course.location_text,
-          region: course.region,
-          is_partner: course.is_partner,
-          lat,
-          lng,
-        }),
-      })
-      const data = await res.json()
-      if (!data.success) setError(data.error || 'Save failed')
-      else {
-        setSaved(true)
-        setTimeout(() => setSaved(false), 2500)
-      }
+      const res = await send(`/api/admin/courses/${courseId}`, 'PATCH', fields)
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(reasonFrom(json, 'The changes could not be saved. Please try again.')); return }
+      setCourse(c => (c ? { ...c, ...fields } : c))
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
     } catch {
-      setError('Save failed')
+      setError(OFFLINE)
     } finally {
       setSaving(false)
     }
   }
 
-  const handleAddContact = async () => {
+  const handleAddContact = async (e: React.FormEvent) => {
+    e.preventDefault()
     setAddingContact(true)
     setContactError('')
     try {
-      const res = await fetch(`/api/admin/courses/${courseId}/contacts`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newContact),
-      })
-      const data = await res.json()
-      if (!res.ok) setContactError(data.error || 'Could not add the contact')
-      else {
-        setContacts([...contacts, data.contact])
-        setNewContact({ name: '', email: '' })
-      }
+      const res = await send(`/api/admin/courses/${courseId}/contacts`, 'POST', newContact)
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setContactError(reasonFrom(json, 'The club official could not be added. Please try again.')); return }
+      setNewContact({ name: '', email: '' })
+      if (!(await refreshLists())) setContactError(STALE)
     } catch {
-      setContactError('Could not add the contact')
+      setContactError(OFFLINE)
     } finally {
       setAddingContact(false)
     }
   }
 
-  const removeContact = async (id: string) => {
-    await fetch(`/api/admin/courses/${courseId}/contacts?id=${id}`, { method: 'DELETE' })
-    setContacts(contacts.filter(c => c.id !== id))
-  }
-
-  const handleAddHole = async () => {
+  const handleAddHole = async (e: React.FormEvent) => {
+    e.preventDefault()
     setAddingHole(true)
+    setHoleError('')
     try {
-      const res = await fetch(`/api/admin/courses/${courseId}/holes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hole_number: parseInt(newHole.hole_number),
-          par: parseInt(newHole.par),
-          distance_metres: newHole.distance_metres ? parseInt(newHole.distance_metres) : null,
-        }),
+      const res = await send(`/api/admin/courses/${courseId}/holes`, 'POST', {
+        hole_number: Number(newHole.hole_number),
+        par: Number(newHole.par),
+        distance_metres: newHole.distance_metres.trim() ? Number(newHole.distance_metres) : null,
       })
-      if (res.ok) {
-        setNewHole({ hole_number: '', par: '3', distance_metres: '' })
-        // Refresh holes
-        const data = await fetch(`/api/admin/courses/${courseId}`).then(r => r.json())
-        setHoles(data.holes || [])
-      }
-    } catch { /* ignore */ } finally {
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setHoleError(reasonFrom(json, 'The hole could not be added. Please try again.')); return }
+      setNewHole({ hole_number: '', par: '3', distance_metres: '' })
+      if (!(await refreshLists())) setHoleError(STALE)
+    } catch {
+      setHoleError(OFFLINE)
+    } finally {
       setAddingHole(false)
     }
   }
 
-  const toggleHoleActive = async (holeId: string, currentActive: boolean) => {
-    await fetch(`/api/admin/courses/${courseId}/holes/${holeId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_active: !currentActive }),
-    })
-    setHoles(holes.map(h => h.id === holeId ? { ...h, is_active: !currentActive } : h))
+  const saveHoleEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!holeEdit) return
+    setHoleBusy(holeEdit.id)
+    setHoleEditError('')
+    try {
+      const res = await send(`/api/admin/courses/${courseId}/holes/${holeEdit.id}`, 'PATCH', {
+        par: Number(holeEdit.par),
+        distance_metres: holeEdit.distance.trim() ? Number(holeEdit.distance) : null,
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setHoleEditError(reasonFrom(json, 'The hole could not be saved. Please try again.')); return }
+      setHoleEdit(null)
+      if (!(await refreshLists())) setHoleError(STALE)
+    } catch {
+      setHoleEditError(OFFLINE)
+    } finally {
+      setHoleBusy(null)
+    }
   }
 
-  const deleteHole = async (holeId: string) => {
-    await fetch(`/api/admin/courses/${courseId}/holes/${holeId}`, { method: 'DELETE' })
-    setHoles(holes.filter(h => h.id !== holeId))
+  /** Put a hole back on sale at once; taking one off asks first. */
+  const setHoleActive = async (hole: HoleRow, active: boolean) => {
+    if (!active) {
+      ask({
+        title: `Take hole ${hole.hole_number} off sale?`,
+        message: 'Golfers can no longer choose it. Bets already made on it, and any claims, carry on as normal.',
+        confirmLabel: 'Take off sale',
+        section: 'holes',
+        request: () => send(`/api/admin/courses/${courseId}/holes/${hole.id}`, 'PATCH', { is_active: false }),
+      })
+      return
+    }
+    setHoleBusy(hole.id)
+    setHoleError('')
+    try {
+      const res = await send(`/api/admin/courses/${courseId}/holes/${hole.id}`, 'PATCH', { is_active: true })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setHoleError(reasonFrom(json, 'The hole could not be put on sale. Please try again.')); return }
+      if (!(await refreshLists())) setHoleError(STALE)
+    } catch {
+      setHoleError(OFFLINE)
+    } finally {
+      setHoleBusy(null)
+    }
   }
 
-  if (loading) return (
-    <div style={{ maxWidth: 800 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <div style={{ width: 70, height: 32, background: '#e5e5e5', borderRadius: 6 }} />
-        <div style={{ width: '30%', height: 20, background: '#e5e5e5', borderRadius: 4 }} />
+  function ask(p: Pending) {
+    setPendingError(null)
+    setPending(p)
+  }
+
+  async function confirmPending() {
+    if (!pending) return
+    setPendingBusy(true)
+    setPendingError(null)
+    try {
+      const res = await pending.request()
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setPendingError(json.error ?? 'That did not work. Please try again.'); return }
+      const { section } = pending
+      setPending(null)
+      if (!(await refreshLists())) (section === 'contacts' ? setContactError : setHoleError)(STALE)
+    } catch {
+      setPendingError(OFFLINE)
+    } finally {
+      setPendingBusy(false)
+    }
+  }
+
+  if (loadError?.notFound) {
+    return (
+      <div className="adm-card" style={{ textAlign: 'center', padding: 36 }}>
+        <title>Course not found · Get Lucky admin</title>
+        <p className="adm-h2" style={{ marginBottom: 8 }}>Course not found</p>
+        <p className="adm-muted" style={{ margin: '0 0 16px' }}>It may have been deleted.</p>
+        <Link href="/admin/courses" className="adm-btn adm-btn--quiet" style={{ textDecoration: 'none' }}>Back to Courses</Link>
       </div>
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 24, marginBottom: 24, height: 280 }} />
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 24, height: 200 }} />
-    </div>
-  )
-  if (!course) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Course not found</div>
-
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    borderRadius: 8,
-    border: '1px solid #e5e5e5',
-    fontSize: 14,
-    color: '#111',
-    fontFamily: "'Inter', system-ui, sans-serif",
+    )
   }
+  if (loadError) return <><title>Course · Get Lucky admin</title><LoadError what="The course" detail={loadError.detail} onRetry={() => { setLoadError(null); setAttempt(n => n + 1) }} /></>
+  if (!course || !form) return <><title>Course · Get Lucky admin</title><p className="adm-muted">Loading…</p></>
+
+  const lastOfficial = contacts.length === 1
+  const noOfficial = course.is_partner && contacts.length === 0
 
   return (
-    <div style={{ maxWidth: 800 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button
-          onClick={() => router.push('/admin/courses')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5',
-            background: '#fff', cursor: 'pointer', color: '#333', fontSize: 13,
-          }}
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>Edit: {course.name}</h1>
+    <div style={{ maxWidth: 860 }}>
+      <title>{`${course.name} · Courses · Get Lucky admin`}</title>
+      <Link href="/admin/courses" className="adm-btn adm-btn--quiet" style={{ textDecoration: 'none', marginBottom: 18 }}>
+        <ArrowLeft size={15} aria-hidden /> Courses
+      </Link>
+      <div className="adm-head">
+        <div>
+          <h1 className="adm-title">{course.name}</h1>
+          <p className="adm-lead">
+            {course.is_partner ? 'Partner course: golfers can pay to play its holes on sale.' : 'Not a partner: golfers see it but cannot pay to play here.'}
+          </p>
+        </div>
+        <span className={course.is_partner ? 'adm-pill adm-pill--lime' : 'adm-pill'}>{course.is_partner ? 'Partner' : 'Not a partner'}</span>
       </div>
 
-      {/* Course details form */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 24, marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111', marginBottom: 16 }}>Course Details</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Name</label>
-            <input type="text" value={course.name} onChange={(e) => setCourse({ ...course, name: e.target.value })} style={inputStyle} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Location</label>
-              <input type="text" value={course.location_text || ''} onChange={(e) => setCourse({ ...course, location_text: e.target.value })} style={inputStyle} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Region</label>
-              <select value={course.region || ''} onChange={(e) => setCourse({ ...course, region: e.target.value })} style={inputStyle}>
-                <option value="">Select region</option>
-                {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Latitude</label>
-              <input type="text" inputMode="decimal" value={coords.lat} onChange={(e) => setCoords({ ...coords, lat: e.target.value })} placeholder="-33.96" style={inputStyle} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Longitude</label>
-              <input type="text" inputMode="decimal" value={coords.lng} onChange={(e) => setCoords({ ...coords, lng: e.target.value })} placeholder="22.38" style={inputStyle} />
-            </div>
-          </div>
-          <p style={{ fontSize: 12, color: '#999', margin: '-6px 0 0' }}>Used to measure how far from the course a claim&apos;s footage was recorded. Google Maps → right-click the clubhouse → the first line is “lat, lng”.</p>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#333', cursor: 'pointer' }}>
-            <input type="checkbox" checked={course.is_partner} onChange={(e) => setCourse({ ...course, is_partner: e.target.checked })} style={{ width: 18, height: 18 }} />
-            Partner course
+      {noOfficial && (
+        <p role="status" className="adm-warn" style={{ margin: '0 0 16px', fontSize: 13 }}>
+          <AlertTriangle size={15} aria-hidden /> No club official: a hole-in-one claim here has nobody to confirm the certificate. Add one under Club officials.
+        </p>
+      )}
+
+      <form onSubmit={handleSave} className="adm-card adm-stack">
+        <h2 className="adm-h2">Details</h2>
+        <label className="adm-field">
+          Name
+          <input type="text" required maxLength={120} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="adm-input" />
+        </label>
+        <div className="adm-grid-2">
+          <label className="adm-field">
+            Location
+            <input type="text" maxLength={200} value={form.location_text} onChange={(e) => setForm({ ...form, location_text: e.target.value })} className="adm-input" />
+          </label>
+          <label className="adm-field">
+            Region
+            <select value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} className="adm-input">
+              <option value="">Choose a region</option>
+              {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
           </label>
         </div>
-
-        {error && <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6, background: '#fde8e8', color: '#c0392b', fontSize: 13 }}>{error}</div>}
-
-        {saved && (
-          <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 6, background: '#e6f4ea', color: '#1a7f37', fontSize: 13, fontWeight: 500 }}>
-            Changes saved successfully
-          </div>
-        )}
-
-        <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '8px 20px', borderRadius: 8, border: 'none',
-              background: '#335231', color: '#fff', fontSize: 14,
-              cursor: 'pointer', fontWeight: 600,
-            }}
-          >
-            <Save size={16} /> {saving ? 'Saving...' : 'Save Changes'}
-          </button>
+        <div className="adm-grid-2">
+          <label className="adm-field">
+            Latitude
+            <input type="text" inputMode="decimal" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} placeholder="-33.96" className="adm-input" />
+          </label>
+          <label className="adm-field">
+            Longitude
+            <input type="text" inputMode="decimal" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} placeholder="22.38" className="adm-input" />
+          </label>
         </div>
-      </div>
-
-      {/* Club contacts */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 24, marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111', marginBottom: 4 }}>Club contacts ({contacts.length})</h3>
-        <p style={{ fontSize: 13, color: '#666', marginBottom: 16 }}>
-          Every hole-in-one claim at this course emails these people a one-tap question: did the club issue the certificate? Independent of what the golfer uploads.
+        <p className="adm-hint" style={{ margin: '-6px 0 0' }}>
+          Both or neither. Used to measure how far from the course a claim&apos;s footage was recorded: in Google Maps, right-click the clubhouse and copy the first line.
         </p>
+        <label className="adm-check">
+          <input type="checkbox" checked={form.is_partner} onChange={(e) => setForm({ ...form, is_partner: e.target.checked })} />
+          Partner course <span className="adm-hint">golfers can pay to play here</span>
+        </label>
+
+        {error && <p role="alert" className="adm-error" style={{ margin: 0 }}>{error}</p>}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button type="submit" disabled={saving} className="adm-btn">{saving ? 'Saving…' : 'Save changes'}</button>
+          {saved && <span role="status" className="adm-small" style={{ fontWeight: 700, opacity: 1 }}><Check size={14} aria-hidden /> Saved</span>}
+        </div>
+      </form>
+
+      <section className="adm-card adm-stack">
+        <div>
+          <h2 className="adm-h2">Club officials ({contacts.length})</h2>
+          <p className="adm-small" style={{ margin: '6px 0 0' }}>
+            Every hole-in-one claim at this course emails these people a one-tap question: did the club issue the certificate? Independent of what the golfer uploads.
+          </p>
+        </div>
         {contacts.length > 0 && (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 16 }}>
-            <tbody>
-              {contacts.map(c => (
-                <tr key={c.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  <td style={{ padding: '8px 10px', fontWeight: 500, color: '#111' }}>{c.name}</td>
-                  <td style={{ padding: '8px 10px', color: '#666' }}>{c.email}</td>
-                  <td style={{ padding: '8px 10px', textAlign: 'right' }}>
-                    <button onClick={() => removeContact(c.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b' }} title="Remove">
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="adm-table-wrap">
+            <table className="adm-table" style={{ minWidth: 0 }}>
+              <thead><tr><th>Name</th><th>Email</th><th style={{ textAlign: 'right' }}>Remove</th></tr></thead>
+              <tbody>
+                {contacts.map(c => (
+                  <tr key={c.id}>
+                    <td style={{ fontWeight: 600 }}>{c.name}</td>
+                    <td className="adm-muted">{c.email}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button
+                        type="button"
+                        className="adm-icon-btn adm-icon-btn--warn"
+                        aria-label={`Remove ${c.name}`}
+                        title="Remove"
+                        onClick={() => ask(lastOfficial
+                          ? {
+                            title: 'Remove the last club official?',
+                            message: `${c.name} is the only club official at ${course.name}. Until you add another, a hole-in-one claim here has nobody to confirm the certificate${course.is_partner ? ', and golfers can still pay to play here' : ''}.`,
+                            confirmLabel: 'Remove anyway',
+                            section: 'contacts',
+                            request: () => send(`/api/admin/courses/${courseId}/contacts?id=${c.id}`, 'DELETE'),
+                          }
+                          : {
+                            title: `Remove ${c.name}?`,
+                            message: `${c.email} stops getting claim confirmations for ${course.name}. Requests already sent for open claims still count.`,
+                            confirmLabel: 'Remove',
+                            section: 'contacts',
+                            request: () => send(`/api/admin/courses/${courseId}/contacts?id=${c.id}`, 'DELETE'),
+                          })}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-        <div style={{ borderTop: contacts.length ? '1px solid #e5e5e5' : 'none', paddingTop: contacts.length ? 16 : 0, display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>Name</label>
-            <input type="text" value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} placeholder="Club manager" style={inputStyle} />
-          </div>
-          <div style={{ flex: 1, minWidth: 200 }}>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>Email</label>
-            <input type="email" value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} placeholder="manager@club.co.za" style={inputStyle} />
-          </div>
-          <button
-            onClick={handleAddContact}
-            disabled={addingContact || !newContact.name || !newContact.email}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '10px 16px', borderRadius: 8, border: 'none', background: '#335231', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap' }}
-          >
-            <Plus size={14} /> Add contact
+        <form onSubmit={handleAddContact} className="adm-row">
+          <label className="adm-field" style={{ flex: '1 1 180px' }}>
+            Name
+            <input type="text" required minLength={2} maxLength={80} value={newContact.name} onChange={(e) => setNewContact({ ...newContact, name: e.target.value })} placeholder="Club manager" className="adm-input" />
+          </label>
+          <label className="adm-field" style={{ flex: '1 1 220px' }}>
+            Email
+            <input type="email" required maxLength={200} value={newContact.email} onChange={(e) => setNewContact({ ...newContact, email: e.target.value })} placeholder="manager@club.co.za" className="adm-input" />
+          </label>
+          <button type="submit" disabled={addingContact} className="adm-btn adm-btn--green">
+            <Plus size={14} aria-hidden /> {addingContact ? 'Adding…' : 'Add official'}
           </button>
-        </div>
-        {contactError && <div style={{ marginTop: 10, fontSize: 13, color: '#c0392b' }}>{contactError}</div>}
-      </div>
+        </form>
+        {contactError && <p role="alert" className="adm-error" style={{ margin: 0 }}>{contactError}</p>}
+      </section>
 
-      {/* Holes management */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>Par-3 Holes ({holes.length})</h3>
+      <section className="adm-card adm-stack">
+        <div>
+          <h2 className="adm-h2">Holes ({holes.length})</h2>
+          <p className="adm-small" style={{ margin: '6px 0 0' }}>
+            Golfers can play a hole that is on sale, a par 3, and {MIN_HOLE_METRES} m or more. The distance is the eligibility, so keep it right.
+          </p>
         </div>
-
         {holes.length === 0 ? (
-          <p style={{ color: '#999', fontSize: 13, marginBottom: 16 }}>No holes added yet</p>
+          <p className="adm-muted" style={{ margin: 0 }}>No holes yet. Add the par 3s below.</p>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 16 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #e5e5e5' }}>
-                <th style={{ padding: '8px 10px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Hole #</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Par</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Distance (m)</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Active</th>
-                <th style={{ padding: '8px 10px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {holes.map((hole) => (
-                <tr key={hole.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  <td style={{ padding: '8px 10px', fontWeight: 500, color: '#111' }}>Hole {hole.hole_number}</td>
-                  <td style={{ padding: '8px 10px', textAlign: 'center', color: '#666' }}>{hole.par}</td>
-                  <td style={{ padding: '8px 10px', textAlign: 'center', color: '#666' }}>
-                    {hole.distance_metres ?? '—'}
-                    {holeUnavailableReason(hole) && (
-                      <span title={`The challenge is played on par 3s of ${MIN_HOLE_METRES}m or more; this hole is listed but cannot be played.`} style={{ display: 'block', fontSize: 11, color: '#b45309' }}>
-                        {holeUnavailableReason(hole)}
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => toggleHoleActive(hole.id, hole.is_active)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: hole.is_active ? '#1a7f37' : '#ccc' }}
-                    >
-                      {hole.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                    </button>
-                  </td>
-                  <td style={{ padding: '8px 10px', textAlign: 'center' }}>
-                    <button
-                      onClick={() => deleteHole(hole.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#c0392b' }}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </td>
+          <form onSubmit={saveHoleEdit} className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>Hole</th>
+                  <th>Par</th>
+                  <th>Distance</th>
+                  <th>Playable</th>
+                  <th>On sale</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {holes.map((hole) => {
+                  const editing = holeEdit?.id === hole.id
+                  const reason = holeUnavailableReason(hole)
+                  return (
+                    <tr key={hole.id}>
+                      <td style={{ fontWeight: 700 }}>Hole {hole.hole_number}</td>
+                      <td>
+                        {editing ? (
+                          <input type="number" required min={3} max={5} step={1} value={holeEdit.par} onChange={e => setHoleEdit({ ...holeEdit, par: e.target.value })} aria-label={`Par for hole ${hole.hole_number}`} className="adm-input" style={{ width: 72 }} />
+                        ) : hole.par}
+                      </td>
+                      <td>
+                        {editing ? (
+                          <input type="number" min={30} max={400} step={1} value={holeEdit.distance} onChange={e => setHoleEdit({ ...holeEdit, distance: e.target.value })} placeholder="m" aria-label={`Distance in metres for hole ${hole.hole_number}`} className="adm-input" style={{ width: 96 }} />
+                        ) : hole.distance_metres != null ? `${hole.distance_metres} m` : '—'}
+                      </td>
+                      <td>
+                        {reason
+                          ? <span className="adm-pill adm-pill--amber">{reason}</span>
+                          : <span className="adm-pill adm-pill--lime">Yes</span>}
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => setHoleActive(hole, !hole.is_active)}
+                          disabled={holeBusy === hole.id}
+                          className={hole.is_active ? 'adm-pill adm-pill--green' : 'adm-pill'}
+                          style={{ border: 'none', cursor: 'pointer' }}
+                          aria-label={hole.is_active ? `Hole ${hole.hole_number} is on sale. Take it off sale` : `Hole ${hole.hole_number} is off sale. Put it on sale`}
+                        >
+                          {hole.is_active ? 'On sale' : 'Off sale'}
+                        </button>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                          {editing ? (
+                            <>
+                              <button type="submit" disabled={holeBusy === hole.id} className="adm-icon-btn adm-icon-btn--ok" aria-label={`Save hole ${hole.hole_number}`} title="Save"><Check size={16} /></button>
+                              <button type="button" onClick={() => { setHoleEdit(null); setHoleEditError('') }} className="adm-icon-btn" aria-label="Cancel" title="Cancel"><X size={16} /></button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => { setHoleEditError(''); setHoleEdit({ id: hole.id, par: String(hole.par), distance: hole.distance_metres != null ? String(hole.distance_metres) : '' }) }}
+                                className="adm-icon-btn"
+                                aria-label={`Edit par and distance of hole ${hole.hole_number}`}
+                                title="Edit par and distance"
+                              >
+                                <Pencil size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => ask({
+                                  title: `Delete hole ${hole.hole_number}?`,
+                                  message: 'A hole with bets cannot be deleted; take it off sale instead.',
+                                  confirmLabel: 'Delete hole',
+                                  section: 'holes',
+                                  request: () => send(`/api/admin/courses/${courseId}/holes/${hole.id}`, 'DELETE'),
+                                })}
+                                className="adm-icon-btn adm-icon-btn--warn"
+                                aria-label={`Delete hole ${hole.hole_number}`}
+                                title="Delete"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+            {holeEditError && <p role="alert" className="adm-error" style={{ margin: '10px 0 0' }}>{holeEditError}</p>}
+          </form>
         )}
 
-        {/* Add hole form */}
-        <div style={{ borderTop: '1px solid #e5e5e5', paddingTop: 16, display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>Hole #</label>
-            <input type="number" value={newHole.hole_number} onChange={(e) => setNewHole({ ...newHole, hole_number: e.target.value })} placeholder="4" style={{ ...inputStyle, width: 70 }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>Par</label>
-            <input type="number" value={newHole.par} onChange={(e) => setNewHole({ ...newHole, par: e.target.value })} style={{ ...inputStyle, width: 60 }} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 4 }}>Distance (m)</label>
-            <input type="number" value={newHole.distance_metres} onChange={(e) => setNewHole({ ...newHole, distance_metres: e.target.value })} placeholder="155" style={{ ...inputStyle, width: 90 }} />
-          </div>
-          <button
-            onClick={handleAddHole}
-            disabled={addingHole || !newHole.hole_number}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '10px 16px', borderRadius: 8, border: 'none',
-              background: '#335231', color: '#fff', fontSize: 13,
-              cursor: 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
-            }}
-          >
-            <Plus size={14} /> Add Hole
+        <form onSubmit={handleAddHole} className="adm-row" style={{ paddingTop: 14, borderTop: '2px solid var(--surface)' }}>
+          <label className="adm-field">
+            Hole number
+            <input type="number" required min={1} max={18} step={1} value={newHole.hole_number} onChange={(e) => setNewHole({ ...newHole, hole_number: e.target.value })} placeholder="4" className="adm-input" style={{ width: 110 }} />
+          </label>
+          <label className="adm-field">
+            Par
+            <input type="number" required min={3} max={5} step={1} value={newHole.par} onChange={(e) => setNewHole({ ...newHole, par: e.target.value })} className="adm-input" style={{ width: 80 }} />
+          </label>
+          <label className="adm-field">
+            Distance (m)
+            <input type="number" min={30} max={400} step={1} value={newHole.distance_metres} onChange={(e) => setNewHole({ ...newHole, distance_metres: e.target.value })} placeholder="155" className="adm-input" style={{ width: 110 }} />
+          </label>
+          <button type="submit" disabled={addingHole} className="adm-btn adm-btn--green">
+            <Plus size={14} aria-hidden /> {addingHole ? 'Adding…' : 'Add hole'}
           </button>
-        </div>
-      </div>
+        </form>
+        {holeError && <p role="alert" className="adm-error" style={{ margin: 0 }}>{holeError}</p>}
+      </section>
+
+      <ConfirmModal
+        open={pending !== null}
+        title={pending?.title ?? ''}
+        message={pending?.message ?? ''}
+        confirmLabel={pending?.confirmLabel}
+        onConfirm={confirmPending}
+        onCancel={() => setPending(null)}
+        busy={pendingBusy}
+        error={pendingError}
+      />
     </div>
   )
 }

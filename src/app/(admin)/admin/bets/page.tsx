@@ -1,27 +1,39 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Download } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import SearchInput from '@/components/admin/SearchInput'
 import Pagination from '@/components/admin/Pagination'
+import LoadError from '@/components/admin/LoadError'
 import { formatZAR, timeAgo } from '@/lib/format'
 import { ALL_TIERS, TIER_LABELS } from '@/lib/tiers'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
+import { downloadExport, getJson, sastDateTime } from './client-helpers'
 
+const COLUMNS = 8
+
+interface Loaded {
+  key: string
+  /** null when the request failed: never shown as "no bets". */
+  list: PaginatedResponse<AdminBetRecord> | null
+  /** What the server said when it failed. */
+  detail?: string
+}
+
+/** Every bet on the platform, newest first. Filters run in the query, so the count, the pages and the export agree. */
 export default function AdminBetsPage() {
   const router = useRouter()
-  const [data, setData] = useState<AdminBetRecord[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [tierFilter, setTierFilter] = useState('')
+  const [attempt, setAttempt] = useState(0)
+  const [exporting, setExporting] = useState(false)
+  const [exportNote, setExportNote] = useState<{ error: boolean; text: string } | null>(null)
 
-  // Loading is derived: the page is loading until the query it currently
-  // shows has been answered, so no state is set synchronously in an effect.
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), limit: '20' })
     if (search) params.set('search', search)
@@ -29,165 +41,158 @@ export default function AdminBetsPage() {
     if (tierFilter) params.set('tier', tierFilter)
     return params.toString()
   }, [page, search, statusFilter, tierFilter])
-  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
-  const loading = loadedQuery !== query
+
+  // Loading is derived: the page is loading until the request for what it
+  // shows (and this attempt at it) has been answered. No state is set
+  // synchronously in the effect, and an older answer cannot replace a newer one.
+  const key = `${query}#${attempt}`
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const loading = loaded?.key !== key
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/admin/bets?${query}`)
-      .then(res => res.json() as Promise<PaginatedResponse<AdminBetRecord>>)
-      .then(json => {
-        if (cancelled) return
-        setData(json.data || [])
-        setTotal(json.total || 0)
-        setTotalPages(json.totalPages || 1)
-      })
-      .catch(() => { if (!cancelled) setData([]) })
-      .finally(() => { if (!cancelled) setLoadedQuery(query) })
+    getJson<PaginatedResponse<AdminBetRecord>>(`/api/admin/bets?${query}`)
+      .then(list => { if (!cancelled) setLoaded({ key, list }) })
+      .catch((err: unknown) => { if (!cancelled) setLoaded({ key, list: null, detail: err instanceof Error ? err.message : undefined }) })
     return () => { cancelled = true }
-  }, [query])
+  }, [key, query])
 
-  const handleExport = async () => {
-    const res = await fetch('/api/admin/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'bets' }),
-    })
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `bets-export-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  /** A new filter starts again from page 1, and an export note about the old one goes. */
+  function filter(apply: () => void) {
+    apply()
+    setPage(1)
+    setExportNote(null)
   }
+
+  async function handleExport() {
+    setExporting(true)
+    setExportNote(null)
+    const body: { type: string } & Record<string, unknown> = { type: 'bets' }
+    if (search) body.search = search
+    if (statusFilter) body.status = statusFilter
+    if (tierFilter) body.tier = tierFilter
+    const result = await downloadExport(body)
+    setExporting(false)
+    if (!result.ok) setExportNote({ error: true, text: `The export failed. ${result.error}` })
+    else if (result.cappedAt) setExportNote({ error: false, text: `The file holds the newest ${result.cappedAt.toLocaleString('en-ZA')} bets only. Narrow the filters to export the rest.` })
+  }
+
+  const list = loaded?.list ?? null
+  const failed = !loading && loaded !== null && loaded.list === null
+  const filtered = Boolean(search || statusFilter || tierFilter)
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <title>Bets · Get Lucky admin</title>
+      <div className="adm-head">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111', marginBottom: 4, fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>Bet Management</h1>
-          <p style={{ fontSize: 14, color: '#666' }}>View and manage all bets on the platform</p>
+          <h1 className="adm-title">Bets</h1>
+          <p className="adm-lead">Every bet on the platform, newest first. Open one for its payment, footage and history. The export follows the filters.</p>
         </div>
-        <button
-          onClick={handleExport}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
-            borderRadius: 8, border: '1px solid #e5e5e5', background: '#fff',
-            fontSize: 13, cursor: 'pointer', color: '#333', fontWeight: 500,
-          }}
-        >
-          <Download size={14} /> Export CSV
+        <button type="button" onClick={handleExport} disabled={exporting} aria-busy={exporting} className="adm-btn adm-btn--quiet">
+          <Download size={14} aria-hidden /> {exporting ? 'Exporting…' : 'Export CSV'}
         </button>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+      {exportNote && (
+        <p role={exportNote.error ? 'alert' : 'status'} className={exportNote.error ? 'adm-error' : 'adm-warn'} style={{ margin: '0 0 14px' }}>
+          {exportNote.text}
+        </p>
+      )}
+
+      <div className="adm-row" style={{ marginBottom: 16 }}>
         <SearchInput
-          placeholder="Search user, course, or bet ID..."
+          placeholder="Search player, email, course or bet ID"
           value={search}
-          onChange={(v) => { setSearch(v); setPage(1) }}
+          onChange={v => filter(() => setSearch(v))}
         />
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }}
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="miss">Miss</option>
-          <option value="claimed">Claimed</option>
-          <option value="verified">Verified</option>
-          <option value="paid">Paid</option>
-        </select>
-        <select
-          value={tierFilter}
-          onChange={(e) => { setTierFilter(e.target.value); setPage(1) }}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }}
-        >
-          <option value="">All tiers</option>
-          {/* From the tier table, never a hand-kept copy: a hardcoded list
-              had been missing tier_6 since the day it was added. */}
-          {ALL_TIERS.map(t => (
-            <option key={t.tier} value={t.tier}>{TIER_LABELS[t.tier]}</option>
-          ))}
-        </select>
+        <label className="adm-field">
+          Status
+          <select value={statusFilter} onChange={e => filter(() => setStatusFilter(e.target.value))} className="adm-input">
+            <option value="">All statuses</option>
+            <option value="active">Active</option>
+            <option value="miss">Miss</option>
+            <option value="claimed">Claimed</option>
+            <option value="verified">Verified</option>
+            <option value="paid">Paid</option>
+          </select>
+        </label>
+        <label className="adm-field">
+          Tier
+          <select value={tierFilter} onChange={e => filter(() => setTierFilter(e.target.value))} className="adm-input">
+            <option value="">All tiers</option>
+            {/* From the tier table, never a hand-kept copy: a hardcoded list
+                had been missing tier_6 since the day it was added. */}
+            {ALL_TIERS.map(t => (
+              <option key={t.tier} value={t.tier}>{TIER_LABELS[t.tier]}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
-      {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-              <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>User</th>
-              <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Course / Hole</th>
-              <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Tier</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Stake</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Potential Win</th>
-              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Status</th>
-              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Result</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  {Array.from({ length: 8 }).map((_, j) => (
-                    <td key={j} style={{ padding: 14 }}>
-                      <div style={{ height: 16, background: '#f0f0f0', borderRadius: 4, width: '70%' }} />
+      {failed ? (
+        <LoadError what="The bets" detail={loaded?.detail} onRetry={() => setAttempt(n => n + 1)} />
+      ) : (
+        <div className="adm-card">
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Course / hole</th>
+                  <th>Tier</th>
+                  <th style={{ textAlign: 'right' }}>Stake</th>
+                  <th style={{ textAlign: 'right' }}>Potential win</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                  <th style={{ textAlign: 'center' }}>Result</th>
+                  <th style={{ textAlign: 'right' }}>Placed</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={COLUMNS} className="adm-muted" style={{ padding: 32, textAlign: 'center' }}>Loading bets…</td></tr>
+                ) : !list || list.data.length === 0 ? (
+                  <tr>
+                    <td colSpan={COLUMNS} className="adm-muted" style={{ padding: 32, textAlign: 'center' }}>
+                      {filtered ? 'No bets match these filters.' : 'No bets yet.'}
                     </td>
-                  ))}
-                </tr>
-              ))
-            ) : data.length === 0 ? (
-              <tr>
-                <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#999' }}>
-                  No bets found
-                </td>
-              </tr>
-            ) : (
-              data.map((bet) => (
-                <tr
-                  key={bet.id}
-                  className="admin-tr"
-                  style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
-                  onClick={() => router.push(`/admin/bets/${bet.id}`)}
-                >
-                  <td style={{ padding: '12px 14px', fontWeight: 500, color: '#111' }}>
-                    {bet.userName || 'Unknown'}
-                  </td>
-                  <td style={{ padding: '12px 14px', color: '#666' }}>
-                    {bet.courseName}, H{bet.holeNumber}
-                  </td>
-                  <td style={{ padding: '12px 14px', fontSize: 12, color: '#335231', fontWeight: 600 }}>
-                    {TIER_LABELS[bet.tier]}
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', color: '#111' }}>
-                    {formatZAR(bet.stakeCents)}
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#111' }}>
-                    {formatZAR(bet.potentialWinCents)}
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                    <StatusBadge status={bet.status} small />
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center', color: '#666' }}>
-                    {bet.declaredResult ? (
-                      <StatusBadge status={bet.declaredResult === 'win' ? 'claimed' : 'miss'} small />
-                    ) : '—'}
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', color: '#999', fontSize: 12 }}>
-                    {timeAgo(bet.createdAt)}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+                  </tr>
+                ) : (
+                  list.data.map(bet => (
+                    // The row opens the bet on a click; the link in the first
+                    // cell is the way in for a keyboard or a new tab.
+                    <tr key={bet.id} className="admin-tr" style={{ cursor: 'pointer' }} onClick={() => router.push(`/admin/bets/${bet.id}`)}>
+                      <td>
+                        <Link
+                          href={`/admin/bets/${bet.id}`}
+                          className="adm-row-link"
+                          aria-label={`${bet.userName || 'Unknown player'}: bet on ${bet.courseName}, hole ${bet.holeNumber}`}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          {bet.userName || 'Unknown'}
+                        </Link>
+                      </td>
+                      <td className="adm-muted">{bet.courseName}, H{bet.holeNumber}</td>
+                      <td style={{ fontWeight: 700 }}>{TIER_LABELS[bet.tier]}</td>
+                      <td style={{ textAlign: 'right' }}>{formatZAR(bet.stakeCents)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatZAR(bet.potentialWinCents)}</td>
+                      <td style={{ textAlign: 'center' }}><StatusBadge status={bet.status} small /></td>
+                      <td style={{ textAlign: 'center' }}>
+                        {bet.declaredResult ? <StatusBadge status={bet.declaredResult === 'win' ? 'claimed' : 'miss'} small /> : <span className="adm-muted">—</span>}
+                      </td>
+                      <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }} className="adm-small">
+                        <time dateTime={bet.createdAt} title={sastDateTime(bet.createdAt)}>{timeAgo(bet.createdAt)}</time>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-      <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+      {list && <Pagination page={page} totalPages={list.totalPages || 1} total={list.total} onPageChange={setPage} />}
     </div>
   )
 }

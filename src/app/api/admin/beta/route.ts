@@ -67,8 +67,9 @@ export async function DELETE(request: Request) {
   const q = parseQuery(request.url, Remove)
   if (!q.ok) return q.response
   try {
-    const { error } = await auth.adminClient.from('beta_access').delete().eq('id', q.data.id)
+    const { data, error } = await auth.adminClient.from('beta_access').delete().eq('id', q.data.id).select('id')
     if (error) throw error
+    if (!data || data.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     log.info('admin.beta.removed', { id: q.data.id, by: auth.user.id })
     return NextResponse.json({ ok: true })
   } catch (err) {

@@ -22,7 +22,8 @@ export async function POST(request: Request, { params }: Params) {
   if (!body.ok) return body.response
 
   try {
-    const { data: v } = await auth.adminClient.from('verifications').select('bet_id').eq('id', verificationId).maybeSingle()
+    const { data: v, error } = await auth.adminClient.from('verifications').select('bet_id').eq('id', verificationId).maybeSingle()
+    if (error) throw error
     if (!v) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const result = await sendWitnessRequests(auth.adminClient, v.bet_id, body.data.witnessId ? { onlyIds: [body.data.witnessId], force: true } : {})
     log.info('admin.witness_requests_sent', { admin_id: auth.user.id, verification_id: verificationId, ...result })

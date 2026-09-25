@@ -1,22 +1,30 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import { Download, Eye, Ban, Shield } from 'lucide-react'
-import StatusBadge from '@/components/admin/StatusBadge'
+import Link from 'next/link'
+import { Download } from 'lucide-react'
 import SearchInput from '@/components/admin/SearchInput'
 import Pagination from '@/components/admin/Pagination'
+import LoadError from '@/components/admin/LoadError'
 import { formatZAR, timeAgo } from '@/lib/format'
 import type { AdminUserRecord, PaginatedResponse } from '@/types/admin'
+import { downloadExport, sastDate } from '../bets/client-helpers'
+
+const OFFLINE = 'Could not reach the server. Check your connection and try again.'
+
+/** "5m ago" for the last week (the same anywhere), then the date in South African time. */
+const joined = (iso: string) => (Date.now() - new Date(iso).getTime() < 7 * 24 * 3_600_000 ? timeAgo(iso) : sastDate(iso))
 
 export default function AdminUsersPage() {
-  const router = useRouter()
   const [data, setData] = useState<AdminUserRecord[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [search, setSearch] = useState('')
   const [suspendedFilter, setSuspendedFilter] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportNote, setExportNote] = useState<{ error: boolean; text: string } | null>(null)
 
   // Loading is derived: the page is loading until the query it currently
   // shows has been answered, so no state is set synchronously in an effect.
@@ -26,69 +34,74 @@ export default function AdminUsersPage() {
     if (suspendedFilter) params.set('suspended', suspendedFilter)
     return params.toString()
   }, [page, search, suspendedFilter])
-  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
-  const loading = loadedQuery !== query
+  const [refresh, setRefresh] = useState(0)
+  const requestKey = `${query}#${refresh}`
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const loading = loadedKey !== requestKey
 
   useEffect(() => {
     let cancelled = false
     fetch(`/api/admin/users?${query}`)
-      .then(res => res.json() as Promise<PaginatedResponse<AdminUserRecord>>)
-      .then(json => {
+      .then(async res => {
+        const json = await res.json().catch(() => ({})) as Partial<PaginatedResponse<AdminUserRecord>> & { error?: string }
         if (cancelled) return
-        setData(json.data || [])
-        setTotal(json.total || 0)
+        if (!res.ok) { setLoadError(json.error ?? `The server answered ${res.status}.`); return }
+        setLoadError(null)
+        setData(json.data ?? [])
+        setTotal(json.total ?? 0)
         setTotalPages(json.totalPages || 1)
       })
-      .catch(() => { if (!cancelled) setData([]) })
-      .finally(() => { if (!cancelled) setLoadedQuery(query) })
+      .catch(() => { if (!cancelled) setLoadError(OFFLINE) })
+      .finally(() => { if (!cancelled) setLoadedKey(`${query}#${refresh}`) })
     return () => { cancelled = true }
-  }, [query])
+  }, [query, refresh])
 
+  /** The CSV of the users the list shows: the same search and filter. */
   const handleExport = async () => {
-    const res = await fetch('/api/admin/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'users' }),
-    })
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `users-export-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+    setExporting(true)
+    setExportNote(null)
+    const body: { type: string } & Record<string, unknown> = { type: 'users' }
+    if (search) body.search = search
+    if (suspendedFilter) body.suspended = suspendedFilter
+    const result = await downloadExport(body)
+    setExporting(false)
+    if (!result.ok) setExportNote({ error: true, text: `The export failed. ${result.error}` })
+    else if (result.cappedAt) setExportNote({ error: false, text: `The file holds the newest ${result.cappedAt.toLocaleString('en-ZA')} users only. Search or filter to export the rest.` })
+    else setExportNote({ error: false, text: `Exported ${result.rows.toLocaleString('en-ZA')} user${result.rows === 1 ? '' : 's'}.` })
   }
+
+  const filtered = Boolean(search || suspendedFilter)
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <title>Users · Get Lucky admin</title>
+      <div className="adm-head">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111', marginBottom: 4, fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>User Management</h1>
-          <p style={{ fontSize: 14, color: '#666' }}>View and manage all registered users</p>
+          <h1 className="adm-title">Users</h1>
+          <p className="adm-lead">Everyone who has signed up. Open a golfer to see their bets, claims and payments, or to suspend them.</p>
         </div>
-        <button
-          onClick={handleExport}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
-            borderRadius: 8, border: '1px solid #e5e5e5', background: '#fff',
-            fontSize: 13, cursor: 'pointer', color: '#333', fontWeight: 500,
-          }}
-        >
-          <Download size={14} /> Export CSV
+        <button type="button" onClick={handleExport} disabled={exporting} className="adm-btn adm-btn--quiet">
+          <Download size={14} aria-hidden /> {exporting ? 'Exporting…' : filtered ? 'Export these as CSV' : 'Export CSV'}
         </button>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, alignItems: 'center' }}>
+      {exportNote && (
+        <p role={exportNote.error ? 'alert' : 'status'} className={exportNote.error ? 'adm-error' : 'adm-small'} style={{ margin: '-12px 0 14px' }}>
+          {exportNote.text}
+        </p>
+      )}
+
+      <div className="adm-row" style={{ marginBottom: 16, alignItems: 'center' }}>
         <SearchInput
-          placeholder="Search by name or email..."
+          placeholder="Search by name or email"
           value={search}
           onChange={(v) => { setSearch(v); setPage(1) }}
         />
         <select
           value={suspendedFilter}
           onChange={(e) => { setSuspendedFilter(e.target.value); setPage(1) }}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }}
+          aria-label="Show"
+          className="adm-input"
         >
           <option value="">All users</option>
           <option value="false">Active</option>
@@ -96,102 +109,57 @@ export default function AdminUsersPage() {
         </select>
       </div>
 
-      {/* Table */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-              <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>User</th>
-              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Handicap</th>
-              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Attempts</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Total Staked</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Total Won</th>
-              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Status</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Joined</th>
-              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  {Array.from({ length: 8 }).map((_, j) => (
-                    <td key={j} style={{ padding: 14 }}>
-                      <div style={{ height: 16, background: '#f0f0f0', borderRadius: 4, width: '60%' }} />
+      {loadError && !loading ? (
+        <LoadError what="The users" onRetry={() => setRefresh(n => n + 1)} detail={loadError} />
+      ) : (
+        <div className="adm-card">
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th className="adm-num">Handicap</th>
+                  <th className="adm-num">Attempts</th>
+                  <th className="adm-num">Staked</th>
+                  <th className="adm-num">Won</th>
+                  <th>Status</th>
+                  <th className="adm-num">Joined</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading && data.length === 0 ? (
+                  <tr><td colSpan={7} className="adm-muted">Loading…</td></tr>
+                ) : data.length === 0 ? (
+                  <tr><td colSpan={7} className="adm-muted" style={{ padding: 28, textAlign: 'center' }}>
+                    {filtered ? 'Nobody matches.' : 'Nobody has signed up yet.'}
+                  </td></tr>
+                ) : data.map((user) => (
+                  <tr key={user.id} style={{ opacity: loading ? 0.6 : 1 }}>
+                    <td>
+                      <Link href={`/admin/users/${user.id}`} className="adm-row-link">{user.name || 'No name'}</Link>
+                      {user.isAdmin && <span className="adm-pill adm-pill--gold" style={{ marginLeft: 8, padding: '1px 8px', fontSize: 11 }}>Admin</span>}
+                      <div className="adm-small">{user.email}</div>
                     </td>
-                  ))}
-                </tr>
-              ))
-            ) : data.length === 0 ? (
-              <tr>
-                <td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#999' }}>No users found</td>
-              </tr>
-            ) : (
-              data.map((user) => (
-                <tr
-                  key={user.id}
-                  className="admin-tr"
-                  style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
-                  onClick={() => router.push(`/admin/users/${user.id}`)}
-                >
-                  <td style={{ padding: '12px 14px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div
-                        style={{
-                          width: 32, height: 32, borderRadius: '50%', background: '#335231',
-                          color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 13, fontWeight: 700, flexShrink: 0,
-                        }}
-                      >
-                        {(user.name || 'U').charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: 500, color: '#111', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          {user.name || 'Unknown'}
-                          {user.isAdmin && <Shield size={12} color="#335231" />}
-                        </div>
-                        <div style={{ fontSize: 12, color: '#999' }}>{user.email}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center', color: '#666' }}>{user.handicap ?? '—'}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center', color: '#111', fontWeight: 500 }}>{user.totalAttempts}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', color: '#111' }}>{formatZAR(user.totalStaked)}</td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', color: user.totalWon > 0 ? '#1a7f37' : '#999', fontWeight: user.totalWon > 0 ? 600 : 400 }}>
-                    {user.totalWon > 0 ? formatZAR(user.totalWon) : '—'}
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                    {user.suspendedAt ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#c0392b', fontWeight: 600 }}>
-                        <Ban size={12} /> Suspended
-                      </span>
-                    ) : (
-                      <StatusBadge status="active" small />
-                    )}
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', color: '#999', fontSize: 12 }}>
-                    {timeAgo(user.createdAt)}
-                  </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-                    <button
-                      onClick={() => router.push(`/admin/users/${user.id}`)}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px',
-                        borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff',
-                        fontSize: 12, cursor: 'pointer', color: '#335231', fontWeight: 500, margin: '0 auto',
-                      }}
-                    >
-                      <Eye size={13} /> View
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+                    <td className="adm-num">{user.handicap ?? '—'}</td>
+                    <td className="adm-num" style={{ fontWeight: 600 }}>{user.totalAttempts}</td>
+                    <td className="adm-num">{formatZAR(user.totalStaked)}</td>
+                    <td className="adm-num" style={{ fontWeight: user.totalWon > 0 ? 700 : 400 }}>
+                      {user.totalWon > 0 ? formatZAR(user.totalWon) : <span className="adm-muted">—</span>}
+                    </td>
+                    <td>
+                      {user.suspendedAt
+                        ? <span className="adm-pill adm-pill--red">Suspended</span>
+                        : <span className="adm-pill adm-pill--green">Active</span>}
+                    </td>
+                    <td className="adm-num adm-muted">{joined(user.createdAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+        </div>
+      )}
     </div>
   )
 }

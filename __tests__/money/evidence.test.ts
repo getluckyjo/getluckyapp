@@ -220,6 +220,64 @@ describe('GET /api/admin/verifications/[id] — what the reviewer sees', () => {
     expect(body.affidavitSeal).toEqual({ sha256: null, bytes: null })
     expect(body.witnesses).toMatchObject([{ role: 'witness', name: 'Sipho', email: 's@example.com' }])
   })
+
+  it('includes the player\'s standing, the payment, the hole, and a download link beside each document', async () => {
+    adminAuth.requireAdmin.mockResolvedValue({ ok: true, user: { id: USER_B.id }, adminClient: createFakeClient(db) })
+    const p = db.find('profiles', r => r.id === USER_A.id)!
+    Object.assign(p, { email: USER_A.email, suspended_at: '2026-09-20T08:00:00Z', suspended_reason: 'Chargeback', age_verified_at: null })
+    db.seed('holes', { id: HOLE_ID, course_id: COURSE_ID, hole_number: 7, par: 3, distance_metres: 162 })
+    const bet = ownBet({ status: 'claimed', stake_pence: 5000, payment_intent_id: 'gl_pay_1', video_url: `${USER_A.id}/b/shot.mp4` })
+    db.seed('payfast_payments', { m_payment_id: 'gl_pay_1', bet_id: bet.id, amount_cents: 5000, status: 'pending', created_at: '2026-09-20T07:00:00Z' })
+    const [v] = db.seed('verifications', { bet_id: bet.id, status: 'documents_received', certificate_path: `${USER_A.id}/b/certificate/c.pdf` })
+
+    const body = await (await adminDetail(new Request('http://x') as never, { params: Promise.resolve({ verificationId: v.id as string }) })).json()
+    expect(body.player).toEqual({ email: USER_A.email, suspendedAt: '2026-09-20T08:00:00Z', suspendedReason: 'Chargeback', ageVerifiedAt: null })
+    expect(body.payment).toEqual({ status: 'pending', amountCents: 5000, reference: 'gl_pay_1' })
+    expect(body.hole).toEqual({ par: 3, distanceMetres: 162 })
+    expect(body.certificateSignedUrl).toBe(`https://storage.example/signed/${USER_A.id}/b/certificate/c.pdf`)
+    expect(typeof body.certificateDownloadUrl).toBe('string')
+    expect(body.affidavitSignedUrl).toBeNull()
+    expect(body.unsignedMedia).toEqual([])
+    expect(typeof body.signedAt).toBe('string')
+  })
+
+  it('a free swing has no payment; a paid swing with no ledger row says so', async () => {
+    adminAuth.requireAdmin.mockResolvedValue({ ok: true, user: { id: USER_B.id }, adminClient: createFakeClient(db) })
+    const free = ownBet({ status: 'claimed', stake_pence: 0, payment_intent_id: `free_${USER_A.id}` })
+    const paid = ownBet({ status: 'claimed', stake_pence: 5000, payment_intent_id: 'gl_gone' })
+    const [vFree] = db.seed('verifications', { bet_id: free.id, status: 'pending' })
+    const [vPaid] = db.seed('verifications', { bet_id: paid.id, status: 'pending' })
+    const get = async (id: unknown) => (await adminDetail(new Request('http://x?fresh=0') as never, { params: Promise.resolve({ verificationId: id as string }) })).json()
+    expect((await get(vFree.id)).payment).toBeNull()
+    expect((await get(vPaid.id)).payment).toEqual({ status: 'missing', amountCents: null, reference: 'gl_gone' })
+    // No reference on the bet: the ledger's own link to it is used.
+    const linked = ownBet({ status: 'claimed', stake_pence: 5000, payment_intent_id: null })
+    db.seed('payfast_payments', { m_payment_id: 'gl_linked', bet_id: linked.id, amount_cents: 5000, status: 'complete', created_at: '2026-09-20T07:00:00Z' })
+    const [vLinked] = db.seed('verifications', { bet_id: linked.id, status: 'pending' })
+    expect((await get(vLinked.id)).payment).toEqual({ status: 'complete', amountCents: 5000, reference: 'gl_linked' })
+  })
+
+  it('a link that cannot be signed is reported as such, not as missing evidence', async () => {
+    const base = createFakeClient(db)
+    const brokenStorage = { ...base, storage: { from: () => ({ createSignedUrl: async () => ({ data: null, error: { message: 'storage down' } }) }) } }
+    adminAuth.requireAdmin.mockResolvedValue({ ok: true, user: { id: USER_B.id }, adminClient: brokenStorage })
+    const bet = ownBet({ status: 'claimed', video_url: `${USER_A.id}/b/shot.mp4` })
+    const [v] = db.seed('verifications', { bet_id: bet.id, status: 'documents_received', certificate_path: `${USER_A.id}/b/certificate/c.jpg` })
+    const res = await adminDetail(new Request('http://x?fresh=0') as never, { params: Promise.resolve({ verificationId: v.id as string }) })
+    expect(res.status).toBe(200)
+    const body = await res.json()
+    expect(body).toMatchObject({ videoSignedUrl: null, certificateSignedUrl: null, affidavitSignedUrl: null })
+    expect(body.unsignedMedia.sort()).toEqual(['certificate', 'video'])
+  })
+
+  it('404 only for a claim that does not exist; a failed read is a 500', async () => {
+    adminAuth.requireAdmin.mockResolvedValue({ ok: true, user: { id: USER_B.id }, adminClient: createFakeClient(db) })
+    const missing = await adminDetail(new Request('http://x') as never, { params: Promise.resolve({ verificationId: '99999999-9999-4999-8999-999999999999' }) })
+    expect(missing.status).toBe(404)
+    adminAuth.requireAdmin.mockResolvedValue({ ok: true, user: { id: USER_B.id }, adminClient: createFakeClient(db, { failTable: { verifications: { code: '57014', message: 'timeout', details: '', hint: '' } } }) })
+    const failed = await adminDetail(new Request('http://x') as never, { params: Promise.resolve({ verificationId: '99999999-9999-4999-8999-999999999999' }) })
+    expect(failed.status).toBe(500)
+  })
 })
 
 describe('retention — witnesses go with a rejected claim', () => {

@@ -6,45 +6,22 @@ interface StatCardProps {
   title: string
   value: string
   icon: LucideIcon
+  /** Kept for callers; the app's look sets every stat in its own green and lime. */
   accent?: string
   subtitle?: string
 }
 
-export default function StatCard({ title, value, icon: Icon, accent = '#335231', subtitle }: StatCardProps) {
+/** One number on the dashboard, in the app's look: a white card, a lime disc, the figure in Poster Gothic. */
+export default function StatCard({ title, value, icon: Icon, subtitle }: StatCardProps) {
   return (
-    <div
-      style={{
-        background: '#fff',
-        borderRadius: 12,
-        padding: '20px 24px',
-        border: '1px solid #e5e5e5',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 16,
-        flex: 1,
-        minWidth: 200,
-      }}
-    >
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 10,
-          background: `${accent}12`,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0,
-        }}
-      >
-        <Icon size={22} color={accent} />
-      </div>
-      <div>
-        <div style={{ fontSize: 13, color: '#999', fontWeight: 500, marginBottom: 4 }}>{title}</div>
-        <div style={{ fontSize: 24, fontWeight: 700, color: '#111', lineHeight: 1.1 }}>{value}</div>
-        {subtitle && (
-          <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{subtitle}</div>
-        )}
+    <div className="adm-card" style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flex: 1, minWidth: 210 }}>
+      <span aria-hidden style={{ width: 46, height: 46, borderRadius: '50%', background: 'var(--lime)', color: 'var(--green-dark)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={21} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div className="adm-stat-label">{title}</div>
+        <div className="adm-stat-value" style={{ fontSize: 30, marginTop: 4 }}>{value}</div>
+        {subtitle && <div className="adm-small" style={{ marginTop: 4 }}>{subtitle}</div>}
       </div>
     </div>
   )

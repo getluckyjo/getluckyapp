@@ -1,17 +1,23 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { DollarSign, TrendingUp, BarChart3, Trophy, Download, Gift } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import Link from 'next/link'
+import { Banknote, TrendingUp, Trophy, HandCoins, Download, Gift } from 'lucide-react'
 import StatCard from '@/components/admin/StatCard'
-import StatusBadge from '@/components/admin/StatusBadge'
 import Pagination from '@/components/admin/Pagination'
-import { formatZAR, timeAgo } from '@/lib/format'
+import LoadError from '@/components/admin/LoadError'
+import { formatZAR } from '@/lib/format'
+import type { AdminBetRecord } from '@/types/admin'
+import { downloadExport, sastDate } from '@/app/(admin)/admin/bets/client-helpers'
 
+/** /api/admin/reports/revenue. Revenue is the sum of stakes; netProfit is stakes minus prizes paid. */
 interface RevenueData {
   totalRevenue: number
   totalPayouts: number
   netProfit: number
   margin: string
+  /** Verified, not yet paid; null before migration 032. */
+  prizesOwed: number | null
   totalBets: number
   byTier: { tier: string; label: string; count: number; revenue: number; payouts: number }[]
   byCourse: { name: string; revenue: number; count: number }[]
@@ -37,315 +43,382 @@ interface FreeSwingData {
   weeks: { weekStart: string; taken: number; matured: number; converted: number; rate: string | null }[]
 }
 
-interface PayoutItem {
-  id: string
-  userName: string
-  courseName: string
-  holeNumber: number
-  tier: string
-  potentialWinCents: number
-  status: string
-  createdAt: string
+type PayoutKind = 'owed' | 'paid'
+
+/** /api/admin/reports/payouts: one page of prizes owed or paid. */
+interface PayoutPage {
+  kind: PayoutKind
+  data: (AdminBetRecord & { verifiedAt: string | null; paidAt: string | null; payoutReference: string | null })[]
+  total: number
+  totalPages: number
+}
+
+type Tab = 'revenue' | 'payouts' | 'free'
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'revenue', label: 'Stakes' },
+  { key: 'payouts', label: 'Prizes' },
+  { key: 'free', label: 'Free swings' },
+]
+
+/** Courses shown before "Show all". */
+const TOP_COURSES = 10
+const showDate = (iso: string | null) => (iso ? sastDate(iso) : '—')
+const money = (cents: number | null | undefined) => (cents == null ? '—' : formatZAR(cents))
+
+/**
+ * GET a report while `url` is set. A cancel flag keeps a slow answer for an
+ * earlier url (the page before) from landing on top of a newer one, and
+ * loading is derived: the answer held is for a different request. The last
+ * answer stays in `data` while the next loads, so a page change dims the
+ * table rather than blanking it.
+ */
+function useReport<T>(url: string | null) {
+  const [attempt, setAttempt] = useState(0)
+  const key = url ? `${attempt} ${url}` : null
+  const [answer, setAnswer] = useState<{ key: string; data: T | null; detail: string | null } | null>(null)
+
+  useEffect(() => {
+    if (!url || !key) return
+    let cancelled = false
+    fetch(url, { cache: 'no-store' })
+      .then(async res => {
+        const json = await res.json().catch(() => null)
+        if (!cancelled) setAnswer(res.ok && json ? { key, data: json as T, detail: null } : { key, data: null, detail: json?.error ?? null })
+      })
+      .catch(() => { if (!cancelled) setAnswer({ key, data: null, detail: null }) })
+    return () => { cancelled = true }
+  }, [url, key])
+
+  const current = key !== null && answer?.key === key
+  return {
+    data: answer?.data ?? null,
+    loading: key !== null && !current,
+    failed: current && answer.data === null,
+    detail: current ? answer.detail : null,
+    retry: () => setAttempt(n => n + 1),
+  }
+}
+
+/** A stat card in its own box: admin.css spaces a card that follows another (.adm-card + .adm-card), which in a row would push all but the first down. */
+function Tile(props: React.ComponentProps<typeof StatCard>) {
+  return <div style={{ flex: '1 1 210px', display: 'flex', minWidth: 0 }}><StatCard {...props} /></div>
 }
 
 export default function AdminReportsPage() {
-  const [revenue, setRevenue] = useState<RevenueData | null>(null)
-  const [payouts, setPayouts] = useState<PayoutItem[]>([])
-  const [payoutTotal, setPayoutTotal] = useState(0)
+  const [tab, setTab] = useState<Tab>('revenue')
+  // Each tab's report is fetched the first time the tab opens, and kept.
+  const [opened, setOpened] = useState<Record<Tab, boolean>>({ revenue: true, payouts: false, free: false })
+  const [kind, setKind] = useState<PayoutKind>('owed')
   const [payoutPage, setPayoutPage] = useState(1)
-  const [payoutTotalPages, setPayoutTotalPages] = useState(1)
-  const [free, setFree] = useState<FreeSwingData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'payouts' | 'free'>('overview')
+  const [allCourses, setAllCourses] = useState(false)
+  const [exporting, setExporting] = useState<string | null>(null)
+  const [exportNote, setExportNote] = useState<{ error: boolean; text: string } | null>(null)
+  const tabRefs = useRef<Partial<Record<Tab, HTMLButtonElement | null>>>({})
 
-  useEffect(() => {
-    Promise.all([
-      fetch('/api/admin/reports/revenue').then(r => r.json()),
-      fetch(`/api/admin/reports/payouts?page=${payoutPage}`).then(r => r.json()),
-      fetch('/api/admin/reports/free-swings').then(r => r.json()),
-    ])
-      .then(([rev, pay, freeSwings]) => {
-        setRevenue(rev)
-        setPayouts(pay.data || [])
-        setPayoutTotal(pay.total || 0)
-        setPayoutTotalPages(pay.totalPages || 1)
-        setFree(freeSwings)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [payoutPage])
+  const revenue = useReport<RevenueData>('/api/admin/reports/revenue')
+  const payouts = useReport<PayoutPage>(opened.payouts ? `/api/admin/reports/payouts?kind=${kind}&page=${payoutPage}` : null)
+  const free = useReport<FreeSwingData>(opened.free ? '/api/admin/reports/free-swings' : null)
 
-  const handleExport = async (type: string) => {
-    const res = await fetch('/api/admin/export', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type }),
-    })
-    const blob = await res.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${type}-export-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  function open(next: Tab) {
+    setTab(next)
+    setOpened(o => (o[next] ? o : { ...o, [next]: true }))
   }
 
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Loading reports...</div>
+  /** Arrow keys move between the tabs, as a tab list does. */
+  function onTabKey(e: React.KeyboardEvent) {
+    if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return
+    e.preventDefault()
+    const i = TABS.findIndex(t => t.key === tab)
+    const next = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length].key
+    open(next)
+    tabRefs.current[next]?.focus()
+  }
+
+  function showKind(next: PayoutKind) {
+    setKind(next)
+    setPayoutPage(1)
+  }
+
+  async function handleExport(type: 'bets' | 'verifications') {
+    setExportNote(null)
+    setExporting(type)
+    const result = await downloadExport({ type })
+    setExporting(null)
+    const what = type === 'bets' ? 'bets' : 'claims'
+    if (!result.ok) setExportNote({ error: true, text: `The export failed. ${result.error}` })
+    else if (result.cappedAt) setExportNote({ error: false, text: `The file holds the newest ${result.cappedAt.toLocaleString('en-ZA')} ${what} only.` })
+  }
+
+  const rev = revenue.failed ? null : revenue.data
+  // Rows of the other list (owed or paid) are never shown under this one's heading.
+  const payoutData = payouts.data?.kind === kind && !payouts.failed ? payouts.data : null
+  const courses = rev?.byCourse ?? []
+  const shownCourses = allCourses ? courses : courses.slice(0, TOP_COURSES)
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <title>Reports · Get Lucky admin</title>
+      <div className="adm-head">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111', marginBottom: 4, fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>Financial Reports</h1>
-          <p style={{ fontSize: 14, color: '#666' }}>Revenue, payouts, and profit analysis</p>
+          <h1 className="adm-title">Reports</h1>
+          <p className="adm-lead">What golfers have staked, the prizes owed and paid, and whether the free swing brings golfers back.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={() => handleExport('bets')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-              borderRadius: 8, border: '1px solid #e5e5e5', background: '#fff',
-              fontSize: 13, cursor: 'pointer', color: '#333',
-            }}
-          >
-            <Download size={14} /> Export Bets
+        <div className="adm-row" style={{ alignItems: 'center' }}>
+          <button type="button" onClick={() => handleExport('bets')} disabled={exporting !== null} className="adm-btn adm-btn--quiet">
+            <Download size={14} aria-hidden /> {exporting === 'bets' ? 'Preparing…' : 'Download bets'}
           </button>
-          <button
-            onClick={() => handleExport('verifications')}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px',
-              borderRadius: 8, border: '1px solid #e5e5e5', background: '#fff',
-              fontSize: 13, cursor: 'pointer', color: '#333',
-            }}
-          >
-            <Download size={14} /> Export Claims
+          <button type="button" onClick={() => handleExport('verifications')} disabled={exporting !== null} className="adm-btn adm-btn--quiet">
+            <Download size={14} aria-hidden /> {exporting === 'verifications' ? 'Preparing…' : 'Download claims'}
           </button>
         </div>
       </div>
+      {exportNote && <p role={exportNote.error ? 'alert' : 'status'} className={exportNote.error ? 'adm-error' : 'adm-small'} style={{ margin: '-12px 0 16px' }}>{exportNote.text}</p>}
 
-      {/* KPI cards */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard title="Total Revenue" value={formatZAR(revenue?.totalRevenue ?? 0)} icon={DollarSign} accent="#335231" subtitle={`${revenue?.totalBets ?? 0} bets via PayFast`} />
-        <StatCard title="Total Payouts" value={formatZAR(revenue?.totalPayouts ?? 0)} icon={Trophy} accent="#c0392b" subtitle="Processed via PayFast" />
-        <StatCard title="Net Profit" value={formatZAR(revenue?.netProfit ?? 0)} icon={TrendingUp} accent={(revenue?.netProfit ?? 0) >= 0 ? '#1a7f37' : '#c0392b'} subtitle={`${revenue?.margin ?? '0'}% margin`} />
-        <StatCard title="Total Bets" value={String(revenue?.totalBets ?? 0)} icon={BarChart3} accent="#1565c0" />
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 22 }} aria-busy={revenue.loading}>
+        <Tile title="Stakes taken" value={money(rev?.totalRevenue)} icon={Banknote} subtitle={rev ? `${rev.totalBets.toLocaleString('en-ZA')} entries, free swings included` : undefined} />
+        <Tile title="Prizes paid" value={money(rev?.totalPayouts)} icon={Trophy} />
+        <Tile
+          title="Stakes minus prizes paid"
+          value={money(rev?.netProfit)}
+          icon={TrendingUp}
+          subtitle={rev ? `${rev.margin}% of stakes${rev.prizesOwed ? ', before the prizes owed' : ''}` : undefined}
+        />
+        {rev?.prizesOwed != null && (
+          <Tile title="Prizes owed" value={money(rev.prizesOwed)} icon={HandCoins} subtitle="Verified, not yet paid" />
+        )}
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #e5e5e5', marginBottom: 20 }}>
-        {[{ key: 'overview', label: 'Revenue Breakdown' }, { key: 'payouts', label: 'Payout History' }, { key: 'free', label: 'Free Swings' }].map((tab) => (
+      <div role="tablist" aria-label="Reports" onKeyDown={onTabKey} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+        {TABS.map(t => (
           <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key as 'overview' | 'payouts' | 'free')}
-            style={{
-              padding: '10px 20px', background: 'none', border: 'none',
-              borderBottom: activeTab === tab.key ? '2px solid #335231' : '2px solid transparent',
-              color: activeTab === tab.key ? '#335231' : '#666',
-              fontWeight: activeTab === tab.key ? 600 : 400, fontSize: 14, cursor: 'pointer',
-            }}
+            key={t.key}
+            ref={el => { tabRefs.current[t.key] = el }}
+            type="button"
+            role="tab"
+            id={`report-tab-${t.key}`}
+            aria-selected={tab === t.key}
+            aria-controls={`report-panel-${t.key}`}
+            tabIndex={tab === t.key ? 0 : -1}
+            onClick={() => open(t.key)}
+            className={tab === t.key ? 'adm-btn adm-btn--green' : 'adm-btn adm-btn--quiet'}
           >
-            {tab.label}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {activeTab === 'overview' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-          {/* Revenue by Tier */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111', marginBottom: 16 }}>Revenue by Tier</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(revenue?.byTier ?? []).map((item) => {
-                const maxRev = Math.max(...(revenue?.byTier ?? []).map(t => t.revenue), 1)
-                return (
-                  <div key={item.tier}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
-                      <span style={{ color: '#333', fontWeight: 500 }}>{item.label}</span>
-                      <span style={{ color: '#111', fontWeight: 600 }}>{formatZAR(item.revenue)}</span>
-                    </div>
-                    <div style={{ height: 8, background: '#f0f0f0', borderRadius: 4, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${(item.revenue / maxRev) * 100}%`,
-                          background: '#335231',
-                          borderRadius: 4,
-                          transition: 'width 0.3s',
-                        }}
-                      />
-                    </div>
-                    <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>{item.count} bets</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-
-          {/* Revenue by Course */}
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111', marginBottom: 16 }}>Revenue by Course</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {(revenue?.byCourse ?? []).slice(0, 10).map((item, i) => {
-                const maxRev = Math.max(...(revenue?.byCourse ?? []).map(c => c.revenue), 1)
-                return (
-                  <div key={item.name}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13 }}>
-                      <span style={{ color: '#333', fontWeight: 500 }}>
-                        <span style={{ color: '#999', marginRight: 6 }}>#{i + 1}</span>
-                        {item.name}
-                      </span>
-                      <span style={{ color: '#111', fontWeight: 600 }}>{formatZAR(item.revenue)}</span>
-                    </div>
-                    <div style={{ height: 8, background: '#f0f0f0', borderRadius: 4, overflow: 'hidden' }}>
-                      <div
-                        style={{
-                          height: '100%',
-                          width: `${(item.revenue / maxRev) * 100}%`,
-                          background: '#4a7a3d',
-                          borderRadius: 4,
-                        }}
-                      />
-                    </div>
-                    <div style={{ fontSize: 11, color: '#999', marginTop: 2 }}>{item.count} bets</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'payouts' && (
-        <div>
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-                  <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>User</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Course</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Amount</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Status</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Date</th>
-                </tr>
-              </thead>
-              <tbody>
-                {payouts.length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#999' }}>No payouts yet</td></tr>
+      {tab === 'revenue' && (
+        <div role="tabpanel" id="report-panel-revenue" aria-labelledby="report-tab-revenue">
+          {revenue.failed ? (
+            <LoadError what="The stakes report" onRetry={revenue.retry} detail={revenue.detail} />
+          ) : !rev ? (
+            <p className="adm-muted">Loading…</p>
+          ) : (
+            <div className="adm-grid-2">
+              <section className="adm-card" style={{ marginTop: 0 }}>
+                <h2 className="adm-h2" style={{ marginBottom: 14 }}>Stakes by tier</h2>
+                <Bars rows={rev.byTier.map(t => ({ key: t.tier, label: t.label, cents: t.revenue, count: t.count }))} />
+              </section>
+              <section className="adm-card" style={{ marginTop: 0 }}>
+                <h2 className="adm-h2" style={{ marginBottom: 4 }}>Stakes by course</h2>
+                <p className="adm-small" style={{ margin: '0 0 14px' }}>
+                  {courses.length > TOP_COURSES && !allCourses
+                    ? `The top ${TOP_COURSES} of ${courses.length} courses with stakes.`
+                    : `All ${courses.length} ${courses.length === 1 ? 'course' : 'courses'} with stakes.`}
+                </p>
+                {courses.length === 0 ? (
+                  <p className="adm-muted" style={{ margin: 0 }}>No stakes yet.</p>
                 ) : (
-                  payouts.map((p) => (
-                    <tr key={p.id} className="admin-tr" style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '12px 14px', fontWeight: 500, color: '#111' }}>{p.userName || 'Unknown'}</td>
-                      <td style={{ padding: '12px 14px', color: '#666' }}>{p.courseName}, H{p.holeNumber}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: '#1a7f37' }}>
-                        {formatZAR(p.potentialWinCents)}
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <StatusBadge status={p.status} small />
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#999', fontSize: 12 }}>
-                        {timeAgo(p.createdAt)}
-                      </td>
-                    </tr>
-                  ))
+                  <Bars rows={shownCourses.map((c, i) => ({ key: `${i}-${c.name}`, label: `${i + 1}. ${c.name}`, cents: c.revenue, count: c.count }))} />
                 )}
-              </tbody>
-            </table>
-          </div>
-          <Pagination page={payoutPage} totalPages={payoutTotalPages} total={payoutTotal} onPageChange={setPayoutPage} />
+                {courses.length > TOP_COURSES && (
+                  <button type="button" onClick={() => setAllCourses(v => !v)} className="adm-link" style={{ marginTop: 14, fontSize: 13 }}>
+                    {allCourses ? `Show the top ${TOP_COURSES}` : `Show all ${courses.length} courses`}
+                  </button>
+                )}
+              </section>
+            </div>
+          )}
         </div>
       )}
 
-      {activeTab === 'free' && (
-        <div>
-          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
-            <StatCard
-              title="Free Swings Taken"
-              value={String(free?.taken ?? 0)}
-              icon={Gift}
-              accent="#335231"
-              subtitle={`${free?.taken7d ?? 0} in the last 7 days · ${free?.taken30d ?? 0} in 30`}
-            />
-            <StatCard
-              title="Stake Within 7 Days"
-              value={free?.conversionRate7d != null ? `${free.conversionRate7d}%` : '—'}
-              icon={TrendingUp}
-              accent="#1a7f37"
-              subtitle={
-                free?.conversionRate7d != null
-                  ? `${free.converted7d} of ${free.matured} whose week has closed${free.pending ? ` · ${free.pending} still inside theirs` : ''}`
-                  : `Nothing has had its full week yet${free?.pending ? ` · ${free.pending} waiting` : ''}`
-              }
-            />
-            <StatCard
-              title="Stakes After a Free Swing"
-              value={formatZAR(free?.revenueAfterFreeCents ?? 0)}
-              icon={DollarSign}
-              accent="#1565c0"
-              subtitle={`${formatZAR(free?.revenuePerFreeSwingCents ?? 0)} per free swing · ${free?.paidBetsAfterFree ?? 0} paid entries`}
-            />
-            <StatCard
-              title="Free Aces Claimed"
-              value={String(free?.claimed ?? 0)}
-              icon={Trophy}
-              accent={(free?.claimed ?? 0) > 0 ? '#c0392b' : '#666'}
-              subtitle={`${formatZAR(free?.prizeExposureCents ?? 0)} in prizes with no stake behind them`}
-            />
+      {tab === 'payouts' && (
+        <div role="tabpanel" id="report-panel-payouts" aria-labelledby="report-tab-payouts">
+          <div className="adm-row" style={{ alignItems: 'center', marginBottom: 12 }}>
+            {(['owed', 'paid'] as const).map(k => (
+              <button key={k} type="button" aria-pressed={kind === k} onClick={() => showKind(k)} className={kind === k ? 'adm-btn adm-btn--green' : 'adm-btn adm-btn--quiet'}>
+                {k === 'owed' ? 'Owed' : 'Paid'}
+              </button>
+            ))}
+            <span className="adm-small">
+              {kind === 'owed'
+                ? 'Verified prizes not yet paid, the longest waiting first. Open one to record its payout.'
+                : 'Prizes recorded as paid, the latest first, with the bank or PayFast reference.'}
+            </span>
           </div>
 
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 20, marginBottom: 20 }}>
-            <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111', marginBottom: 6 }}>Is one free swing enough?</h3>
-            <p style={{ fontSize: 13, color: '#666', lineHeight: 1.6, margin: 0 }}>
-              The rate above is the share of golfers who took the free swing and then staked real money within
-              seven days. It counts only swings old enough for that week to have closed, so a good week of
-              sign-ups never drags it down. Of everyone who has ever taken one,{' '}
-              <strong style={{ color: '#111' }}>
-                {free?.convertedEver ?? 0}
-                {free?.conversionRateEver != null ? ` (${free.conversionRateEver}%)` : ''}
-              </strong>{' '}
-              has staked something since
-              {free?.medianHoursToFirstPaid != null
-                ? `, typically ${free.medianHoursToFirstPaid < 48
-                    ? `${Math.round(free.medianHoursToFirstPaid)} hours`
-                    : `${(free.medianHoursToFirstPaid / 24).toFixed(1)} days`} after the free shot`
-                : ''}.
-              If the rate stays low, the step to fix is the one from free to R50 — not a second free swing.
-            </p>
-          </div>
-
-          <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-                  <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Week of</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Taken</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Week closed</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Staked in 7 days</th>
-                  <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(free?.weeks ?? []).length === 0 ? (
-                  <tr><td colSpan={5} style={{ padding: 40, textAlign: 'center', color: '#999' }}>No free swings taken yet</td></tr>
-                ) : (
-                  (free?.weeks ?? []).map((w) => (
-                    <tr key={w.weekStart} className="admin-tr" style={{ borderBottom: '1px solid #f0f0f0' }}>
-                      <td style={{ padding: '12px 14px', fontWeight: 500, color: '#111' }}>
-                        {new Date(w.weekStart).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#333' }}>{w.taken}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#999' }}>{w.matured}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', color: '#333' }}>{w.converted}</td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: w.rate != null ? '#1a7f37' : '#999' }}>
-                        {w.rate != null ? `${w.rate}%` : 'Still open'}
-                      </td>
+          {payouts.failed ? (
+            <LoadError what={kind === 'owed' ? 'The prizes owed' : 'The prizes paid'} onRetry={payouts.retry} detail={payouts.detail} />
+          ) : !payoutData ? (
+            <p className="adm-muted">Loading…</p>
+          ) : (
+            <>
+              <div className="adm-card adm-table-wrap" aria-busy={payouts.loading} style={{ padding: '8px 12px', opacity: payouts.loading ? 0.55 : 1, transition: 'opacity 0.15s' }}>
+                <table className="adm-table">
+                  <thead>
+                    <tr>
+                      <th>Golfer</th>
+                      <th>Course</th>
+                      <th className="adm-num">Prize</th>
+                      {kind === 'owed' ? <><th>Verified</th><th>Payout</th></> : <><th>Paid</th><th>Reference</th></>}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {payoutData.data.length === 0 ? (
+                      <tr><td colSpan={5} className="adm-muted" style={{ padding: 28, textAlign: 'center' }}>{kind === 'owed' ? 'No prizes owed.' : 'No prizes paid yet.'}</td></tr>
+                    ) : payoutData.data.map(p => (
+                      <tr key={p.id}>
+                        <td><Link href={`/admin/bets/${p.id}`} className="adm-row-link">{p.userName || 'Unknown'}</Link></td>
+                        <td className="adm-muted">{p.courseName}, hole {p.holeNumber}</td>
+                        <td className="adm-num" style={{ fontWeight: 700 }}>{formatZAR(p.potentialWinCents)}</td>
+                        {kind === 'owed' ? (
+                          <>
+                            <td className="adm-muted">{showDate(p.verifiedAt)}</td>
+                            <td><Link href={`/admin/bets/${p.id}`} className="adm-link">Record the payout</Link></td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="adm-muted">{showDate(p.paidAt)}</td>
+                            <td className="adm-mono">{p.payoutReference ?? '—'}</td>
+                          </>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination page={payoutPage} totalPages={payoutData.totalPages} total={payoutData.total} onPageChange={setPayoutPage} />
+            </>
+          )}
         </div>
       )}
+
+      {tab === 'free' && (
+        <div role="tabpanel" id="report-panel-free" aria-labelledby="report-tab-free">
+          {free.failed ? (
+            <LoadError what="The free swing report" onRetry={free.retry} detail={free.detail} />
+          ) : !free.data ? (
+            <p className="adm-muted">Loading… this report counts every free swing, so it can take a moment.</p>
+          ) : (
+            <FreeSwings free={free.data} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Horizontal bars, each against the largest. */
+function Bars({ rows }: { rows: { key: string; label: string; cents: number; count: number }[] }) {
+  const max = Math.max(...rows.map(r => r.cents), 1)
+  return (
+    <div className="adm-stack" style={{ gap: 12 }}>
+      {rows.map(r => (
+        <div key={r.key}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, marginBottom: 4, fontSize: 13 }}>
+            <span style={{ fontWeight: 600, minWidth: 0 }}>{r.label}</span>
+            <span style={{ fontWeight: 700, whiteSpace: 'nowrap' }}>{formatZAR(r.cents)}</span>
+          </div>
+          <div style={{ height: 8, background: 'var(--surface)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(r.cents / max) * 100}%`, background: 'var(--green)', borderRadius: 4 }} />
+          </div>
+          <div className="adm-small" style={{ marginTop: 2 }}>{r.count.toLocaleString('en-ZA')} {r.count === 1 ? 'entry' : 'entries'}</div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function FreeSwings({ free }: { free: FreeSwingData }) {
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 18 }}>
+        <Tile
+          title="Free swings taken"
+          value={free.taken.toLocaleString('en-ZA')}
+          icon={Gift}
+          subtitle={`${free.taken7d} in the last 7 days · ${free.taken30d} in 30`}
+        />
+        <Tile
+          title="Staked within 7 days"
+          value={free.conversionRate7d != null ? `${free.conversionRate7d}%` : '—'}
+          icon={TrendingUp}
+          subtitle={
+            free.conversionRate7d != null
+              ? `${free.converted7d} of ${free.matured} whose week has closed${free.pending ? ` · ${free.pending} still inside theirs` : ''}`
+              : `Nothing has had its full week yet${free.pending ? ` · ${free.pending} waiting` : ''}`
+          }
+        />
+        <Tile
+          title="Stakes after a free swing"
+          value={formatZAR(free.revenueAfterFreeCents)}
+          icon={Banknote}
+          subtitle={`${formatZAR(free.revenuePerFreeSwingCents)} per free swing · ${free.paidBetsAfterFree} paid entries`}
+        />
+        <Tile
+          title="Free aces claimed"
+          value={String(free.claimed)}
+          icon={Trophy}
+          subtitle={`${formatZAR(free.prizeExposureCents)} in prizes with no stake behind them`}
+        />
+      </div>
+
+      <section className="adm-card" style={{ marginBottom: 14 }}>
+        <h2 className="adm-h2" style={{ marginBottom: 6 }}>Is one free swing enough?</h2>
+        <p style={{ fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+          The rate above is the share of golfers who took the free swing and then staked real money within
+          seven days. It counts only swings old enough for that week to have closed, so a good week of
+          sign-ups never drags it down. Of everyone who has ever taken one,{' '}
+          <strong>
+            {free.convertedEver}
+            {free.conversionRateEver != null ? ` (${free.conversionRateEver}%)` : ''}
+          </strong>{' '}
+          {free.convertedEver === 1 ? 'has' : 'have'} staked something since
+          {free.medianHoursToFirstPaid != null
+            ? `, typically ${free.medianHoursToFirstPaid < 48
+                ? `${Math.round(free.medianHoursToFirstPaid)} hours`
+                : `${(free.medianHoursToFirstPaid / 24).toFixed(1)} days`} after the free shot`
+            : ''}.
+          If the rate stays low, the step to fix is the one from free to R50, not a second free swing.
+        </p>
+      </section>
+
+      <div className="adm-card adm-table-wrap" style={{ padding: '8px 12px' }}>
+        <table className="adm-table">
+          <thead>
+            <tr>
+              <th>Week of</th>
+              <th className="adm-num">Taken</th>
+              <th className="adm-num">Week closed</th>
+              <th className="adm-num">Staked in 7 days</th>
+              <th className="adm-num">Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            {free.weeks.length === 0 ? (
+              <tr><td colSpan={5} className="adm-muted" style={{ padding: 28, textAlign: 'center' }}>No free swings taken yet.</td></tr>
+            ) : free.weeks.map(w => (
+              <tr key={w.weekStart}>
+                <td style={{ fontWeight: 700 }}>{showDate(w.weekStart)}</td>
+                <td className="adm-num">{w.taken}</td>
+                <td className="adm-num adm-muted">{w.matured}</td>
+                <td className="adm-num">{w.converted}</td>
+                <td className="adm-num" style={{ fontWeight: 700 }}>{w.rate != null ? `${w.rate}%` : <span className="adm-muted">Still open</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

@@ -2,9 +2,16 @@
 
 import { useEffect, useState } from 'react'
 import { KeyRound, Mail, Trash2, Copy, Check } from 'lucide-react'
+import ConfirmModal from '@/components/admin/ConfirmModal'
+import LoadError from '@/components/admin/LoadError'
 import type { BetaAccessKind } from '@/types/database'
+import { sastDate } from '../bets/client-helpers'
 
 interface Row { id: number; kind: BetaAccessKind; value: string; note: string | null; added_by: string | null; created_at: string }
+
+const OFFLINE = 'Could not reach the server. Check your connection and try again.'
+
+const shown = (r: Row) => (r.kind === 'code' ? r.value.toUpperCase() : r.value)
 
 /**
  * Who may use the app while BETA_GATE=on. Add an email (they sign in with
@@ -15,6 +22,7 @@ export default function AdminBetaPage() {
   const [rows, setRows] = useState<Row[]>([])
   const [gate, setGate] = useState<boolean | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [kind, setKind] = useState<BetaAccessKind>('email')
   const [value, setValue] = useState('')
   const [note, setNote] = useState('')
@@ -22,17 +30,22 @@ export default function AdminBetaPage() {
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<number | null>(null)
   const [refresh, setRefresh] = useState(0)
+  const [removing, setRemoving] = useState<Row | null>(null)
+  const [removeBusy, setRemoveBusy] = useState(false)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     fetch('/api/admin/beta')
-      .then(r => r.json())
-      .then(json => {
+      .then(async res => {
+        const json = await res.json().catch(() => ({}))
         if (cancelled) return
+        if (!res.ok) { setLoadError(json.error ?? `The server answered ${res.status}.`); return }
+        setLoadError(null)
         setRows(json.data ?? [])
         setGate(json.gate ?? null)
       })
-      .catch(() => { if (!cancelled) setRows([]) })
+      .catch(() => { if (!cancelled) setLoadError(OFFLINE) })
       .finally(() => { if (!cancelled) setLoaded(true) })
     return () => { cancelled = true }
   }, [refresh])
@@ -48,19 +61,32 @@ export default function AdminBetaPage() {
         body: JSON.stringify({ kind, value: value.trim() || undefined, note: note.trim() || undefined }),
       })
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setError(json.error ?? 'Could not add.'); return }
+      if (!res.ok) { setError(json.error ?? 'Could not add. Please try again.'); return }
       setValue('')
       setNote('')
       setRefresh(n => n + 1)
+    } catch {
+      setError(OFFLINE)
     } finally {
       setBusy(false)
     }
   }
 
-  async function remove(id: number) {
-    if (!confirm('Remove this tester? They lose access on their next page view.')) return
-    const res = await fetch(`/api/admin/beta?id=${id}`, { method: 'DELETE' })
-    if (res.ok) setRefresh(n => n + 1)
+  async function remove() {
+    if (!removing) return
+    setRemoveBusy(true)
+    setRemoveError(null)
+    try {
+      const res = await fetch(`/api/admin/beta?id=${removing.id}`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setRemoveError(json.error ?? 'Could not remove. Please try again.'); return }
+      setRemoving(null)
+      setRefresh(n => n + 1)
+    } catch {
+      setRemoveError(OFFLINE)
+    } finally {
+      setRemoveBusy(false)
+    }
   }
 
   async function copy(row: Row) {
@@ -71,89 +97,116 @@ export default function AdminBetaPage() {
     } catch { /* clipboard blocked; the value is visible anyway */ }
   }
 
-  const input: React.CSSProperties = { padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }
-
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+      <title>Beta testers · Get Lucky admin</title>
+      <div className="adm-head">
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111', marginBottom: 4, fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>Beta testers</h1>
-          <p style={{ fontSize: 14, color: '#666' }}>Who may use the app while the closed beta is on. Changes apply on the tester&rsquo;s next page view.</p>
+          <h1 className="adm-title">Beta testers</h1>
+          <p className="adm-lead">Who may use the app while the closed beta is on. Changes apply on the tester&rsquo;s next page view.</p>
         </div>
         {gate !== null && (
-          <span style={{ padding: '6px 12px', borderRadius: 999, fontSize: 12, fontWeight: 600, background: gate ? '#e6f4ea' : '#f3f3f3', color: gate ? '#1e6b30' : '#666' }}>
-            Gate {gate ? 'ON' : 'OFF'} (BETA_GATE env)
-          </span>
+          <span className={gate ? 'adm-pill adm-pill--lime' : 'adm-pill'}>Gate {gate ? 'on' : 'off'} (BETA_GATE)</span>
         )}
       </div>
 
-      <form onSubmit={add} style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-        <select value={kind} onChange={e => setKind(e.target.value as BetaAccessKind)} style={input}>
-          <option value="email">Email address</option>
-          <option value="code">Invite code</option>
-        </select>
-        <input
-          value={value}
-          onChange={e => setValue(e.target.value)}
-          placeholder={kind === 'email' ? 'golfer@example.com' : 'Leave blank to generate'}
-          type={kind === 'email' ? 'email' : 'text'}
-          required={kind === 'email'}
-          style={{ ...input, minWidth: 260 }}
-        />
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (who, which club)" style={{ ...input, minWidth: 220 }} />
-        <button type="submit" disabled={busy} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#345231', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+      <form onSubmit={add} className="adm-card adm-card--form adm-row" style={{ marginBottom: 16 }}>
+        <label className="adm-field">
+          Kind
+          <select value={kind} onChange={e => setKind(e.target.value as BetaAccessKind)} className="adm-input">
+            <option value="email">Email address</option>
+            <option value="code">Invite code</option>
+          </select>
+        </label>
+        <label className="adm-field" style={{ flex: '1 1 240px' }}>
+          {kind === 'email' ? 'Email' : 'Code'}
+          <input
+            value={value}
+            onChange={e => setValue(e.target.value)}
+            placeholder={kind === 'email' ? 'golfer@example.com' : 'Leave blank to generate one'}
+            type={kind === 'email' ? 'email' : 'text'}
+            required={kind === 'email'}
+            minLength={kind === 'code' ? 4 : undefined}
+            maxLength={kind === 'code' ? 40 : 200}
+            className="adm-input"
+          />
+        </label>
+        <label className="adm-field" style={{ flex: '1 1 220px' }}>
+          Note
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Who, which club" maxLength={200} className="adm-input" />
+        </label>
+        <button type="submit" disabled={busy} className="adm-btn">
           {busy ? 'Adding…' : kind === 'email' ? 'Add email' : 'Create code'}
         </button>
-        {error && <span style={{ color: '#b00020', fontSize: 13 }}>{error}</span>}
+        {error && <p role="alert" className="adm-error" style={{ margin: 0, flexBasis: '100%' }}>{error}</p>}
       </form>
 
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-              <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Kind</th>
-              <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Value</th>
-              <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Note</th>
-              <th style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Added</th>
-              <th style={{ padding: '12px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {!loaded ? (
-              <tr><td colSpan={5} style={{ padding: 20, color: '#999' }}>Loading…</td></tr>
-            ) : rows.length === 0 ? (
-              <tr><td colSpan={5} style={{ padding: 20, color: '#999' }}>Nobody on the list yet. With the gate on, only admins could get in.</td></tr>
-            ) : rows.map(r => (
-              <tr key={r.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                <td style={{ padding: '12px 14px', color: '#333' }}>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    {r.kind === 'email' ? <Mail size={14} /> : <KeyRound size={14} />} {r.kind}
-                  </span>
-                </td>
-                <td style={{ padding: '12px 14px', fontFamily: r.kind === 'code' ? 'monospace' : undefined, color: '#111' }}>
-                  {r.kind === 'code' ? r.value.toUpperCase() : r.value}
-                  {r.kind === 'code' && (
-                    <button type="button" onClick={() => copy(r)} title="Copy" style={{ marginLeft: 8, border: 'none', background: 'none', cursor: 'pointer', color: '#666', verticalAlign: 'middle' }}>
-                      {copied === r.id ? <Check size={14} /> : <Copy size={14} />}
-                    </button>
-                  )}
-                </td>
-                <td style={{ padding: '12px 14px', color: '#666' }}>{r.note ?? ''}</td>
-                <td style={{ padding: '12px 14px', textAlign: 'right', color: '#666' }}>{new Date(r.created_at).toLocaleDateString('en-ZA')}</td>
-                <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                  <button type="button" onClick={() => remove(r.id)} title="Remove" style={{ border: 'none', background: 'none', cursor: 'pointer', color: '#b00020' }}>
-                    <Trash2 size={15} />
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {loadError ? (
+        <LoadError what="The beta list" onRetry={() => { setLoadError(null); setLoaded(false); setRefresh(n => n + 1) }} detail={loadError} />
+      ) : (
+        <div className="adm-card">
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>Kind</th>
+                  <th>Email or code</th>
+                  <th>Note</th>
+                  <th className="adm-num">Added</th>
+                  <th style={{ textAlign: 'right' }}>Remove</th>
+                </tr>
+              </thead>
+              <tbody>
+                {!loaded ? (
+                  <tr><td colSpan={5} className="adm-muted">Loading…</td></tr>
+                ) : rows.length === 0 ? (
+                  <tr><td colSpan={5} className="adm-muted" style={{ padding: 28, textAlign: 'center' }}>Nobody on the list yet. With the gate on, nobody could use the app, admins included.</td></tr>
+                ) : rows.map(r => (
+                  <tr key={r.id}>
+                    <td>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        {r.kind === 'email' ? <Mail size={14} aria-hidden /> : <KeyRound size={14} aria-hidden />} {r.kind === 'email' ? 'Email' : 'Code'}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={r.kind === 'code' ? 'adm-mono' : undefined} style={{ fontWeight: 600 }}>{shown(r)}</span>
+                      {r.kind === 'code' && (
+                        <button type="button" onClick={() => copy(r)} className="adm-icon-btn" aria-label={`Copy code ${shown(r)}`} title="Copy" style={{ width: 28, height: 28, marginLeft: 8, verticalAlign: 'middle' }}>
+                          {copied === r.id ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                      )}
+                    </td>
+                    <td className="adm-muted">{r.note ?? ''}</td>
+                    <td className="adm-num adm-muted">{sastDate(r.created_at)}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <button type="button" onClick={() => { setRemoveError(null); setRemoving(r) }} className="adm-icon-btn adm-icon-btn--warn" aria-label={`Remove ${shown(r)}`} title="Remove">
+                        <Trash2 size={15} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-      <p style={{ fontSize: 12, color: '#888', marginTop: 12 }}>
+      <p className="adm-small" style={{ marginTop: 12 }}>
         Turn the gate on by setting <code>BETA_GATE=on</code> in Vercel (Production or Preview) and redeploying. Admin accounts are not exempt: add your own email first.
       </p>
+
+      <ConfirmModal
+        open={removing !== null}
+        title={`Remove ${removing ? shown(removing) : ''}?`}
+        message={removing?.kind === 'code'
+          ? 'Anyone who got in with this code loses access on their next page view, and it stops working at /beta.'
+          : 'They lose access on their next page view while the gate is on.'}
+        confirmLabel="Remove"
+        onConfirm={remove}
+        onCancel={() => setRemoving(null)}
+        busy={removeBusy}
+        error={removeError}
+      />
     </div>
   )
 }

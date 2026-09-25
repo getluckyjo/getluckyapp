@@ -1,77 +1,44 @@
 'use client'
 
-import { LogOut, Shield } from 'lucide-react'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { LogOut, Menu, Shield } from 'lucide-react'
+import { useAuth } from '@/context/AuthContext'
 
 interface AdminTopBarProps {
   adminName?: string
   adminEmail?: string
+  /** Opens the sidebar as a drawer; the button shows below 900 px wide only. */
+  onMenu?: () => void
 }
 
-export default function AdminTopBar({ adminName, adminEmail }: AdminTopBarProps) {
+export default function AdminTopBar({ adminName, adminEmail, onMenu }: AdminTopBarProps) {
+  const { signOut } = useAuth()
+  const router = useRouter()
+  const [leaving, setLeaving] = useState(false)
+
+  // Sign out the way the app's Account screen does, then to the sign-in screen.
+  async function logOut() {
+    setLeaving(true)
+    try { await signOut() } finally { router.replace('/auth') }
+  }
+
   return (
-    <header
-      style={{
-        height: 64,
-        background: '#fff',
-        borderBottom: '1px solid #e5e5e5',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '0 24px',
-        flexShrink: 0,
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Shield size={18} color="#335231" />
-        <span style={{ fontSize: 13, color: '#666', fontWeight: 500 }}>Admin Panel</span>
-      </div>
+    <header className="adm-top">
+      <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button type="button" className="adm-icon-btn adm-menu-btn" onClick={onMenu} aria-label="Open the menu"><Menu size={18} /></button>
+        <span className="adm-top-tag"><Shield size={17} aria-hidden /> Admin panel</span>
+      </span>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#111' }}>
-            {adminName || 'Admin'}
-          </div>
-          <div style={{ fontSize: 12, color: '#999' }}>
-            {adminEmail || 'admin@getlucky.golf'}
-          </div>
+      <div className="adm-top-who">
+        <div className="adm-top-id">
+          <div className="adm-top-name">{adminName || 'Admin'}</div>
+          {adminEmail && <div className="adm-top-email">{adminEmail}</div>}
         </div>
-
-        <div
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            background: '#335231',
-            color: '#fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 14,
-            fontWeight: 700,
-          }}
-        >
-          {(adminName || 'A').charAt(0).toUpperCase()}
-        </div>
-
-        <a
-          href="/api/auth/signout"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 12px',
-            borderRadius: 6,
-            border: '1px solid #e5e5e5',
-            background: '#fff',
-            color: '#666',
-            fontSize: 13,
-            textDecoration: 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <LogOut size={14} />
-          Logout
-        </a>
+        <div className="adm-avatar" aria-hidden>{(adminName || adminEmail || 'A').charAt(0).toUpperCase()}</div>
+        <button type="button" onClick={logOut} disabled={leaving} className="adm-btn adm-btn--quiet">
+          <LogOut size={14} aria-hidden /> {leaving ? 'Logging out…' : 'Log out'}
+        </button>
       </div>
     </header>
   )

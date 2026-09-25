@@ -1,24 +1,24 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
-import { apiError, parseQuery, pagination, searchTerm, boolString } from '@/lib/api/http'
-import { orSearchTerm } from '@/lib/admin/data'
+import { apiError, parseQuery, pagination, boolString } from '@/lib/api/http'
 import { PAYMENT_SELECT, betsByReference, namesForPayments, toPaymentRecord, type PaymentRowLike } from '@/lib/admin/payments'
 import type { AdminPaymentRecord, PaginatedResponse } from '@/types/admin'
+import { paymentFilters, paymentSearchConditions, paymentsSource } from './filters'
 
 const Query = pagination.extend({
-  status: z.enum(['complete', 'amount_mismatch', 'pending', 'failed']).optional(),
-  /** true → only payments that never became a bet: the ones needing a person. */
+  ...paymentFilters,
+  /** true → only payments that took money and never became a bet: the ones needing a person. */
   unmatched: boolString.optional(),
-  search: searchTerm.optional(),
 })
 
 /**
  * GET /api/admin/payments — the PayFast ledger.
  *
  * Every payment the app has recorded, newest first, with the bet it produced
- * (or the fact that it produced none). `unmatched=true` narrows to complete
- * payments with no bet, which is the queue a person has to clear.
+ * (or the fact that it produced none). `unmatched=true` reads migration 032's
+ * admin_unmatched_payments view instead: complete or amount_mismatch, and no
+ * bet by either link, which is the queue a person has to clear. A status
+ * narrows either one.
  */
 export async function GET(request: Request) {
   const auth = await requireAdmin()
@@ -29,20 +29,12 @@ export async function GET(request: Request) {
   const admin = auth.adminClient
 
   try {
-    let query = admin.from('payfast_payments').select(PAYMENT_SELECT, { count: 'exact' })
+    let query = admin.from(paymentsSource(unmatched)).select(PAYMENT_SELECT, { count: 'exact' })
     if (status) query = query.eq('status', status)
-    if (unmatched === true) query = query.eq('status', 'complete').is('bet_id', null)
+    if (search) query = query.or((await paymentSearchConditions(admin, search)).join(','))
 
-    if (search) {
-      const s = orSearchTerm(search)
-      const { data: users } = await admin.from('profiles').select('id').or(`name.ilike.*${s}*,email.ilike.*${s}*`).limit(100)
-      const conds = [`m_payment_id.ilike.*${s}*`, `pf_payment_id.ilike.*${s}*`]
-      const userIds = ((users ?? []) as { id: string }[]).map(u => u.id)
-      if (userIds.length) conds.push(`user_id.in.(${userIds.join(',')})`)
-      query = query.or(conds.join(','))
-    }
-
-    query = query.order('created_at', { ascending: false })
+    // The reference breaks ties, so a payment cannot appear on two pages or on none.
+    query = query.order('created_at', { ascending: false }).order('m_payment_id')
     const offset = (page - 1) * limit
     const { data, count, error } = await query.range(offset, offset + limit - 1)
     if (error) throw error

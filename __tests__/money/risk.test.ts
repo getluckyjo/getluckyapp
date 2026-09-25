@@ -233,13 +233,67 @@ describe('admin review discipline', () => {
     expect(b.status).toBe('verified')
   })
 
-  it('batch approve records that no checklist was done; batch reject needs a reason', async () => {
+  it('batch approve is refused (approval goes through each checklist); batch reject needs a reason and reports each claim', async () => {
     const b = bet(USER_A.id)
     const [v] = db.seed('verifications', { bet_id: b.id, status: 'under_review' })
-    expect((await batchReview(jsonRequest('http://x', { ids: [v.id], action: 'reject' }) as never)).status).toBe(400)
-    const res = await batchReview(jsonRequest('http://x', { ids: [v.id], action: 'approve', notes: 'Reviewed together with the club on the phone.' }) as never)
+    const [done] = db.seed('verifications', { bet_id: bet(USER_C.id).id, status: 'approved' })
+    const approve = await batchReview(jsonRequest('http://x', { ids: [v.id], action: 'approve', notes: 'Reviewed together with the club on the phone.' }) as never)
+    expect(approve.status).toBe(400)
+    expect(await approve.json()).toMatchObject({ code: 'BATCH_APPROVE_NOT_ALLOWED' })
+    expect(v.status).toBe('under_review')
+    expect(b.status).toBe('claimed')
+    expect(v.review_checklist).toBeUndefined()
+
+    expect(await (await batchReview(jsonRequest('http://x', { ids: [v.id], action: 'reject' }) as never)).json()).toMatchObject({ code: 'NOTES_REQUIRED' })
+    expect(await (await batchReview(jsonRequest('http://x', { ids: [v.id], action: 'reject', notes: 'short' }) as never)).json()).toMatchObject({ code: 'NOTES_REQUIRED' })
+    const res = await batchReview(jsonRequest('http://x', { ids: [v.id, done.id], action: 'reject', notes: 'Club has no record of the certificate.' }) as never)
     expect(res.status).toBe(200)
-    expect(v.review_checklist).toMatchObject({ batch: true, completed_by: USER_B.id })
+    const body = await res.json()
+    expect(body.results).toEqual([
+      { id: v.id, success: true },
+      { id: done.id, success: false, error: expect.stringContaining('approved') },
+    ])
+    expect(v).toMatchObject({ status: 'rejected', reviewer_notes: 'Club has no record of the certificate.' })
+    expect(done.status).toBe('approved')
+  })
+
+  it('batch under review needs no notes', async () => {
+    const [v] = db.seed('verifications', { bet_id: bet(USER_A.id).id, status: 'documents_received' })
+    const res = await batchReview(jsonRequest('http://x', { ids: [v.id], action: 'under_review' }) as never)
+    expect(await res.json()).toMatchObject({ results: [{ id: v.id, success: true }], newStatus: 'under_review' })
+    expect(v.status).toBe('under_review')
+  })
+
+  it('detail with ?fresh=0 skips the rules and returns the stored result, saying so', async () => {
+    const b = bet(USER_A.id, { capture_lat: null, risk_score: 4, risk_flags: [{ rule: 'hole_cluster', severity: 'medium', detail: { claims: 3, window_days: 30 } }], risk_evaluated_at: ago(H) })
+    const [v] = db.seed('verifications', { bet_id: b.id, status: 'documents_received' })
+    const quick = await (await adminDetail(new Request('http://x?fresh=0') as never, params(v.id as string))).json()
+    expect(quick).toMatchObject({ riskCheck: 'stored', riskScore: 4, riskEvaluatedAt: ago(H) })
+    expect(quick.riskFlags.map((f: RiskFlag) => f.rule)).toEqual(['hole_cluster'])
+    const full = await (await adminDetail(new Request('http://x') as never, params(v.id as string))).json()
+    expect(full.riskCheck).toBe('fresh')
+    expect(full.riskFlags.map((f: RiskFlag) => f.rule)).toContain('no_location')
+  })
+
+  it('when the rules cannot run, the detail shows the stored flags and says the check failed, never a clean score', async () => {
+    const b = bet(USER_A.id, { risk_score: 6, risk_flags: [{ rule: 'shared_ip', severity: 'high', detail: { accounts: 2, window_days: 30 } }], risk_evaluated_at: ago(D) })
+    const [v] = db.seed('verifications', { bet_id: b.id, status: 'documents_received' })
+    // The rules end by writing to the bet; make that write fail.
+    const base = createFakeClient(db)
+    const failingWrites = {
+      ...base,
+      from(table: string) {
+        const q = base.from(table)
+        if (table !== 'bets') return q
+        return Object.assign(q, { update: () => ({ eq: async () => ({ data: null, error: { message: 'database is read-only' } }) }) })
+      },
+    }
+    adminAuth.requireAdmin.mockResolvedValue({ ok: true, user: { id: USER_B.id }, adminClient: failingWrites })
+    const res = await adminDetail(new Request('http://x') as never, params(v.id as string))
+    expect(res.status).toBe(200)
+    const detail = await res.json()
+    expect(detail).toMatchObject({ riskCheck: 'failed', riskScore: 6, riskEvaluatedAt: ago(D) })
+    expect(detail.riskFlags.map((f: RiskFlag) => f.rule)).toEqual(['shared_ip'])
   })
 
   it('paid needs a payout reference and stamps the verification', async () => {

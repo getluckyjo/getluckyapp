@@ -49,11 +49,13 @@ export async function requireAdmin(): Promise<AdminAuth> {
     }
 
     const adminClient = createAdminClient()
-    const { data: profile } = await adminClient
+    const { data: profile, error: profileError } = await adminClient
       .from('profiles')
       .select('is_admin')
       .eq('id', user.id)
       .maybeSingle()
+    // A database blip is not a verdict: say "could not be reached", not "not an admin".
+    if (profileError) throw profileError
 
     if (!profile?.is_admin) {
       log.warn('admin.auth_not_admin', { user_id: user.id, has_profile: !!profile })

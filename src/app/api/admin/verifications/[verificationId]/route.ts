@@ -8,7 +8,8 @@ import { log } from '@/lib/observability/log'
 import { witnessesForBet } from '@/lib/claims/witnesses'
 import { ChecklistSchema, MIN_DECISION_NOTES } from '@/lib/claims/checklist'
 import { tryRefreshClaimRisk } from '@/lib/risk/rules'
-import type { CaptureAttestation, VerificationDetail } from '@/types/admin'
+import type { CaptureAttestation, RiskFlag } from '@/types/admin'
+import type { ReviewMedia, VerificationReview } from '../review-types'
 
 type Params = { params: Promise<{ verificationId: string }> }
 
@@ -17,6 +18,8 @@ interface BetDetailRow extends BetRowLike {
   video_sha256: string | null
   video_bytes: number | null
   video_uploaded_at: string | null
+  footage_purged_at: string | null
+  risk_evaluated_at: string | null
   capture_started_at: string | null
   capture_ended_at: string | null
   capture_duration_ms: number | null
@@ -28,6 +31,10 @@ interface BetDetailRow extends BetRowLike {
 }
 
 const CAPTURE_COLUMNS = 'capture_started_at, capture_ended_at, capture_duration_ms, capture_lat, capture_lng, capture_accuracy_m, capture_distance_m, capture_user_agent'
+const BET_DETAIL_SELECT = `${BET_SELECT}, expires_at, video_sha256, video_bytes, video_uploaded_at, footage_purged_at, risk_evaluated_at, ${CAPTURE_COLUMNS}`
+
+/** Signed links last an hour: long enough to review, short enough not to leak. */
+const LINK_SECONDS = 3600
 
 function captureOf(bet: BetDetailRow | undefined): CaptureAttestation {
   const endedAt = bet?.capture_ended_at ?? null
@@ -45,12 +52,35 @@ function captureOf(bet: BetDetailRow | undefined): CaptureAttestation {
   }
 }
 
-export async function GET(_request: Request, { params }: Params) {
+type Admin = Extract<Awaited<ReturnType<typeof requireAdmin>>, { ok: true }>['adminClient']
+
+/** The payment that bought the swing. A free swing has no stake and no payment. */
+async function paymentFor(admin: Admin, bet: BetDetailRow | undefined): Promise<VerificationReview['payment']> {
+  if (!bet || !(bet.stake_pence > 0)) return null
+  // The bet's own reference is never rewritten; the ledger's bet_id link is best-effort.
+  const q = admin.from('payfast_payments').select('m_payment_id, amount_cents, status')
+  const { data, error } = bet.payment_intent_id
+    ? await q.eq('m_payment_id', bet.payment_intent_id).maybeSingle()
+    : await q.eq('bet_id', bet.id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  if (error) throw error
+  const row = data as { m_payment_id: string; amount_cents: number; status: NonNullable<VerificationReview['payment']>['status'] } | null
+  if (!row) return { status: 'missing', amountCents: null, reference: bet.payment_intent_id }
+  return { status: row.status, amountCents: row.amount_cents, reference: row.m_payment_id }
+}
+
+/**
+ * GET — one claim with everything the reviewer needs. The risk rules are
+ * re-run each time the claim is opened, unless the request says `?fresh=0`
+ * (a reload after an action, or for new links), when the stored result is
+ * used. Everything that depends only on the claim and its bet runs at once.
+ */
+export async function GET(request: Request, { params }: Params) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const { verificationId } = await params
   if (!uuid.safeParse(verificationId).success) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const admin = auth.adminClient
+  const recheck = new URL(request.url).searchParams.get('fresh') !== '0'
 
   try {
     const { data: rowRaw, error } = await admin.from('verifications').select('*').eq('id', verificationId).maybeSingle()
@@ -58,42 +88,66 @@ export async function GET(_request: Request, { params }: Params) {
     if (!rowRaw) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     const row = rowRaw as VerificationRowLike
 
-    const { data: betRaw } = await admin
-      .from('bets')
-      .select(`${BET_SELECT}, expires_at, video_sha256, video_bytes, video_uploaded_at, ${CAPTURE_COLUMNS}`)
-      .eq('id', row.bet_id)
-      .maybeSingle()
+    const { data: betRaw, error: betError } = await admin.from('bets').select(BET_DETAIL_SELECT).eq('id', row.bet_id).maybeSingle()
+    if (betError) throw betError
     const bet = (betRaw ?? undefined) as BetDetailRow | undefined
 
-    // Re-evaluate the risk rules every time a reviewer opens the claim, so
-    // what they see reflects everything that has happened since submission.
-    const risk = bet ? await tryRefreshClaimRisk(admin, bet.id) : null
+    const unsignedMedia: ReviewMedia[] = []
+    /** A signed link; null when there is no file; null and noted in unsignedMedia when the link could not be made. */
+    const sign = async (media: ReviewMedia, bucket: string, path: string | null, download = false) => {
+      if (!path) return null
+      const { data, error: signError } = await admin.storage.from(bucket).createSignedUrl(path, LINK_SECONDS, download ? { download: true } : undefined)
+      if (signError || !data?.signedUrl) {
+        log.warn('admin.review_sign_failed', { verification_id: verificationId, media, error: signError?.message ?? 'no url' })
+        if (!unsignedMedia.includes(media)) unsignedMedia.push(media)
+        return null
+      }
+      return data.signedUrl
+    }
+    const noRow = Promise.resolve({ data: null, error: null })
+    const signedAt = new Date().toISOString()
 
-    const [historyRes, profileRes, eventsRes, witnesses] = await Promise.all([
-      bet ? admin.from('bets').select(BET_SELECT).eq('user_id', bet.user_id).order('created_at', { ascending: false }).limit(5) : Promise.resolve({ data: [] as BetRowLike[] }),
-      bet ? admin.from('profiles').select('total_attempts').eq('id', bet.user_id).maybeSingle() : Promise.resolve({ data: null }),
+    const [risk, { history, names }, profileRes, holeRes, payment, eventsRes, witnesses, links] = await Promise.all([
+      bet && recheck ? tryRefreshClaimRisk(admin, bet.id) : Promise.resolve(null),
+      (async () => {
+        const res = bet
+          ? await admin.from('bets').select(BET_SELECT).eq('user_id', bet.user_id).order('created_at', { ascending: false }).limit(5)
+          : { data: [] as BetRowLike[] }
+        const list = (res.data ?? []) as BetRowLike[]
+        return { history: list, names: await namesForBets(admin, bet ? [bet, ...list] : list) }
+      })(),
+      bet ? admin.from('profiles').select('email, total_attempts, suspended_at, suspended_reason, age_verified_at').eq('id', bet.user_id).maybeSingle() : noRow,
+      bet ? admin.from('holes').select('par, distance_metres').eq('id', bet.hole_id).maybeSingle() : noRow,
+      paymentFor(admin, bet),
       admin.from('claim_events').select('id, table_name, action, actor_id, actor_role, changed, created_at').eq('bet_id', row.bet_id).order('created_at', { ascending: true }).limit(200),
       witnessesForBet(admin, row.bet_id),
+      Promise.all([
+        sign('video', 'shot-videos', bet?.video_url ?? null),
+        sign('certificate', 'verification-docs', row.certificate_path),
+        sign('certificate', 'verification-docs', row.certificate_path, true),
+        sign('affidavit', 'verification-docs', row.affidavit_path),
+        sign('affidavit', 'verification-docs', row.affidavit_path, true),
+      ]),
     ])
-    const history = (historyRes.data ?? []) as BetRowLike[]
-    const names = await namesForBets(admin, bet ? [bet, ...history] : history)
+    const [videoSignedUrl, certificateSignedUrl, certificateDownloadUrl, affidavitSignedUrl, affidavitDownloadUrl] = links
+    const profile = profileRes.data as { email: string | null; total_attempts: number | null; suspended_at: string | null; suspended_reason: string | null; age_verified_at: string | null } | null
+    const hole = holeRes.data as { par: number | null; distance_metres: number | null } | null
 
-    const sign = async (bucket: string, path: string | null) => {
-      if (!path) return null
-      const { data } = await admin.storage.from(bucket).createSignedUrl(path, 3600)
-      return data?.signedUrl ?? null
-    }
-    const [videoSignedUrl, certificateSignedUrl, affidavitSignedUrl] = await Promise.all([
-      sign('shot-videos', bet?.video_url ?? null),
-      sign('verification-docs', row.certificate_path),
-      sign('verification-docs', row.affidavit_path),
-    ])
+    // When the rules could not run (or were skipped), the bet's stored result
+    // stands, and the page says so: never a clean "no rules fired" by default.
+    const storedFlags = Array.isArray(bet?.risk_flags) ? (bet.risk_flags as RiskFlag[]) : []
+    const riskCheck: VerificationReview['riskCheck'] = risk ? 'fresh' : !bet || !recheck ? 'stored' : 'failed'
 
-    const detail: VerificationDetail = {
+    const detail: VerificationReview = {
       ...toQueueItem(row, bet, names),
       videoSignedUrl,
       certificateSignedUrl,
       affidavitSignedUrl,
+      certificateDownloadUrl,
+      affidavitDownloadUrl,
+      unsignedMedia,
+      signedAt,
+      footagePurgedAt: bet?.footage_purged_at ?? null,
       capture: captureOf(bet),
       certificateSeal: { sha256: row.certificate_sha256 ?? null, bytes: row.certificate_bytes ?? null },
       affidavitSeal: { sha256: row.affidavit_sha256 ?? null, bytes: row.affidavit_bytes ?? null },
@@ -104,12 +158,22 @@ export async function GET(_request: Request, { params }: Params) {
         linkExpired: !w.response && !!w.requested_at && (!w.token_expires_at || Date.parse(w.token_expires_at) < Date.now()),
         createdAt: w.created_at,
       })),
-      riskScore: risk?.score ?? 0,
-      riskFlags: risk?.flags ?? [],
+      riskScore: risk ? risk.score : bet?.risk_score ?? 0,
+      riskFlags: risk ? risk.flags : storedFlags,
+      riskCheck,
+      riskEvaluatedAt: risk ? new Date().toISOString() : bet?.risk_evaluated_at ?? null,
       reviewChecklist: (row.review_checklist as Record<string, unknown> | null) ?? null,
       payoutReference: bet?.payout_reference ?? null,
       userBetHistory: history.map(b => toAdminBetRecord(b, names)),
-      userTotalAttempts: profileRes.data?.total_attempts ?? 0,
+      userTotalAttempts: profile?.total_attempts ?? 0,
+      player: {
+        email: profile?.email ?? null,
+        suspendedAt: profile?.suspended_at ?? null,
+        suspendedReason: profile?.suspended_reason ?? null,
+        ageVerifiedAt: profile?.age_verified_at ?? null,
+      },
+      payment,
+      hole: { par: hole?.par ?? null, distanceMetres: hole?.distance_metres ?? null },
       betStatus: bet?.status ?? null,
       betCreatedAt: bet?.created_at ?? null,
       betExpiresAt: bet?.expires_at ?? null,

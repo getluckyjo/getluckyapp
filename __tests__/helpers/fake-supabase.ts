@@ -27,6 +27,9 @@
  * trigger does. A unique key can span columns (golf_day_players).
  * `db.beforeInsert` lets a test slip a row in just ahead of an insert, which
  * is how a race between a route's check and its write is staged.
+ *
+ * Views the routes read (VIEWS) are computed from the seeded tables on every
+ * read, as Postgres does, so a test seeds the tables and the view follows.
  */
 import { randomUUID } from 'node:crypto'
 
@@ -44,6 +47,7 @@ interface PostgrestError {
   code: string
   message: string
   details?: string
+  hint?: string
 }
 
 interface Result<T = unknown> {
@@ -111,6 +115,15 @@ function promoCodeTrigger(db: FakeDb, row: Row): PostgrestError | null {
   const used = db.rows('bets').filter(b => b.promo_code_id === row.promo_code_id).length
   if (used >= Number(code.max_uses)) return refuse('PROMO_CODE_EXHAUSTED')
   return null
+}
+
+/** Read-only views, read like tables. */
+const VIEWS: Record<string, (db: FakeDb) => Row[]> = {
+  // Mirrors admin_unmatched_payments in migration 032: took money, no bet_id, and no bet carrying the reference.
+  admin_unmatched_payments: db => db.rows('payfast_payments').filter(p =>
+    (p.status === 'complete' || p.status === 'amount_mismatch') &&
+    p.bet_id == null &&
+    !db.rows('bets').some(b => b.payment_intent_id === p.m_payment_id)),
 }
 
 export class FakeDb {
@@ -233,7 +246,8 @@ export class Builder implements PromiseLike<Result> {
   single() { this.singleMode = 'one'; return this }
 
   private matching(): Row[] {
-    let rows = this.db.rows(this.table).filter(r => this.filters.every(f => f(r)))
+    const source = VIEWS[this.table]?.(this.db) ?? this.db.rows(this.table)
+    let rows = source.filter(r => this.filters.every(f => f(r)))
     if (this.orderBy.length) {
       const cmp = (x: unknown, y: unknown) =>
         typeof x === 'number' && typeof y === 'number' ? x - y
@@ -390,7 +404,8 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
       }
       return new Builder(db, table)
     },
-    async rpc(fn: string, args: unknown) {
+    // Typed as any Result, so a test can stand in its own answer for one function.
+    async rpc(fn: string, args: unknown): Promise<Result> {
       rpcCalls.push({ fn, args })
       if (fn === 'increment_attempts') {
         const { user_id } = args as { user_id: string }

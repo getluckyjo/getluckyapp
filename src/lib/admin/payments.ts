@@ -50,6 +50,8 @@ export async function namesForPayments(admin: SupabaseClient, rows: PaymentRowLi
     courseIds.length ? admin.from('courses').select('id, name').in('id', courseIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     holeIds.length ? admin.from('holes').select('id, hole_number').in('id', holeIds) : Promise.resolve({ data: [] as { id: string; hole_number: number }[] }),
   ])
+  // A failed lookup is an error, not a page of blank names.
+  for (const r of [profiles, courses, holes]) if ('error' in r && r.error) throw r.error
 
   return {
     users: new Map((profiles.data ?? []).map((p: { id: string; name: string | null; email: string | null }) => [p.id, { name: p.name, email: p.email }])),
@@ -89,7 +91,8 @@ export function toPaymentRecord(r: PaymentRowLike, names: PaymentNames): AdminPa
 export async function betsByReference(admin: SupabaseClient, rows: PaymentRowLike[]): Promise<Map<string, string>> {
   const unlinked = rows.filter(r => !r.bet_id).map(r => r.m_payment_id)
   if (!unlinked.length) return new Map()
-  const { data } = await admin.from('bets').select('id, payment_intent_id').in('payment_intent_id', unlinked)
+  const { data, error } = await admin.from('bets').select('id, payment_intent_id').in('payment_intent_id', unlinked)
+  if (error) throw error
   return new Map(
     ((data ?? []) as { id: string; payment_intent_id: string | null }[])
       .filter(b => b.payment_intent_id)

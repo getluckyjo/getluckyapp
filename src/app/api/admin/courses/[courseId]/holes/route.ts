@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
-import { apiError, parseBody } from '@/lib/api/http'
+import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { log } from '@/lib/observability/log'
 import { HoleFields } from '@/lib/admin/schemas'
 
@@ -28,6 +28,7 @@ export async function POST(request: Request, { params }: Params) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const { courseId } = await params
+  if (!uuid.safeParse(courseId).success) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const body = await parseBody(request, HoleFields)
   if (!body.ok) return body.response
 
@@ -38,7 +39,8 @@ export async function POST(request: Request, { params }: Params) {
       .select('id')
       .single()
     if (error) {
-      if (error.code === '23505') return NextResponse.json({ error: 'That hole number already exists on this course', code: 'DUPLICATE_HOLE' }, { status: 409 })
+      if (error.code === '23505') return NextResponse.json({ error: `Hole ${body.data.hole_number} is already on this course. Edit that one instead.`, code: 'DUPLICATE_HOLE' }, { status: 409 })
+      if (error.code === '23503') return NextResponse.json({ error: 'Not found' }, { status: 404 })
       throw error
     }
     log.info('admin.hole_created', { admin_id: auth.user.id, course_id: courseId, hole_id: data.id })
