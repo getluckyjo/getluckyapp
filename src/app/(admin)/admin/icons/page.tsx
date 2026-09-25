@@ -177,7 +177,7 @@ export default function AdminIconsPage() {
           Order
           <input value={sortOrder} onChange={e => setSortOrder(e.target.value)} placeholder="100" type="number" min={0} max={10000} step={1} className="adm-input" style={{ width: 96 }} />
         </label>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, fontWeight: 600, minHeight: 44 }}>
+        <label className="adm-check" style={{ minHeight: 44 }}>
           <input type="checkbox" checked={isCaptain} onChange={e => setIsCaptain(e.target.checked)} /> Captain
         </label>
         <button type="submit" disabled={busy} className="adm-btn">
@@ -201,7 +201,7 @@ export default function AdminIconsPage() {
                   <th>Order</th>
                   <th>Tagline</th>
                   <th>Photo</th>
-                  <th style={{ textAlign: 'right' }}>Picks</th>
+                  <th className="adm-num">Picks</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -269,7 +269,7 @@ export default function AdminIconsPage() {
                           ? <img src={r.photo_url} alt="" width={36} height={36} style={{ borderRadius: '50%', objectFit: 'cover', display: 'block' }} />
                           : <span className="adm-muted">Initials</span>}
                       </td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{r.votes.toLocaleString('en-ZA')}</td>
+                      <td className="adm-num" style={{ fontWeight: 700 }}>{r.votes.toLocaleString('en-ZA')}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                           {edit ? (

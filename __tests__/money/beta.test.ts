@@ -137,6 +137,14 @@ describe('/api/admin/beta', () => {
     expect(del.status).toBe(200)
     expect(db.rows('beta_access')).toHaveLength(2)
     expect((await removeBeta(new Request('http://x/api/admin/beta?id=abc', { method: 'DELETE' }))).status).toBe(400)
+    // Removing someone who is not on the list says so, rather than "done".
+    expect((await removeBeta(new Request('http://x/api/admin/beta?id=42', { method: 'DELETE' }))).status).toBe(404)
+  })
+
+  it('a failed read is a 500, never an empty list', async () => {
+    asAdmin()
+    adminClient.createAdminClient.mockImplementation(() => createFakeClient(db, { failTable: { beta_access: { code: '57014', message: 'timeout' } } }))
+    expect((await listBeta()).status).toBe(500)
   })
 
   it('rejects a bad email and a duplicate', async () => {

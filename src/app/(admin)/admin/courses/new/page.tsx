@@ -109,8 +109,8 @@ export default function AdminNewCoursePage() {
         <p className="adm-hint" style={{ margin: '-6px 0 0' }}>
           Both or neither. Used to measure how far from the course a claim&apos;s footage was recorded: in Google Maps, right-click the clubhouse and copy the first line.
         </p>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
-          <input type="checkbox" checked={form.is_partner} onChange={(e) => setForm({ ...form, is_partner: e.target.checked })} style={{ width: 18, height: 18 }} />
+        <label className="adm-check">
+          <input type="checkbox" checked={form.is_partner} onChange={(e) => setForm({ ...form, is_partner: e.target.checked })} />
           Partner course <span className="adm-hint">golfers can pay to play here</span>
         </label>
 

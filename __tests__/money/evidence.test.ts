@@ -250,6 +250,11 @@ describe('GET /api/admin/verifications/[id] — what the reviewer sees', () => {
     const get = async (id: unknown) => (await adminDetail(new Request('http://x?fresh=0') as never, { params: Promise.resolve({ verificationId: id as string }) })).json()
     expect((await get(vFree.id)).payment).toBeNull()
     expect((await get(vPaid.id)).payment).toEqual({ status: 'missing', amountCents: null, reference: 'gl_gone' })
+    // No reference on the bet: the ledger's own link to it is used.
+    const linked = ownBet({ status: 'claimed', stake_pence: 5000, payment_intent_id: null })
+    db.seed('payfast_payments', { m_payment_id: 'gl_linked', bet_id: linked.id, amount_cents: 5000, status: 'complete', created_at: '2026-09-20T07:00:00Z' })
+    const [vLinked] = db.seed('verifications', { bet_id: linked.id, status: 'pending' })
+    expect((await get(vLinked.id)).payment).toEqual({ status: 'complete', amountCents: 5000, reference: 'gl_linked' })
   })
 
   it('a link that cannot be signed is reported as such, not as missing evidence', async () => {

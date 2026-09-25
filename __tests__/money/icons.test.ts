@@ -169,6 +169,38 @@ describe('admin icons', () => {
     expect((await adminDelete(new Request(`http://x/api/admin/icons/${data.id}`, { method: 'DELETE' }), params(data.id))).status).toBe(200)
     expect(db.rows('icons').find(i => i.id === data.id)).toBeUndefined()
   })
+
+  it('counts picks exactly past PostgREST\'s 1,000-row cap', async () => {
+    asAdmin()
+    db.seed('icon_votes', ...Array.from({ length: 1200 }, (_, n) => ({ user_id: `u${n}`, icon_id: n < 1100 ? ICON_A : ICON_B })))
+    const json = await (await adminList()).json()
+    expect(json.totalVotes).toBe(1200)
+    expect(json.data.find((i: { id: string }) => i.id === ICON_A).votes).toBe(1100)
+    expect(json.data.find((i: { id: string }) => i.id === ICON_B).votes).toBe(100)
+  })
+
+  it('a failed count is a 500, never "no picks"', async () => {
+    asAdmin()
+    adminClient.createAdminClient.mockImplementation(() => createFakeClient(db, { failTable: { icon_votes: { code: '57014', message: 'timeout' } } }))
+    expect((await adminList()).status).toBe(500)
+  })
+
+  it('an emptied Order box is no change, not 0; name, tagline and photo can be edited', async () => {
+    asAdmin()
+    const icon = db.rows('icons').find(i => i.id === ICON_A)!
+    expect((await adminPatch(post(`http://x/api/admin/icons/${ICON_A}`, { sortOrder: '' }), params(ICON_A))).status).toBe(400)
+    expect(icon.sort_order).toBe(1)
+    const res = await adminPatch(post(`http://x/api/admin/icons/${ICON_A}`, { name: 'Ernie Els (SA)', tagline: 'Four majors', photoUrl: 'https://example.test/els.jpg', sortOrder: '' }), params(ICON_A))
+    expect(res.status).toBe(200)
+    expect(icon).toMatchObject({ name: 'Ernie Els (SA)', tagline: 'Four majors', photo_url: 'https://example.test/els.jpg', sort_order: 1 })
+    expect((await adminPatch(post(`http://x/api/admin/icons/${ICON_A}`, { photoUrl: null }), params(ICON_A))).status).toBe(200)
+    expect(icon.photo_url).toBeNull()
+  })
+
+  it('deleting an Icon that is not there is a 404', async () => {
+    asAdmin()
+    expect((await adminDelete(new Request('http://x', { method: 'DELETE' }), params('88888888-8888-4888-8888-888888888888'))).status).toBe(404)
+  })
 })
 
 describe('lib', () => {

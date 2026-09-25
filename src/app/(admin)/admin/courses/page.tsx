@@ -144,9 +144,9 @@ export default function AdminCoursesPage() {
                   <th>Course</th>
                   <th>Location</th>
                   <th>Partner</th>
-                  <th style={{ textAlign: 'right' }}>Holes on sale</th>
-                  <th style={{ textAlign: 'right' }}>Officials</th>
-                  <th style={{ textAlign: 'right' }}>Bets</th>
+                  <th className="adm-num">Holes on sale</th>
+                  <th className="adm-num">Officials</th>
+                  <th className="adm-num">Bets</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -166,13 +166,13 @@ export default function AdminCoursesPage() {
                       <td>
                         <span className={course.is_partner ? 'adm-pill adm-pill--lime' : 'adm-pill'}>{course.is_partner ? 'Partner' : 'Not yet'}</span>
                       </td>
-                      <td style={{ textAlign: 'right' }}>{course.activeHoleCount} of {course.holeCount}</td>
-                      <td style={{ textAlign: 'right' }}>
+                      <td className="adm-num">{course.activeHoleCount} of {course.holeCount}</td>
+                      <td className="adm-num">
                         {noOfficial
                           ? <span className="adm-pill adm-pill--red" title="A claim here has nobody to confirm the certificate">None</span>
                           : course.officialCount}
                       </td>
-                      <td style={{ textAlign: 'right' }}>{course.totalBets.toLocaleString('en-ZA')}</td>
+                      <td className="adm-num">{course.totalBets.toLocaleString('en-ZA')}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
                           <button type="button" onClick={() => ask({ kind: 'partner', course })} className="adm-btn adm-btn--quiet">

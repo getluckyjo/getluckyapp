@@ -12,7 +12,7 @@ import Pagination from '@/components/admin/Pagination'
 import { formatZAR } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminUserRecord, AdminBetRecord, AdminPaymentRecord } from '@/types/admin'
-import { showDate } from '../dates'
+import { sastDate, sastDateTime } from '../../bets/client-helpers'
 
 /** A bet in the golfer's history, with the claim it made when they declared a hole-in-one. */
 type UserBet = AdminBetRecord & { claim: { id: string; status: string } | null }
@@ -114,7 +114,7 @@ export default function AdminUserDetailPage() {
             {user.isAdmin && <span className="adm-pill adm-pill--gold" style={{ marginLeft: 12, verticalAlign: 'middle' }}>Admin</span>}
           </h1>
           <p className="adm-lead">
-            {user.email} · joined {showDate(user.createdAt)}
+            {user.email} · joined {sastDate(user.createdAt)}
             {user.paymentMethod && ` · pays by ${PAYMENT_METHODS[user.paymentMethod] ?? user.paymentMethod} through PayFast`}
           </p>
         </div>
@@ -131,7 +131,7 @@ export default function AdminUserDetailPage() {
 
       {user.suspendedAt && (
         <p role="status" className="adm-card" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 16px', border: '2px solid #f3c7c7', color: 'var(--red)', fontWeight: 600, fontSize: 14 }}>
-          <Ban size={16} aria-hidden /> Suspended {showDate(user.suspendedAt)}: {user.suspendedReason || 'no reason given'}
+          <Ban size={16} aria-hidden /> Suspended {sastDate(user.suspendedAt)}: {user.suspendedReason || 'no reason given'}
         </p>
       )}
 
@@ -151,7 +151,7 @@ export default function AdminUserDetailPage() {
           <div>
             <div className="adm-h3">{user.ageVerifiedAt ? 'Age verified' : 'Age not verified'}</div>
             <div className="adm-small">
-              {user.ageVerifiedAt ? showDate(user.ageVerifiedAt) : 'No bet can be granted until this passes'}
+              {user.ageVerifiedAt ? sastDate(user.ageVerifiedAt) : 'No bet can be granted until this passes'}
             </div>
           </div>
         </div>
@@ -161,7 +161,7 @@ export default function AdminUserDetailPage() {
             <div className="adm-h3">{user.savedCard ? user.savedCard.label : 'No saved card'}</div>
             <div className="adm-small">
               {user.savedCard
-                ? `Saved ${showDate(user.savedCard.savedAt)}${user.savedCard.lastUsedAt ? `, last used ${showDate(user.savedCard.lastUsedAt, { time: true })}` : ''} · held by PayFast`
+                ? `Saved ${sastDate(user.savedCard.savedAt)}${user.savedCard.lastUsedAt ? `, last used ${sastDateTime(user.savedCard.lastUsedAt)}` : ''} · held by PayFast`
                 : 'The golfer adds or removes one under Account'}
             </div>
           </div>
@@ -180,11 +180,11 @@ export default function AdminUserDetailPage() {
                 <tr>
                   <th>Course and hole</th>
                   <th>Tier</th>
-                  <th style={{ textAlign: 'right' }}>Stake</th>
-                  <th style={{ textAlign: 'right' }}>Prize</th>
+                  <th className="adm-num">Stake</th>
+                  <th className="adm-num">Prize</th>
                   <th>Status</th>
                   <th>Claim</th>
-                  <th style={{ textAlign: 'right' }}>Date</th>
+                  <th className="adm-num">Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -192,15 +192,15 @@ export default function AdminUserDetailPage() {
                   <tr key={bet.id}>
                     <td><Link href={`/admin/bets/${bet.id}`} className="adm-row-link">{bet.courseName || 'Unknown course'}, hole {bet.holeNumber || '?'}</Link></td>
                     <td>{TIER_LABELS[bet.tier] ?? bet.tier}</td>
-                    <td style={{ textAlign: 'right' }}>{formatZAR(bet.stakeCents)}</td>
-                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatZAR(bet.potentialWinCents)}</td>
+                    <td className="adm-num">{formatZAR(bet.stakeCents)}</td>
+                    <td className="adm-num" style={{ fontWeight: 600 }}>{formatZAR(bet.potentialWinCents)}</td>
                     <td><StatusBadge status={bet.status} small /></td>
                     <td>
                       {bet.claim
                         ? <Link href={`/admin/verification-queue/${bet.claim.id}`} aria-label={`Open the claim (${bet.claim.status.replace(/_/g, ' ')})`} style={{ textDecoration: 'none' }}><StatusBadge status={bet.claim.status} small /></Link>
                         : <span className="adm-muted">—</span>}
                     </td>
-                    <td className="adm-muted" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{showDate(bet.createdAt, { time: true })}</td>
+                    <td className="adm-num adm-muted">{sastDateTime(bet.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -221,20 +221,20 @@ export default function AdminUserDetailPage() {
               <thead>
                 <tr>
                   <th>Course and hole</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th className="adm-num">Amount</th>
                   <th>Status</th>
                   <th>Paid with</th>
                   <th>Bet</th>
-                  <th style={{ textAlign: 'right' }}>Date</th>
+                  <th className="adm-num">Date</th>
                 </tr>
               </thead>
               <tbody>
                 {payments.map((payment) => {
                   const needsAttention = payment.status === 'complete' && !payment.betId
                   return (
-                    <tr key={payment.mPaymentId} style={needsAttention ? { background: '#fff8e6' } : undefined}>
+                    <tr key={payment.mPaymentId} className={needsAttention ? 'adm-attention' : undefined}>
                       <td>{payment.courseName ? `${payment.courseName}${payment.holeNumber ? `, hole ${payment.holeNumber}` : ''}` : '—'}</td>
-                      <td style={{ textAlign: 'right' }}>{formatZAR(payment.amountCents)}</td>
+                      <td className="adm-num">{formatZAR(payment.amountCents)}</td>
                       <td>
                         <StatusBadge status={payment.status} small variant={payment.status === 'complete' ? 'success' : payment.status === 'pending' ? 'warning' : 'danger'} />
                       </td>
@@ -248,7 +248,7 @@ export default function AdminUserDetailPage() {
                           <span className="adm-muted">—</span>
                         )}
                       </td>
-                      <td className="adm-muted" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{showDate(payment.createdAt, { time: true })}</td>
+                      <td className="adm-num adm-muted">{sastDateTime(payment.createdAt)}</td>
                     </tr>
                   )
                 })}

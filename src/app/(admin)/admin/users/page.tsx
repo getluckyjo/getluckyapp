@@ -26,21 +26,14 @@ export default function AdminUsersPage() {
   const [exporting, setExporting] = useState(false)
   const [exportNote, setExportNote] = useState<{ error: boolean; text: string } | null>(null)
 
-  const filters = useMemo(() => {
-    const params = new URLSearchParams()
-    if (search) params.set('search', search)
-    if (suspendedFilter) params.set('suspended', suspendedFilter)
-    return params
-  }, [search, suspendedFilter])
-
   // Loading is derived: the page is loading until the query it currently
   // shows has been answered, so no state is set synchronously in an effect.
   const query = useMemo(() => {
-    const params = new URLSearchParams(filters)
-    params.set('page', String(page))
-    params.set('limit', '20')
+    const params = new URLSearchParams({ page: String(page), limit: '20' })
+    if (search) params.set('search', search)
+    if (suspendedFilter) params.set('suspended', suspendedFilter)
     return params.toString()
-  }, [filters, page])
+  }, [page, search, suspendedFilter])
   const [refresh, setRefresh] = useState(0)
   const requestKey = `${query}#${refresh}`
   const [loadedKey, setLoadedKey] = useState<string | null>(null)

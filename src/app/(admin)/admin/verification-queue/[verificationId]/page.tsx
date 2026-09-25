@@ -35,6 +35,21 @@ const PAYMENT_PILL: Record<NonNullable<VerificationReview['payment']>['status'],
   missing: { label: 'No payment found', pill: 'adm-pill adm-pill--red' },
 }
 
+type Loaded = { ok: true; data: VerificationReview } | { ok: false; status: number; message: string | null }
+
+/** Fetch the claim. `fresh` re-runs the risk rules; a reload for new links or after an action does not. */
+async function fetchReview(verificationId: string, fresh: boolean): Promise<Loaded> {
+  try {
+    const res = await fetch(`/api/admin/verifications/${verificationId}${fresh ? '' : '?fresh=0'}`, { cache: 'no-store' })
+    const json = await res.json().catch(() => null)
+    if (!res.ok || !json) return { ok: false, status: res.status, message: failureMessage(res.status, json?.error) }
+    return { ok: true, data: json as VerificationReview }
+  } catch (err) {
+    console.error('[admin] claim load failed:', err)
+    return { ok: false, status: 0, message: null }
+  }
+}
+
 /** Anything about the player or the money that should stop a reviewer before approving or paying. */
 function warningsFor(d: VerificationReview): Warning[] {
   const out: Warning[] = []
@@ -81,36 +96,30 @@ export default function VerificationDetailPage() {
   const [busy, setBusy] = useState(false)
   const [modalError, setModalError] = useState<string | null>(null)
   const [panelError, setPanelError] = useState<string | null>(null)
-  // After a decision here: the next open claim (id), none waiting (null), or the lookup failed.
   const [decided, setDecided] = useState<'approved' | 'rejected' | null>(null)
+  // After a decision here: the next open claim (id), none waiting (id null), or the lookup failed.
   const [nextClaim, setNextClaim] = useState<{ id: string | null } | 'looking' | 'failed'>('looking')
   const [showHistory, setShowHistory] = useState(false)
   const [pack, setPack] = useState<{ busy: boolean; hash?: string | null; error?: string }>({ busy: false })
   const [witnessBusy, setWitnessBusy] = useState<string | null>(null)
   const [witnessNote, setWitnessNote] = useState<{ ok: boolean; text: string } | null>(null)
 
-  /** Load the claim. `fresh` re-runs the risk rules; a reload for new links or after an action does not. */
-  const load = useCallback(async (fresh: boolean): Promise<void> => {
-    try {
-      const res = await fetch(`/api/admin/verifications/${verificationId}${fresh ? '' : '?fresh=0'}`, { cache: 'no-store' })
-      const json = await res.json().catch(() => null)
-      if (!res.ok || !json) {
-        setLoadFailure({ status: res.status, message: failureMessage(res.status, json?.error) })
-        return
-      }
-      const data = json as VerificationReview
-      loadedAt.current = Date.now()
-      if (!notesSeeded.current) {
-        notesSeeded.current = true
-        setNotes(data.reviewerNotes ?? '')
-      }
-      setDetail(data)
-      setLoadFailure(null)
-    } catch (err) {
-      console.error('[admin] claim load failed:', err)
-      setLoadFailure({ status: 0, message: null })
+  /** Show what a load returned. The notes start from the saved ones, once: a reload never overwrites typing. */
+  const apply = useCallback((r: Loaded) => {
+    if (!r.ok) {
+      setLoadFailure({ status: r.status, message: r.message })
+      return
     }
-  }, [verificationId])
+    loadedAt.current = Date.now()
+    if (!notesSeeded.current) {
+      notesSeeded.current = true
+      setNotes(r.data.reviewerNotes ?? '')
+    }
+    setDetail(r.data)
+    setLoadFailure(null)
+  }, [])
+
+  const load = useCallback(async (fresh: boolean) => apply(await fetchReview(verificationId, fresh)), [verificationId, apply])
 
   /** New links and the latest state. One at a time: focus and visibility can fire together. */
   const refresh = useCallback(async () => {
@@ -125,7 +134,11 @@ export default function VerificationDetailPage() {
     }
   }, [load])
 
-  useEffect(() => { void load(true) }, [load])
+  useEffect(() => {
+    let cancelled = false
+    fetchReview(verificationId, true).then(r => { if (!cancelled) apply(r) })
+    return () => { cancelled = true }
+  }, [verificationId, apply])
 
   // A reviewer who phoned the club comes back to links that have expired: renew them first.
   useEffect(() => {
@@ -417,7 +430,7 @@ export default function VerificationDetailPage() {
               <Fact label="Play window closed">{whenSA(d.betExpiresAt)}</Fact>
               <Fact label="Footage sealed">
                 {d.videoUploadedAt
-                  ? <>{whenSA(d.videoUploadedAt)}{d.betExpiresAt && d.videoUploadedAt > d.betExpiresAt && <Bad> (after the window closed)</Bad>}</>
+                  ? <>{whenSA(d.videoUploadedAt)}{d.betExpiresAt && Date.parse(d.videoUploadedAt) > Date.parse(d.betExpiresAt) && <Bad> (after the window closed)</Bad>}</>
                   : <Bad>not recorded: the server never sealed the footage</Bad>}
               </Fact>
               <Fact label="Footage size">{d.videoBytes ? `${(d.videoBytes / 1_000_000).toFixed(1)} MB` : '—'}</Fact>

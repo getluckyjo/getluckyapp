@@ -5,7 +5,7 @@ import { KeyRound, Mail, Trash2, Copy, Check } from 'lucide-react'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
 import type { BetaAccessKind } from '@/types/database'
-import { showDate } from '../users/dates'
+import { sastDate } from '../bets/client-helpers'
 
 interface Row { id: number; kind: BetaAccessKind; value: string; note: string | null; added_by: string | null; created_at: string }
 
@@ -152,7 +152,7 @@ export default function AdminBetaPage() {
                   <th>Kind</th>
                   <th>Email or code</th>
                   <th>Note</th>
-                  <th style={{ textAlign: 'right' }}>Added</th>
+                  <th className="adm-num">Added</th>
                   <th style={{ textAlign: 'right' }}>Remove</th>
                 </tr>
               </thead>
@@ -177,7 +177,7 @@ export default function AdminBetaPage() {
                       )}
                     </td>
                     <td className="adm-muted">{r.note ?? ''}</td>
-                    <td className="adm-muted" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{showDate(r.created_at)}</td>
+                    <td className="adm-num adm-muted">{sastDate(r.created_at)}</td>
                     <td style={{ textAlign: 'right' }}>
                       <button type="button" onClick={() => { setRemoveError(null); setRemoving(r) }} className="adm-icon-btn adm-icon-btn--warn" aria-label={`Remove ${shown(r)}`} title="Remove">
                         <Trash2 size={15} />
