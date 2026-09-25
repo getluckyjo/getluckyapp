@@ -216,8 +216,8 @@ export default function AdminGolfDaysPage() {
               <input required value={editing.form.name} onChange={e => setField('name', e.target.value)} placeholder="Bomb Squad Golf Day" maxLength={80} style={{ ...input, minWidth: 240 }} />
             </label>
             <label style={label}>
-              Tab label (12 max)
-              <input required value={editing.form.tabLabel} onChange={e => setField('tabLabel', e.target.value)} placeholder="Bomb Squad" maxLength={12} style={{ ...input, width: 130 }} />
+              Tab label (7 fits best, 12 max)
+              <input required value={editing.form.tabLabel} onChange={e => setField('tabLabel', e.target.value)} placeholder="BS" maxLength={12} style={{ ...input, width: 130 }} />
             </label>
           </div>
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>

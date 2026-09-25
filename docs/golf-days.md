@@ -24,8 +24,8 @@ or by hand at `/admin/golf-days`.
 | Holes | East 16, 152 m from the club tees; West 17, 161 m from the white tees (where golf days play it) |
 | Prize | R100 000, covered by Get Lucky (not insured by Indwe) |
 | Places | 200 |
-| Tab | "Bomb Squad" |
-| Look | The can: white stock, bottle-green line work, gold accent. Photo brightened in `public/golf-days/bombsquad/hero.jpg` |
+| Tab | "BS", with the bomb and BS shield from the can as its icon. Migration 029 seeds the label "Bomb Squad", which a narrow phone cuts to "BOMB SQ…"; production's is changed to "BS" in the admin |
+| Look | The can: white stock, bottle-green line work, gold accent. Photo brightened in `public/golf-days/bombsquad/hero.jpg`. The label says "Free swing" and names the venue "Royal Johannesburg" (the theme's `venue`), without "& Kensington" |
 
 Each course's signature par 3, with lengths from the club's own 2024
 scorecards:
@@ -64,7 +64,7 @@ Tap the link, sign in and tap *Join*. Then add Get Lucky to your home screen whe
 https://www.getluckyholeinone.com/golf-day/bombsquad
 
 *On the day:*
-At *East 16* or *West 17*, open the *Bomb Squad* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
+At *East 16* or *West 17*, open the *BS* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
 
 18+ only. One swing each.
 

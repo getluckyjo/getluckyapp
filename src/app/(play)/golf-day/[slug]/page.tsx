@@ -45,6 +45,12 @@ function venueOf(holes: GolfDayHole[]): string {
   return clubs.length === 1 ? clubs[0] : names.join(' · ')
 }
 
+/** A course as the golf day names its venue: "Royal Johannesburg – West". */
+function CourseName({ name, venue }: { name: string; venue: string | null }) {
+  const dash = name.lastIndexOf(' – ')
+  return <>{venue && dash !== -1 ? `${venue} – ${name.slice(dash + 3)}` : name}</>
+}
+
 /** "Bomb Squad Golf Day" sets as the host, then GOLF DAY on a line of its own. */
 function nameLines(name: string): [string, string | null] {
   const m = /^(.*\S)\s+(golf day)$/i.exec(name.trim())
@@ -242,8 +248,8 @@ export default function GolfDayPage() {
                 <p className="gd-kicker">{theme.host} <span aria-hidden>×</span> Get Lucky</p>
                 <h1 className="gd-name">{nameTop}{nameBottom && <><br />{nameBottom}</>}</h1>
                 <p className="gd-prize">{formatRand(golfDay.prizeZAR)}</p>
-                <p className="gd-band"><span>One free swing each</span></p>
-                <p className="gd-meta">{venueOf(golfDay.holes)}<br />{formatGolfDayDate(golfDay.playsOn)}</p>
+                <p className="gd-band"><span>Free swing</span></p>
+                <p className="gd-meta">{theme.venue ?? venueOf(golfDay.holes)}<br />{formatGolfDayDate(golfDay.playsOn)}</p>
                 <p className="gd-tagline">{theme.tagline}</p>
               </section>
 
@@ -302,7 +308,7 @@ export default function GolfDayPage() {
                 {!busy && <button type="button" className="cs-sheet-close" aria-label="Cancel" onClick={() => setPicked(null)}>×</button>}
               </div>
               <dl className="stake-rows">
-                <div><dt>Course</dt><dd>{picked.course.name}</dd></div>
+                <div><dt>Course</dt><dd><CourseName name={picked.course.name} venue={theme.venue} /></dd></div>
                 <div><dt>Hole</dt><dd>Hole {picked.holeNumber} · {holeMeta(picked)}</dd></div>
                 <div className="stake-rows-win"><dt>You could win</dt><dd>{formatRand(golfDay.prizeZAR)}</dd></div>
               </dl>

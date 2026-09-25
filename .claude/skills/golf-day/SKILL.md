@@ -25,7 +25,7 @@ Ask for anything missing. Do not guess the date, prize or venue.
 |---|---|
 | Name | As players know it: "Bomb Squad Golf Day" |
 | Link slug | 2–40 lower-case letters, digits or dashes. It cannot change once sent, so agree it first |
-| Tab label | 12 characters at most ("Bomb Squad"). Shown in the tab bar |
+| Tab label | Shown in the tab bar, beside Home, Play and Account. Up to 7 characters sits like the other tabs. Longer (12 at most) is set smaller and cut short on a narrow phone: "Bomb Squad" showed as "BOMB SQ…", so Bomb Squad went with "BS". Suggest the host's initials or short name |
 | Date | One day. The swing works 00:00–23:59 South African time |
 | Venue and courses | One hole per course the day is played on (e.g. East and West) |
 | Prize | Rand, up to R1 000 000 |
@@ -98,11 +98,21 @@ Use the next free migration number. Add a row to
 2. Add a theme to `THEMES` in `src/lib/golf-days/themes.ts`, keyed by slug.
    Take `ink`, `accent`, `paper` and `page` from the host's artwork. Use the
    `accent` for rules and shadows only, never for text (gold on white is too
-   faint). Write a one-line `tagline`.
+   faint). Write a one-line `tagline`. Set `venue` when players know the
+   club by a shorter name than the courses table's ("Royal Johannesburg",
+   not "Royal Johannesburg & Kensington").
 3. An alcohol brand needs a `footnote` such as "<Brand>. Not for sale to
    persons under the age of 18. Enjoy responsibly."
-4. Check it in a browser at 390 px wide, signed out and on the day. See
-   "Checking the screen" below.
+4. Tab icon (optional, when the host has a simple mark): draw it as line
+   work in `src/components/icons/index.tsx`, like `BombSquadIcon` (stroke
+   2.6 in a 40-wide viewBox, `currentColor`), and key it by slug in
+   `GOLF_DAY_ICONS` in `src/components/layout/BottomTabBar.tsx`. Without
+   one the tab shows a pin flag. Compare it with the artwork at full size
+   and at tab size (about 27 px) before keeping it.
+5. Check it in a browser at 320 px and 390 px wide, and on a computer (the
+   app sits in a 375 px phone frame there), signed out and on the day. See
+   "Checking the screen" below. Nothing on the label may run past its
+   border.
 
 ## 5. Before the link goes out
 
