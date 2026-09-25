@@ -3,9 +3,11 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { haptics } from '@/lib/haptics'
-import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon } from '@/components/icons'
+import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon, FlagIcon } from '@/components/icons'
+import { useGolfDayTab } from '@/hooks/useGolfDayTab'
+import { golfDayPath } from '@/lib/golf-days/rules'
 
-export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'icons' | 'account' | 'play'
+export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'icons' | 'golfday' | 'account' | 'play'
 
 /**
  * V2 tab bar — "Menu Bar Complete.svg" (design/00-reference).
@@ -21,23 +23,38 @@ export type ActiveTab = 'home' | 'history' | 'leaderboard' | 'icons' | 'account'
  * pill. At the app's 48px pill that is a 7px radius, a 71px disc and
  * 21–25px icons.
  */
-const TABS = [
+interface Tab {
+  key: ActiveTab
+  label: string
+  path: string
+  Icon: typeof HomeIcon | null
+  size: number
+}
+
+const TABS: Tab[] = [
   { key: 'home',        label: 'Home',    path: '/home',          Icon: HomeIcon,    size: 21 },
   { key: 'leaderboard', label: 'Winners', path: '/leaderboard',   Icon: WinnersIcon, size: 25 },
   { key: 'play',        label: 'Play',    path: '/select-course', Icon: null,        size: 0  },
   { key: 'icons',       label: 'Icons',   path: '/icons',         Icon: ClubIcon,    size: 21 },
   { key: 'account',     label: 'Account', path: '/account',       Icon: AccountIcon, size: 22 },
-] as const
+]
 
 /** `active` may be omitted on pages that belong to no tab (legal, not found). */
 export default function BottomTabBar({ active }: { active?: ActiveTab }) {
   const router = useRouter()
+  // A player who joined a golf day through its link sees it where Icons is;
+  // everyone else, signed out included, keeps Icons.
+  const golfDay = useGolfDayTab()
+  const tabs = golfDay
+    ? TABS.map(t => t.key !== 'icons' ? t : { key: 'golfday' as const, label: golfDay.tabLabel, path: golfDayPath(golfDay.slug), Icon: FlagIcon, size: 22 })
+    : TABS
+  const paths = tabs.map(t => t.path).join('|')
 
   // The five destinations are one tap away; have their code and route tree
   // ready before the tap so a switch feels instant.
   useEffect(() => {
-    for (const tab of TABS) router.prefetch(tab.path)
-  }, [router])
+    for (const path of paths.split('|')) router.prefetch(path)
+  }, [router, paths])
 
   function go(path: string) {
     haptics.tap()
@@ -49,9 +66,11 @@ export default function BottomTabBar({ active }: { active?: ActiveTab }) {
       <div className="tabbar-band" aria-hidden="true" />
       <div className="tabbar-pill" aria-hidden="true" />
       <div className="tabbar-tabs" role="tablist">
-        {TABS.map(tab => {
+        {tabs.map(tab => {
           const isActive = active === tab.key
           const isPlay = tab.key === 'play'
+          // A golf day's label ("Bomb Squad") runs longer than the built-in five.
+          const isLong = tab.label.length > 7
           return (
             <button
               key={tab.key}
@@ -59,7 +78,7 @@ export default function BottomTabBar({ active }: { active?: ActiveTab }) {
               role="tab"
               aria-selected={isActive}
               aria-current={isActive ? 'page' : undefined}
-              className={`tabbar-tab${isPlay ? ' tabbar-tab--play' : ''}${isActive ? ' is-active' : ''}`}
+              className={`tabbar-tab${isPlay ? ' tabbar-tab--play' : ''}${isLong ? ' tabbar-tab--long' : ''}${isActive ? ' is-active' : ''}`}
               onClick={() => !isActive && go(tab.path)}
             >
               <span className="tabbar-slot" aria-hidden="true">

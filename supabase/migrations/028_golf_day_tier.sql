@@ -1,0 +1,12 @@
+-- 028_golf_day_tier.sql
+-- Adds the golf day swing ('tier_golf_day') to the bet_tier enum: the one
+-- free swing every player at a sponsored golf day gets (migration 029), on
+-- that day's holes, for that day's prize. No stake, no ledger row.
+--
+-- Its own value, because its prize is set per golf day rather than by the
+-- tier, and so the free swing and promo swing rules stay untouched.
+--
+-- Idempotent. Run on its own, before 029, which uses the new value in a
+-- check constraint (Postgres refuses to read a value in the transaction
+-- that added it).
+alter type public.bet_tier add value if not exists 'tier_golf_day';

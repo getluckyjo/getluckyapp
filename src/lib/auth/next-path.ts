@@ -10,6 +10,18 @@ export const SAFE_NEXT_PATHS = [
   '/welcome', '/home', '/history', '/leaderboard', '/account', '/select-course', '/icons', '/admin',
 ]
 
+/**
+ * A golf day's link, /golf-day/<slug> (src/lib/golf-days/rules.ts): the
+ * player signs in from it and must come back to it to join. The whole path
+ * is matched, so a slug is the only thing that varies.
+ */
+const GOLF_DAY_PATH = /^\/golf-day\/[a-z0-9-]{2,40}$/
+
+export function isGolfDayPath(path: string): boolean {
+  return GOLF_DAY_PATH.test(path)
+}
+
 export function safeNext(raw: string | null | undefined): string {
-  return raw && SAFE_NEXT_PATHS.includes(raw) ? raw : '/welcome'
+  if (!raw) return '/welcome'
+  return SAFE_NEXT_PATHS.includes(raw) || GOLF_DAY_PATH.test(raw) ? raw : '/welcome'
 }

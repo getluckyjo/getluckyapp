@@ -27,7 +27,9 @@ const UNGATED_ROUTES = ['/payment-return', '/age-check', '/welcome']
 
 // Dashboard surfaces. Public today: /leaderboard is a shop window, and /home
 // renders a signed-out state. Left as they are — see the note on /account below.
-const DASHBOARD_ROUTES = ['/home', '/history', '/leaderboard', '/account', '/icons']
+// /golf-day/<slug> is a golf day's link: a player meets it before signing in,
+// and the screen shows the day and a sign-in button to a signed-out visitor.
+const DASHBOARD_ROUTES = ['/home', '/history', '/leaderboard', '/account', '/icons', '/golf-day']
 
 // The play flow. These REQUIRE a session.
 //

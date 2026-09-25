@@ -4,7 +4,7 @@
  * real modules; the previous version of this file tested private copies.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { ALL_TIERS, BET_TIERS, FREE_TIER, PROMO_TIER, TIER_LABELS, TIER_STAKE_CENTS, TIER_WIN_CENTS, isFreeTier, isNoStakeTier, isPromoTier, tierByKey } from '@/lib/tiers'
+import { ALL_TIERS, BET_TIERS, FREE_TIER, GOLF_DAY_TIER, PROMO_TIER, TIER_LABELS, TIER_STAKE_CENTS, TIER_WIN_CENTS, isFreeTier, isGolfDayTier, isNoStakeTier, isPromoTier, tierByKey } from '@/lib/tiers'
 import { verifyPaymentAmount, parseAmountToCents, expectedStakeCents } from '@/lib/payments'
 import { PAYFAST_IPS, isFromPayfast, isFromPayfastLive, resetResolvedPayfastIps } from '@/lib/payfast/ips'
 import { toCSV } from '@/lib/admin/csv'
@@ -47,7 +47,7 @@ describe('FREE_TIER', () => {
   })
 
   it('is still a describable bet: ALL_TIERS and tierByKey know it', () => {
-    expect(ALL_TIERS).toHaveLength(BET_TIERS.length + 2)
+    expect(ALL_TIERS).toHaveLength(BET_TIERS.length + 3)
     expect(tierByKey('tier_free')).toBe(FREE_TIER)
     expect(tierByKey('tier_1')?.stakeZAR).toBe(50)
     expect(tierByKey('tier_99')).toBeUndefined()
@@ -79,6 +79,21 @@ describe('PROMO_TIER', () => {
     expect(isNoStakeTier('tier_free')).toBe(true)
     expect(isNoStakeTier('tier_1')).toBe(false)
     expect(isNoStakeTier(undefined)).toBe(false)
+  })
+})
+
+describe('GOLF_DAY_TIER', () => {
+  it('is never sellable, carries no prize of its own, and counts as a no-stake entry', () => {
+    expect(BET_TIERS.map(t => t.tier)).not.toContain('tier_golf_day')
+    expect(expectedStakeCents('tier_golf_day')).toBeNull()
+    expect(verifyPaymentAmount('tier_golf_day', 0).ok).toBe(false)
+    // The prize is the golf day's, written on the bet; the tier must not suggest one.
+    expect(GOLF_DAY_TIER.winZAR).toBe(0)
+    expect(tierByKey('tier_golf_day')).toBe(GOLF_DAY_TIER)
+    expect(TIER_LABELS.tier_golf_day).toBe('Golf day swing')
+    expect(isGolfDayTier('tier_golf_day')).toBe(true)
+    expect(isGolfDayTier('tier_promo')).toBe(false)
+    expect(isNoStakeTier('tier_golf_day')).toBe(true)
   })
 })
 

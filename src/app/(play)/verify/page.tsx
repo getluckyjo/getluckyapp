@@ -6,7 +6,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS } from '@/context/BetContext'
-import { tierByKey } from '@/lib/tiers'
+import { isGolfDayTier, tierByKey } from '@/lib/tiers'
 
 type StepStatus = 'completed' | 'active' | 'pending' | 'failed'
 
@@ -55,7 +55,7 @@ function applyRejection(steps: VerifyStep[]): VerifyStep[] {
  */
 export default function VerifyPage() {
   const router = useRouter()
-  const { selectedTier, betId, selectedCourse, selectedHole, resetSession } = useBet()
+  const { selectedTier, prizeZAR, betId, selectedCourse, selectedHole, resetSession } = useBet()
   const [steps, setSteps] = useState<VerifyStep[]>(INITIAL_STEPS)
   const [rejected, setRejected] = useState(false)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
@@ -71,6 +71,16 @@ export default function VerifyPage() {
 
   // tierByKey, not BET_TIERS: a free swing is a real bet with a real prize.
   const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
+  // A golf day's prize is set per golf day, and Get Lucky covers it itself:
+  // there is no insurer on that claim, so the screen must not name one.
+  const winZAR = prizeZAR ?? tierData.winZAR
+  const selfCovered = isGolfDayTier(selectedTier)
+  const shownSteps = selfCovered
+    ? steps.map(s => s.id !== 'verified' ? s : {
+        ...s,
+        desc: s.status === 'failed' ? 'The evidence didn\u2019t meet the bar for a verified hole-in-one.' : 'Reviewed by our team.',
+      })
+    : steps
   const payoutDate = new Date()
   payoutDate.setDate(payoutDate.getDate() + 7)
   const payoutEta = payoutDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })
@@ -135,7 +145,9 @@ export default function VerifyPage() {
           <h1 className="v2-title" style={{ marginBottom: 10 }}>{rejected ? 'Claim\nnot approved' : 'Claim\nunder review'}</h1>
           <p className="vf-sub">
             {rejected
-              ? 'Our team and the insurer couldn\u2019t verify this hole-in-one from the evidence provided.'
+              ? selfCovered
+                ? 'Our team couldn\u2019t verify this hole-in-one from the evidence provided.'
+                : 'Our team and the insurer couldn\u2019t verify this hole-in-one from the evidence provided.'
               : 'Our team is verifying your hole-in-one. Claims are reviewed within 5 business days and we\u2019ll let you know the moment it\u2019s confirmed.'}
           </p>
 
@@ -147,7 +159,7 @@ export default function VerifyPage() {
           ) : (
             <div className="vf-prize">
               <div className="vf-prize-label">Pending prize</div>
-              <div className="vf-prize-amount">R{tierData.winZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}</div>
+              <div className="vf-prize-amount">R{winZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}</div>
               {selectedCourse && selectedHole && (
                 <div className="vf-prize-meta">{selectedCourse.name} · Hole {selectedHole.holeNumber}</div>
               )}
@@ -156,7 +168,7 @@ export default function VerifyPage() {
           )}
 
           <ol className="vf-steps" aria-label={`${doneCount} of ${steps.length} steps complete`}>
-            {steps.map((step, i) => (
+            {shownSteps.map((step, i) => (
               <li key={step.id} className={`vf-step is-${step.status}`}>
                 <span className="vf-step-dot" aria-hidden>
                   {step.status === 'completed' ? (

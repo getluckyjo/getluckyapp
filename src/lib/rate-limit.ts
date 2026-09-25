@@ -38,6 +38,7 @@ export const RULES = {
   betCreate:   { name: 'bet_create',  perUser: 40,  perIp: 1200, windowSeconds: TEN_MINUTES } as RateRule, // the return page polls ~7×
   freeSwing:   { name: 'free_swing',  perUser: 5,   perIp: 120,  windowSeconds: ONE_HOUR    } as RateRule, // one per account ever; five tries is already generous
   promo:       { name: 'promo',       perUser: 20,  perIp: 600,  windowSeconds: ONE_HOUR    } as RateRule, // checking and playing a code; a club day shares one IP, a guesser does not get far
+  golfDay:     { name: 'golf_day',    perUser: 20,  perIp: 1500, windowSeconds: ONE_HOUR    } as RateRule, // joining and swinging; 200 players can share the clubhouse Wi-Fi
   claim:       { name: 'claim',       perUser: 20,  perIp: 600,  windowSeconds: TEN_MINUTES } as RateRule,
   upload:      { name: 'upload',      perUser: 20,  perIp: 600,  windowSeconds: TEN_MINUTES } as RateRule,
   ageCheck:    { name: 'age_check',   perUser: 10,  perIp: 300,  windowSeconds: ONE_HOUR    } as RateRule,

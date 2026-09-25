@@ -31,6 +31,7 @@ an in-memory PostgREST fake.
 | Age gate | `POST /api/profile/age-check` | Date of birth → `profiles.age_verified_at`, `terms_accepted_at` | Server sets the columns; a client cannot (profile guard trigger, migration 006) |
 | Pick a hole | `/select-course`, `/choose-stake` | Partner courses with active par-3 holes; a stake tier | `GET /api/courses` shows partner courses only; checkout re-checks |
 | Free swing | `POST /api/bets/free` (card on `/choose-stake`, prompt on `/home`) | The freemium entry: one per account for life, no stake, R10,000 prize, then the ordinary record → claim → review path | `bets_one_free_swing_per_user` (migration 023) and the deterministic `free_<uid>` reference on the existing unique index; age check; suspension check; same target check as checkout; rate limit |
+| Golf day | `/golf-day/<slug>` (the link players are sent; their Icons tab becomes the golf day's), `POST /api/golf-days/<slug>/join`, `POST …/swing`; made at `/admin/golf-days` | One free swing per player who joined through the link, on the day (South African time), on the day's holes, for the day's prize. Get Lucky covers the prize, not Indwe, so its screens name no insurer | Migration 029: a trigger caps joins (locks the golf day, then counts) and closes them after the day; unique `(golf_day_id, user_id)` on bets; a trigger allows the swing only to a joined player, on the day, on its holes, for its prize; deterministic `golfday_<day>_<uid>` reference; same gates as the free swing plus the target check |
 | Promo swing | `GET`/`POST /api/bets/promo` ("Have a promo code?" on `/choose-stake`); codes made at `/admin/promos` | One extra free swing per code per golfer, same prize and path as the free swing. Playing the code is redeeming it: the bet row is the use | Migration 027: unique `(promo_code_id, user_id)`, check constraint tying `tier_promo` to a code, and a trigger that locks the code while it checks the cap, expiry and off switch; deterministic `promo_<code>_<uid>` reference; same gates as the free swing |
 | Pay | `POST /api/payments/payfast` → PayFast | Signs a checkout with our `gl_<uuid>` reference and the user, course, hole and tier inside the signed payload | PayFast credentials come from env with no fallback; production refuses sandbox (`instrumentation.ts`) |
 | ITN | `POST /api/payments/payfast/notify` | PayFast tells us it was paid. IP allow-list, signature, phone-home validation, merchant check; a membership reference (`GLG-…`) is handed on to the membership site's webhook; otherwise amount matched to tier, then a row in `payfast_payments` | Upsert on `m_payment_id`, so retries are no-ops; anything unexpected is a 500 so PayFast retries |
@@ -49,7 +50,7 @@ service role; the admin layout's client-side gate is cosmetic.
 
 ## 3. Data model
 
-All in `public`, defined by `supabase/migrations/001…027`, typed by hand in
+All in `public`, defined by `supabase/migrations/001…029`, typed by hand in
 `src/types/database.ts` (regenerate after a migration; see README).
 
 | Table | One row per | Notes |
@@ -59,6 +60,7 @@ All in `public`, defined by `supabase/migrations/001…027`, typed by hand in
 | `course_contacts` | club official per course | Asked to confirm the certificate on every claim at the course. |
 | `bets` | entry | Status, stake, prize, ledger reference, play window, footage path + hash + size + sealed-at, capture report, hashed IP/device, risk flags and score, payout reference, purge stamp. `tier = 'tier_free'` is the free swing: stake 0, no ledger row, one per user by unique index. `tier = 'tier_promo'` is a promo swing: stake 0, no ledger row, `promo_code_id` names the code. |
 | `promo_codes` | promo code | Code, cap on total uses, expiry, off switch, note. Uses are counted from `bets`. Service role only; a used code cannot be deleted. |
+| `golf_days`, `golf_day_holes`, `golf_day_players` | sponsored golf day; its holes; a player who joined | Link (slug), tab label, date, prize, places, off switch. `bets.golf_day_id` names the golf day of a `tier_golf_day` swing. Service role only; a golf day with swings cannot be deleted. The look of a branded day is code: `src/lib/golf-days/themes.ts`. |
 | `payfast_payments` | payment the ITN accepted | The money ledger. Keeps amounts when a user is deleted (`user_id` nulled). |
 | `verifications` | claim | Document paths + hashes, review state, checklist, notes, reviewer, timestamps, purge stamp. One per bet. |
 | `claim_witnesses` | person named on a claim | Role, source (claimant or course), token hash, request and response with time, hashed IP, note. |

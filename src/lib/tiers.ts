@@ -13,6 +13,9 @@
  *              /api/bets/free grants it directly.
  *   PROMO_TIER one extra free swing per promo code (migration 027). Same
  *              rules as FREE_TIER, granted by /api/bets/promo.
+ *   GOLF_DAY_TIER  the free swing at a sponsored golf day (migration 029).
+ *              Its prize is the golf day's, stored on the bet, so the tier
+ *              carries none; /api/golf-days/[slug]/swing grants it.
  *
  * Anything that merely *describes* a bet after the fact (admin labels, the
  * result screens) reads ALL_TIERS, because a free bet is a real bet.
@@ -20,8 +23,8 @@
 
 /** Tiers that are bought. */
 export type PaidBetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
-/** Every tier a bet row can carry, free and promo included. */
-export type BetTier = PaidBetTier | 'tier_free' | 'tier_promo'
+/** Every tier a bet row can carry, free, promo and golf day included. */
+export type BetTier = PaidBetTier | 'tier_free' | 'tier_promo' | 'tier_golf_day'
 
 export interface BetTierData {
   tier: BetTier
@@ -64,8 +67,18 @@ export const PROMO_TIER: BetTierData = {
   tier: 'tier_promo', stakeZAR: 0, winZAR: 10000, multiplier: 0, label: 'Promo swing → R10,000',
 }
 
-/** Paid tiers plus the free and promo ones — every tier a bet row can carry. */
-export const ALL_TIERS: BetTierData[] = [...BET_TIERS, FREE_TIER, PROMO_TIER]
+/**
+ * The golf day swing: one free swing per player at a golf day we sponsor,
+ * on that day's holes. The prize is set per golf day and written on the bet
+ * (potential_win_pence), so winZAR here is 0: read the bet, or the golf day,
+ * never this, for what a golf day swing pays.
+ */
+export const GOLF_DAY_TIER: BetTierData = {
+  tier: 'tier_golf_day', stakeZAR: 0, winZAR: 0, multiplier: 0, label: 'Golf day swing',
+}
+
+/** Paid tiers plus the free, promo and golf day ones — every tier a bet row can carry. */
+export const ALL_TIERS: BetTierData[] = [...BET_TIERS, FREE_TIER, PROMO_TIER, GOLF_DAY_TIER]
 
 /** Look a tier up by key, free included. Undefined for a key we do not know. */
 export function tierByKey(tier: string | null | undefined): BetTierData | undefined {
@@ -82,9 +95,14 @@ export function isPromoTier(tier: string | null | undefined): boolean {
   return tier === PROMO_TIER.tier
 }
 
-/** Was this entry played without a stake (free or promo swing)? */
+/** Is this a golf day swing? */
+export function isGolfDayTier(tier: string | null | undefined): boolean {
+  return tier === GOLF_DAY_TIER.tier
+}
+
+/** Was this entry played without a stake (free, promo or golf day swing)? */
 export function isNoStakeTier(tier: string | null | undefined): boolean {
-  return isFreeTier(tier) || isPromoTier(tier)
+  return isFreeTier(tier) || isPromoTier(tier) || isGolfDayTier(tier)
 }
 
 // ── Derived maps for admin / API use ──

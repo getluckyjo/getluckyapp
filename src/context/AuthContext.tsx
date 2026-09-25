@@ -13,7 +13,7 @@ interface AuthContextValue {
   profile: Profile | null
   loading: boolean
   signInWithGoogle: (next?: string) => Promise<void>
-  signInWithMagicLink: (email: string) => Promise<{ error: string | null }>
+  signInWithMagicLink: (email: string, next?: string) => Promise<{ error: string | null }>
   verifyEmailCode: (email: string, code: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -89,11 +89,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
   }
 
-  async function signInWithMagicLink(email: string) {
+  // `next` rides in the emailed link too (src/lib/email/auth-emails.ts), so
+  // a golfer who taps the link rather than typing the code lands in the same place.
+  async function signInWithMagicLink(email: string, next?: string) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: callbackUrl(),
+        emailRedirectTo: callbackUrl(next),
       },
     })
     return { error: error?.message ?? null }

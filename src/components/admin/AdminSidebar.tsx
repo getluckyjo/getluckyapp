@@ -13,6 +13,7 @@ import {
   KeyRound,
   Star,
   TicketPercent,
+  Flag,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -28,6 +29,7 @@ const NAV_ITEMS = [
   { href: '/admin/reports', label: 'Reports', icon: BarChart3 },
   { href: '/admin/icons', label: 'Icons', icon: Star },
   { href: '/admin/promos', label: 'Promo codes', icon: TicketPercent },
+  { href: '/admin/golf-days', label: 'Golf days', icon: Flag },
   { href: '/admin/beta', label: 'Beta testers', icon: KeyRound },
 ]
 
