@@ -5,6 +5,8 @@ import ServiceWorkerManager from './ServiceWorkerManager'
 import SessionTracker from './SessionTracker'
 import InstallPrompt from './InstallPrompt'
 import FeedbackButton from './FeedbackButton'
+// Catches Chrome's install dialog from boot, for screens that offer it later.
+import '@/lib/pwa/install'
 
 /**
  * The floating feedback button is for a closed beta with testers who know

@@ -21,7 +21,7 @@ or by hand at `/admin/golf-days`.
 | Link | `https://www.getluckyholeinone.com/golf-day/bombsquad` |
 | Date | Friday 2 October 2026 (the swing works 00:00–23:59, South African time) |
 | Venue | Royal Johannesburg & Kensington, East and West courses |
-| Holes | East 16, 152 m from the club tees; West 17, 185 m from the yellow tees (161 m from the white) |
+| Holes | East 16, 152 m from the club tees; West 17, 161 m from the white tees (where golf days play it) |
 | Prize | R100 000, covered by Get Lucky (not insured by Indwe) |
 | Places | 200 |
 | Tab | "Bomb Squad" |
@@ -38,21 +38,60 @@ scorecards:
   away on the right, and is 185 m from the yellow tees or 161 m from the
   white.
 
-The app shows West 17 at 185 m. If the golf day plays it off the whites,
-set it to 161 m in Admin → Courses so the screen matches the tee.
+Golf days at Royal normally play the white tees, so production has West
+17 at 161 m (set by hand on 25 September 2026). Migration 029 on its own
+leaves it at 185 m from the yellow tees. The East's scorecard names its
+tees Championship, Club, Executive and Classic. The challenge on East 16
+is played from the Club tee, 152 m (Johannes, 25 September 2026). From the
+Executive tee it would be 127 m, under the app's 140 m minimum.
 
 Migration 029 also corrects the West course's par 3 distances to the
 club's 2024 card (yellow tees). They were out of date from migration 019.
 
 ### Message to send with the link
 
-> **Bomb Squad Golf Day × Get Lucky: one free swing each for R100 000**
->
-> 1. **Before Friday:** open www.getluckyholeinone.com/golf-day/bombsquad on your phone. Sign in with Google or your email, confirm you're 18 or older, and tap **Join**. A **Bomb Squad** tab appears at the bottom of the app. Tip: add the page to your home screen.
-> 2. **On the day:** at East hole 16 or West hole 17, open the **Bomb Squad** tab and tap the hole you're on.
-> 3. **Film it:** hand your phone to a playing partner to film your tee shot in the app.
->
-> Hole it, and once the club and your playing partners confirm it, R100 000 is yours.
+One link does it: joining leads straight into putting the app on the home
+screen (see "Home screen" below). For WhatsApp, paste as is; the asterisks
+are WhatsApp's bold.
+
+```
+*Bomb Squad Golf Day × Get Lucky* ⛳
+
+Every player gets ONE free swing for *R100 000* on Friday 2 October. Hole it and it's yours.
+
+*Before Friday (takes 2 minutes):*
+Tap the link, sign in and tap *Join*. Then add Get Lucky to your home screen when it asks.
+https://www.getluckyholeinone.com/golf-day/bombsquad
+
+*On the day:*
+At *East 16* or *West 17*, open the *Bomb Squad* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
+
+18+ only. One swing each.
+
+See you on the tee. Time to get lucky! 🍀
+```
+
+### Home screen
+
+Joining is the moment to put the app on the phone, so it follows straight
+on:
+
+- **Android, Chrome:** tapping Join opens Chrome's own install dialog.
+  Chrome only allows it straight after a tap, and only once it has decided
+  the site can be installed. When it can't, the pop-up below opens instead.
+- **Everywhere else:** a "You're in. One more step" pop-up with the taps
+  for that phone. iPhone Safari gets Share → Add to Home Screen. An iPhone
+  in WhatsApp, Chrome or Instagram is told to open the page in Safari
+  first, with a Copy link button. Android without the dialog gets the
+  three-dot menu route, plus how to leave WhatsApp's browser.
+- **Joined on the way back from signing in:** no tap, so always the pop-up.
+- **Later:** "Put Get Lucky on your home screen" under their status reopens
+  it. Nothing is offered once the app is installed, or on a computer.
+
+On iPhone the home screen app keeps its own sign-in, separate from
+Safari's. The pop-up tells players to sign in once more with the code from
+their email. Their join is on their account, so the tab is there when they
+do.
 
 ## Going live
 
@@ -66,12 +105,13 @@ club's 2024 card (yellow tees). They were out of date from migration 019.
    200 players signing up in one evening. Ask players to sign up before
    the day, not at registration: 200 people on one clubhouse Wi-Fi at once
    is the busiest moment the app could have.
-4. **Claims.** A claim asks the club to confirm by email. Check that Royal
-   Johannesburg East and West have a club official at Admin → Courses →
-   Contacts.
-5. **Terms.** `/terms` says every prize is insured by Indwe. That is not
-   true of a golf day prize. The golf day screen says the prize is paid by
-   Get Lucky, but the terms page needs a line for golf days too.
+4. **Claims.** A claim asks the club to confirm by email. Johannes is the
+   club official for Royal Johannesburg East and West (Admin → Courses →
+   Contacts, 25 September 2026). Every claim at either course, golf day or
+   paid, emails him.
+5. **Terms.** `/terms` says every prize is insured by Indwe. The golf day
+   screen says the prize is paid by Get Lucky. Johannes chose to leave the
+   terms as they are (25 September 2026).
 6. **Dry run.** At `/admin/golf-days`, make a test golf day with today's
    date and one hole. Open its link on two phones, join, take a swing, film
    it and declare a miss. Then switch it off.

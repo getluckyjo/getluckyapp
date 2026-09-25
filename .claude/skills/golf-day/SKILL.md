@@ -126,13 +126,26 @@ Give the person:
 - the date and holes as the app shows them, and the alternatives;
 - the go-live checklist from step 5, with anything still open.
 
-> **<Golf day> × Get Lucky: one free swing each for R<prize>**
->
-> 1. **Before the day:** open <link> on your phone. Sign in with Google or your email, confirm you're 18 or older, and tap **Join**. A **<Tab label>** tab appears at the bottom of the app.
-> 2. **On the day:** at <course> hole <n> (or <course> hole <n>), open the **<Tab label>** tab and tap the hole you're on.
-> 3. **Film it:** hand your phone to a playing partner to film your tee shot in the app.
->
-> Hole it, and once the club and your playing partners confirm it, R<prize> is yours.
+One link is enough: joining leads straight into adding the app to the home
+screen (docs/golf-days.md, "Home screen"). For WhatsApp, give it in a plain
+block so the asterisks (WhatsApp's bold) survive:
+
+```
+*<Golf day> × Get Lucky* ⛳
+
+Every player gets ONE free swing for *R<prize>* on <day and date>. Hole it and it's yours.
+
+*Before <day> (takes 2 minutes):*
+Tap the link, sign in and tap *Join*. Then add Get Lucky to your home screen when it asks.
+<link>
+
+*On the day:*
+At *<course> <n>* or *<course> <n>*, open the *<Tab label>* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
+
+18+ only. One swing each.
+
+See you on the tee. Time to get lucky! 🍀
+```
 
 ## Checking the screen
 

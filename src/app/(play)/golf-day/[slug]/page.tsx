@@ -7,11 +7,13 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import PullToRefresh from '@/components/pwa/PullToRefresh'
+import AddToHomeSheet, { useCanOfferInstall, useInstallState, usePlatform } from '@/components/pwa/AddToHomeSheet'
 import { useAuth } from '@/context/AuthContext'
 import { useBet } from '@/context/BetContext'
 import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import { setGolfDayTab } from '@/hooks/useGolfDayTab'
 import { track } from '@/lib/analytics'
+import { promptInstall } from '@/lib/pwa/install'
 import { formatRand } from '@/lib/format'
 import { GOLF_DAY_TIER } from '@/lib/tiers'
 import { themeFor } from '@/lib/golf-days/themes'
@@ -88,8 +90,19 @@ export default function GolfDayPage() {
   const [error, setError] = useState('')
   const [picked, setPicked] = useState<GolfDayHole | null>(null)
   const [reload, setReload] = useState(0)
+  // The home screen pop-up: 'joined' straight after joining, 'asked' from the link.
+  const [installSheet, setInstallSheet] = useState<'joined' | 'asked' | null>(null)
+  const offerInstall = useCanOfferInstall()
+  const platform = usePlatform()
+  const { canPrompt } = useInstallState()
 
-  const join = useCallback(async () => {
+  /**
+   * Join, then put the app on the home screen: the next step after signing
+   * in. A tap on Join on Android Chrome opens Chrome's own install dialog
+   * straight away (it must follow a tap, and this is one). Everywhere else,
+   * and when joined on the way back from signing in, the pop-up opens.
+   */
+  const join = useCallback(async (fromTap: boolean) => {
     if (!user) return
     setBusy('join')
     setError('')
@@ -100,6 +113,14 @@ export default function GolfDayPage() {
         setGolfDayTab(user.id, { slug: body.slug, tabLabel: body.tabLabel })
         track('golf_day_joined', { golf_day: slug })
         setReload(n => n + 1)
+        if (offerInstall) {
+          const outcome = fromTap && platform === 'android' && canPrompt ? await promptInstall() : 'unavailable'
+          if (outcome === 'accepted') track('pwa_install', { source: 'golf_day' })
+          if (outcome === 'unavailable') {
+            track('pwa_install_prompt_shown', { platform: 'golf_day' })
+            setInstallSheet('joined')
+          }
+        }
       } else {
         setError(body.error ?? 'You could not be joined. Please try again.')
       }
@@ -108,7 +129,7 @@ export default function GolfDayPage() {
     } finally {
       setBusy(null)
     }
-  }, [slug, user])
+  }, [slug, user, offerInstall, platform, canPrompt])
 
   // What the screen shows depends on who is looking, so it waits for auth.
   useEffect(() => {
@@ -125,7 +146,7 @@ export default function GolfDayPage() {
         setData(loaded)
         // Back from signing in through "Sign in to join": join without a second tap.
         const { me, golfDay } = loaded
-        if (me && !me.joined && !golfDay.closed && !golfDay.full && golfDay.phase !== 'over' && takeJoinFlag(slug)) void join()
+        if (me && !me.joined && !golfDay.closed && !golfDay.full && golfDay.phase !== 'over' && takeJoinFlag(slug)) void join(false)
       })
       .catch(() => { if (!cancelled) setFailed(true) })
     return () => { cancelled = true }
@@ -235,7 +256,8 @@ export default function GolfDayPage() {
                   busy={busy}
                   swingHole={swingHole}
                   onSignIn={signInToJoin}
-                  onJoin={join}
+                  onJoin={() => join(true)}
+                  onInstall={offerInstall ? () => setInstallSheet('asked') : undefined}
                   onPick={setPicked}
                   onResume={() => swingHole && me?.swing && goRecord(me.swing.betId, swingHole, golfDay.prizeZAR)}
                 />
@@ -294,13 +316,22 @@ export default function GolfDayPage() {
           </>
         )}
 
+        {installSheet && golfDay && (
+          <AddToHomeSheet
+            title={installSheet === 'joined' ? 'You\u2019re in. One more step' : 'Put Get Lucky on your home screen'}
+            lead={`Put Get Lucky on your home screen, so your ${golfDay.tabLabel} swing is one tap away on the day.`}
+            source="golf_day"
+            onClose={() => setInstallSheet(null)}
+          />
+        )}
+
         <BottomTabBar active="golfday" />
       </div>
     </PhoneFrame>
   )
 }
 
-function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPick, onResume }: {
+function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPick, onResume, onInstall }: {
   golfDay: PublicGolfDay
   me: GolfDayMe | null
   signedIn: boolean
@@ -310,6 +341,8 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
   onJoin: () => void
   onPick: (hole: GolfDayHole) => void
   onResume: () => void
+  /** Opens the home screen pop-up; absent when there is nothing to offer (installed, desktop). */
+  onInstall?: () => void
 }) {
   const date = formatGolfDayDate(golfDay.playsOn)
   const joined = Boolean(me?.joined)
@@ -355,7 +388,12 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
 
   // ── Joined, swing still to come ──
   if (golfDay.phase === 'upcoming') {
-    return <p className="gd-status"><strong>You&rsquo;re in.</strong> Your swing opens on {date}. Come back to this tab when you reach one of the holes below.</p>
+    return (
+      <>
+        <p className="gd-status"><strong>You&rsquo;re in.</strong> Your swing opens on {date}. Come back to this tab when you reach one of the holes below.</p>
+        {onInstall && <button type="button" className="gd-link" onClick={onInstall}>Put Get Lucky on your home screen</button>}
+      </>
+    )
   }
   if (golfDay.phase === 'over') return <p className="gd-status">The golf day is over and your swing was not taken.</p>
   return (
