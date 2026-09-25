@@ -82,6 +82,16 @@ export function BombSquadIcon({ size = 24, ...rest }: IconProps) {
   )
 }
 
+/** A calendar page with a plus: "Add to calendar". Line work, like the install steps' icons. */
+export function CalendarIcon({ size = 22, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, '0 0 24 24', 1)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...rest}>
+      <rect x={3.5} y={5} width={17} height={15.5} rx={2.5} />
+      <path d="M3.5 10H20.5M8 3V7M16 3V7M12 12.8V17.8M9.5 15.3H14.5" />
+    </svg>
+  )
+}
+
 /** Tab bar — Account (person outline). */
 export function AccountIcon({ size = 24, ...rest }: IconProps) {
   return (

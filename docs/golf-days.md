@@ -93,6 +93,26 @@ Safari's. The pop-up tells players to sign in once more with the code from
 their email. Their join is on their account, so the tab is there when they
 do.
 
+### Add to calendar
+
+Once joined, and until the day, the screen has an **Add to calendar**
+button, so the link is easy to find again. The event is all day on the
+golf day's date, with the holes, the tab to open and the link
+(`src/lib/golf-days/calendar.ts`):
+
+- **iPhone and computers:** the button opens `GET /api/golf-days/<slug>/calendar`,
+  an .ics file. Safari shows it as an event to add; a computer downloads
+  it. It carries a reminder at 7am on the day. From the installed app it
+  opens over the app.
+- **Android:** the button opens Google Calendar with the event filled in.
+  Google ignores reminders in a link, so the phone's default one applies.
+
+Every download has the same event ID, so adding it twice updates the
+event rather than repeating it. A switched-off golf day has no calendar
+file. Wallet passes were considered and left: Apple Wallet needs an Apple
+Developer account and a signing certificate, Google Wallet an approved
+issuer account.
+
 ## Going live
 
 1. **Database.** In the Supabase SQL editor, run `028_golf_day_tier.sql`
@@ -151,7 +171,10 @@ hand. Then Icons comes back.
 
 `__tests__/money/golf-day.test.ts` covers the day's time window, the
 routes, the tab, the admin and both races, staged through the test fake.
-`__tests__/money/auth-flow.test.ts` covers the way back from sign-in.
+`__tests__/money/auth-flow.test.ts` covers the way back from sign-in. The
+calendar event is pinned in `golf-day.test.ts` too (dates, escaping, line
+folding, the reminder, the Google link and the route), and the Bomb Squad
+file was read back with Python's `icalendar` parser.
 
 Migrations 001–029 were applied to a local Postgres 16. Every trigger rule
 was exercised there: full, over, not joined, wrong hole, wrong prize, not

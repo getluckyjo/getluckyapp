@@ -137,7 +137,8 @@ Give the person:
 - the go-live checklist from step 5, with anything still open.
 
 One link is enough: joining leads straight into adding the app to the home
-screen (docs/golf-days.md, "Home screen"). For WhatsApp, give it in a plain
+screen (docs/golf-days.md, "Home screen"), and joined players get an Add to
+calendar button with the link in the event. Neither needs setting up. For WhatsApp, give it in a plain
 block so the asterisks (WhatsApp's bold) survive:
 
 ```

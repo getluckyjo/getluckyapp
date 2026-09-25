@@ -11,14 +11,18 @@ import AddToHomeSheet, { useCanOfferInstall, useInstallState, usePlatform } from
 import { useAuth } from '@/context/AuthContext'
 import { useBet } from '@/context/BetContext'
 import { useRefreshSignal } from '@/hooks/useRefreshSignal'
+import { useIsStandalone } from '@/hooks/useIsStandalone'
 import { setGolfDayTab } from '@/hooks/useGolfDayTab'
 import { track } from '@/lib/analytics'
 import { promptInstall } from '@/lib/pwa/install'
 import { formatRand } from '@/lib/format'
 import { GOLF_DAY_TIER } from '@/lib/tiers'
 import { themeFor } from '@/lib/golf-days/themes'
+import { golfDayEvent, googleCalendarUrl } from '@/lib/golf-days/calendar'
+import { siteUrl } from '@/lib/email/layout'
+import { CalendarIcon } from '@/components/icons'
 import {
-  formatGolfDayDate, golfDayPath, shortCourseName,
+  formatGolfDayDate, golfDayPath, golfDayVenue, shortCourseName,
   type GolfDayHole, type GolfDayMe, type PublicGolfDay,
 } from '@/lib/golf-days/rules'
 
@@ -36,13 +40,6 @@ function takeJoinFlag(slug: string): boolean {
   } catch {
     return false // storage blocked: they tap Join instead
   }
-}
-
-/** The club all the holes belong to ("Royal Johannesburg & Kensington"), or the course names. */
-function venueOf(holes: GolfDayHole[]): string {
-  const names = [...new Set(holes.map(h => h.course.name))]
-  const clubs = [...new Set(names.map(n => (n.includes(' – ') ? n.slice(0, n.lastIndexOf(' – ')) : n)))]
-  return clubs.length === 1 ? clubs[0] : names.join(' · ')
 }
 
 /** A course as the golf day names its venue: "Royal Johannesburg – West". */
@@ -249,7 +246,7 @@ export default function GolfDayPage() {
                 <h1 className="gd-name">{nameTop}{nameBottom && <><br />{nameBottom}</>}</h1>
                 <p className="gd-prize">{formatRand(golfDay.prizeZAR)}</p>
                 <p className="gd-band"><span>Free swing</span></p>
-                <p className="gd-meta">{theme.venue ?? venueOf(golfDay.holes)}<br />{formatGolfDayDate(golfDay.playsOn)}</p>
+                <p className="gd-meta">{theme.venue ?? golfDayVenue(golfDay.holes)}<br />{formatGolfDayDate(golfDay.playsOn)}</p>
                 <p className="gd-tagline">{theme.tagline}</p>
               </section>
 
@@ -264,6 +261,7 @@ export default function GolfDayPage() {
                   onSignIn={signInToJoin}
                   onJoin={() => join(true)}
                   onInstall={offerInstall ? () => setInstallSheet('asked') : undefined}
+                  venue={theme.venue}
                   onPick={setPicked}
                   onResume={() => swingHole && me?.swing && goRecord(me.swing.betId, swingHole, golfDay.prizeZAR)}
                 />
@@ -337,7 +335,36 @@ export default function GolfDayPage() {
   )
 }
 
-function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPick, onResume, onInstall }: {
+/**
+ * "Add to calendar", so the link is to hand on the day. Android adds the
+ * event through Google Calendar; an iPhone or a computer opens the .ics,
+ * which Safari shows as an event to add. From the installed app it opens
+ * over the app, not in place of it.
+ */
+function AddToCalendar({ golfDay, venue }: { golfDay: PublicGolfDay; venue: string | null }) {
+  const platform = usePlatform()
+  const standalone = useIsStandalone()
+  if (!platform) return null
+  const google = platform === 'android'
+  const href = google
+    ? googleCalendarUrl(golfDayEvent(golfDay, { site: siteUrl(), venue }))
+    : `/api/golf-days/${encodeURIComponent(golfDay.slug)}/calendar`
+  return (
+    <>
+      <a
+        className="gd-calendar"
+        href={href}
+        onClick={() => track('golf_day_calendar_added', { golf_day: golfDay.slug, calendar: google ? 'google' : 'ics' })}
+        {...(google || standalone ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+      >
+        <CalendarIcon /> Add to calendar
+      </a>
+      <p className="gd-small gd-calendar-note">So the link is in your calendar on the day.</p>
+    </>
+  )
+}
+
+function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPick, onResume, onInstall, venue }: {
   golfDay: PublicGolfDay
   me: GolfDayMe | null
   signedIn: boolean
@@ -349,6 +376,8 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
   onResume: () => void
   /** Opens the home screen pop-up; absent when there is nothing to offer (installed, desktop). */
   onInstall?: () => void
+  /** The theme's short name for the club, for the calendar event. */
+  venue: string | null
 }) {
   const date = formatGolfDayDate(golfDay.playsOn)
   const joined = Boolean(me?.joined)
@@ -397,6 +426,7 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
     return (
       <>
         <p className="gd-status"><strong>You&rsquo;re in.</strong> Your swing opens on {date}. Come back to this tab when you reach one of the holes below.</p>
+        <AddToCalendar golfDay={golfDay} venue={venue} />
         {onInstall && <button type="button" className="gd-link" onClick={onInstall}>Put Get Lucky on your home screen</button>}
       </>
     )

@@ -2280,3 +2280,16 @@ button, [role="button"], [role="tab"] {
   text-decoration: underline; text-underline-offset: 3px;
 }
 .gd-sheet-later { margin-top: 8px; }
+/* Add to calendar: the quiet partner to the host-ink button, in the label's own line work. */
+.gd-calendar {
+  text-decoration: none; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 48px; padding: 0 16px; margin-top: 2px;
+  background: var(--gd-paper); color: var(--gd-ink);
+  border: 2px solid var(--gd-ink); border-radius: 6px;
+  font-family: var(--font-heading); font-size: 18px; font-weight: 800; line-height: 1; letter-spacing: 0.03em; text-transform: uppercase;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+.gd-calendar:active { transform: translate(1px, 2px); }
+.gd-calendar-note { margin: -4px 0 0; text-align: center; }

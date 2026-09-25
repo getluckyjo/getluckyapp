@@ -13,6 +13,8 @@
  *  - only joined players see the tab; switching the day off takes it away
  *  - a signed-out visitor sees the day, not who or how many joined
  *  - admins make and change golf days, and only with holes that can be played
+ *  - "Add to calendar" puts the day, the holes and the link in a player's
+ *    calendar, as a well-formed .ics or a Google Calendar link
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, type FakeUser } from '../helpers/fake-supabase'
@@ -23,6 +25,9 @@ import { GET as myTab } from '@/app/api/golf-days/route'
 import { GET as listDays, POST as createDay } from '@/app/api/admin/golf-days/route'
 import { PATCH as patchDay } from '@/app/api/admin/golf-days/[golfDayId]/route'
 import { GET as listPlayers } from '@/app/api/admin/golf-days/[golfDayId]/players/route'
+import { GET as dayCalendar } from '@/app/api/golf-days/[slug]/calendar/route'
+import { golfDayEvent, googleCalendarUrl, toIcs, type CalendarDay } from '@/lib/golf-days/calendar'
+import { siteUrl } from '@/lib/email/layout'
 import {
   closesAt, formatGolfDayDate, golfDayPhase, golfDaySwingReference, opensAt, refusalFromDbError, shortCourseName, tabVisible, todayInSouthAfrica,
 } from '@/lib/golf-days/rules'
@@ -459,5 +464,98 @@ describe('admin', () => {
       ['Alice', null, null],
       ['Bob', 'miss', 'Royal Johannesburg & Kensington – West, hole 17'],
     ])
+  })
+})
+
+describe('Add to calendar', () => {
+  const calendar = (slug = 'bombsquad') => dayCalendar(new Request(`http://x/api/golf-days/${slug}/calendar`), slugParams(slug))
+  /** The .ics with its folded lines joined back up, as a calendar reads it. */
+  const unfold = (ics: string) => ics.replace(/\r\n /g, '').split('\r\n')
+  const field = (lines: string[], name: string) => lines.find(l => l.startsWith(`${name}:`) || l.startsWith(`${name};`))
+
+  const hole = (course: string, holeNumber: number, distanceMetres: number) => ({
+    holeId: `${course}-${holeNumber}`, holeNumber, par: 3, distanceMetres,
+    course: { id: course, name: `Royal Johannesburg & Kensington – ${course}`, location: 'Linksfield, Gauteng', region: 'Gauteng' },
+  })
+  const DAY_OF: CalendarDay = {
+    slug: 'bombsquad', name: 'Bomb Squad Golf Day', tabLabel: 'BS', playsOn: '2026-10-02', prizeZAR: 100000,
+    holes: [hole('East', 16, 152), hole('West', 17, 161)],
+  }
+  const SITE = 'https://www.getluckyholeinone.com'
+
+  it('is the day itself, all day, with the holes, the link and the prize', () => {
+    const event = golfDayEvent(DAY_OF, { site: SITE, venue: 'Royal Johannesburg' })
+    expect(event).toMatchObject({
+      uid: 'golf-day-bombsquad@www.getluckyholeinone.com',
+      title: 'Bomb Squad Golf Day: free swing for R100\u00a0000',
+      start: '20261002',
+      end: '20261003',
+      location: 'Royal Johannesburg, Linksfield, Gauteng',
+      url: 'https://www.getluckyholeinone.com/golf-day/bombsquad',
+    })
+    expect(event.details).toContain('Play it at East 16 (152 m) or West 17 (161 m).')
+    expect(event.details).toContain('open the BS tab in Get Lucky')
+    expect(event.details).toContain('https://www.getluckyholeinone.com/golf-day/bombsquad')
+    expect(event.reminder).toBe('Bomb Squad Golf Day is today. Open the BS tab in Get Lucky for your free swing.')
+  })
+
+  it('without a short venue, names the club as the courses table does; a day on the 31st ends next year', () => {
+    const event = golfDayEvent({ ...DAY_OF, playsOn: '2026-12-31' }, { site: `${SITE}/`, venue: null })
+    expect(event.location).toBe('Royal Johannesburg & Kensington, Linksfield, Gauteng')
+    expect([event.start, event.end]).toEqual(['20261231', '20270101'])
+    expect(event.url).toBe('https://www.getluckyholeinone.com/golf-day/bombsquad')
+  })
+
+  it('writes a well-formed .ics: CRLF, lines of at most 75 bytes, text escaped, a reminder at 7am on the day', () => {
+    const event = golfDayEvent({ ...DAY_OF, name: 'Smith, Jones; & Co\\ Golf Day' }, { site: SITE, venue: 'Royal Johannesburg' })
+    const ics = toIcs(event, new Date('2026-09-25T10:11:12.345Z'))
+    expect(ics.endsWith('\r\n')).toBe(true)
+    expect(ics.replace(/\r\n/g, '')).not.toMatch(/[\r\n]/)
+    for (const line of ics.split('\r\n')) expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75)
+
+    const lines = unfold(ics)
+    expect(lines.slice(0, 2)).toEqual(['BEGIN:VCALENDAR', 'VERSION:2.0'])
+    expect(field(lines, 'DTSTAMP')).toBe('DTSTAMP:20260925T101112Z')
+    expect(field(lines, 'DTSTART')).toBe('DTSTART;VALUE=DATE:20261002')
+    expect(field(lines, 'DTEND')).toBe('DTEND;VALUE=DATE:20261003')
+    expect(field(lines, 'SUMMARY')).toBe('SUMMARY:Smith\\, Jones\\; & Co\\\\ Golf Day: free swing for R100\u00a0000')
+    expect(field(lines, 'LOCATION')).toBe('LOCATION:Royal Johannesburg\\, Linksfield\\, Gauteng')
+    expect(field(lines, 'DESCRIPTION')).toContain('\\n\\nPlay it at East 16 (152 m) or West 17 (161 m).')
+    expect(lines).toContain('TRIGGER:PT7H')
+    // Folding never splits a character: the unfolded text is the text.
+    expect(lines.join('\n')).toContain('free swing for R100\u00a0000')
+  })
+
+  it('gives Android a Google Calendar link carrying the same event', () => {
+    const event = golfDayEvent(DAY_OF, { site: SITE, venue: 'Royal Johannesburg' })
+    const url = new URL(googleCalendarUrl(event))
+    expect(url.origin + url.pathname).toBe('https://calendar.google.com/calendar/render')
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      action: 'TEMPLATE', text: event.title, dates: '20261002/20261003', details: event.details, location: event.location,
+    })
+  })
+
+  it('GET serves the golf day as text/calendar, from the database and the theme', async () => {
+    const day = seedDay({ plays_on: '2026-10-02', tab_label: 'BS' }); joined(day, USER_B)
+    const res = await calendar()
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('text/calendar; charset=utf-8')
+    expect(res.headers.get('content-disposition')).toBe('inline; filename="bombsquad.ics"')
+    const body = await res.text()
+    const lines = unfold(body)
+    expect(field(lines, 'DTSTART')).toBe('DTSTART;VALUE=DATE:20261002')
+    expect(field(lines, 'LOCATION')).toBe('LOCATION:Royal Johannesburg\\, Linksfield\\, Gauteng')
+    expect(field(lines, 'URL')).toBe(`URL:${siteUrl()}/golf-day/bombsquad`)
+    expect(field(lines, 'DESCRIPTION')).toContain('East 2 (211 m) or West 17 (185 m)')
+    expect(body).not.toContain(USER_B.id)
+  })
+
+  it('GET: 404 for an unknown, malformed or switched-off golf day', async () => {
+    seedDay({ slug: 'off', disabled_at: new Date().toISOString() })
+    seedDay()
+    expect((await calendar('nope')).status).toBe(404)
+    expect((await calendar('BAD SLUG')).status).toBe(404)
+    expect((await calendar('off')).status).toBe(404)
+    expect((await calendar()).status).toBe(200)
   })
 })

@@ -160,6 +160,13 @@ export interface AdminGolfDay {
   createdAt: string
 }
 
+/** The club all the holes belong to ("Royal Johannesburg & Kensington"), or the course names. */
+export function golfDayVenue(holes: GolfDayHole[]): string {
+  const names = [...new Set(holes.map(h => h.course.name))]
+  const clubs = [...new Set(names.map(n => (n.includes(' – ') ? n.slice(0, n.lastIndexOf(' – ')) : n)))]
+  return clubs.length === 1 ? clubs[0] : names.join(' · ')
+}
+
 /** Course names carry the club: "Royal Johannesburg & Kensington – East" reads "East" next to its sibling. */
 export function shortCourseName(name: string, siblings: string[]): string {
   const dash = name.lastIndexOf(' – ')
