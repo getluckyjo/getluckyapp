@@ -56,9 +56,11 @@ describe('safeNext', () => {
     }
   })
 
-  it('allows /admin itself but nothing built from it', () => {
-    expect(safeNext('/admin')).toBe('/admin')
-    for (const bad of ['/admin/payments', '/admin?x=1', '/adminx', '/admin/']) {
+  it('allows /admin and its pages, so an admin signed out mid-task comes back, and nothing else built from it', () => {
+    for (const ok of ['/admin', '/admin/payments', '/admin/verification-queue/0f1e2d3c-4b5a-4968-8776-655443322110', '/admin/courses/abc-123/holes']) {
+      expect(safeNext(ok), ok).toBe(ok)
+    }
+    for (const bad of ['/admin?x=1', '/adminx', '/admin/', '/admin//evil.example', '/admin/../auth', '/admin/a/b/c/d', '/admin/Payments', '/admin/x?next=//evil.example', '//admin/payments']) {
       expect(safeNext(bad), String(bad)).toBe('/welcome')
     }
   })
