@@ -59,6 +59,39 @@ export function FlagIcon({ size = 24, ...rest }: IconProps) {
   )
 }
 
+/**
+ * Tab bar — the Bomb Squad golf day's tab: the bomb and BS shield from the
+ * Bomb Squad Lager can (tail fins, shield, BS, the bar under it), drawn as
+ * line work to sit with the other tab icons.
+ */
+export function BombSquadIcon({ size = 24, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, '0 0 40 46', 40 / 46)} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" {...rest}>
+      <g strokeWidth={2.6}>
+        <path d="M16.4 5.5L4.2 2.4 5.8 12.2 17.3 13.8" />
+        <path d="M23.6 5.5L35.8 2.4 34.2 12.2 22.7 13.8" />
+        <ellipse cx={20} cy={8.5} rx={4} ry={7} />
+        <path d="M17.6 15.6H14.5L6.5 21V32C6.5 38.6 12.5 43.4 20 43.4S33.5 38.6 33.5 32V21L25.5 15.6H22.4" />
+      </g>
+      <g strokeWidth={2.4}>
+        <path d="M12.6 22.8V33.6H15.9a2.9 2.9 0 0 0 0-5.8H12.6M12.6 27.8H15.5a2.5 2.5 0 0 0 0-5H12.6" />
+        <path d="M27.4 24.6C26.8 23.4 25.7 22.8 24.5 22.8 22.8 22.8 21.6 23.9 21.6 25.3 21.6 28.6 27.6 27.2 27.6 30.8 27.6 32.5 26.2 33.6 24.4 33.6 23 33.6 21.8 32.9 21.2 31.8" />
+        <path d="M14 38.2H26" />
+      </g>
+    </svg>
+  )
+}
+
+/** A calendar page with a plus: "Add to calendar". Line work, like the install steps' icons. */
+export function CalendarIcon({ size = 22, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, '0 0 24 24', 1)} fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...rest}>
+      <rect x={3.5} y={5} width={17} height={15.5} rx={2.5} />
+      <path d="M3.5 10H20.5M8 3V7M16 3V7M12 12.8V17.8M9.5 15.3H14.5" />
+    </svg>
+  )
+}
+
 /** Tab bar — Account (person outline). */
 export function AccountIcon({ size = 24, ...rest }: IconProps) {
   return (

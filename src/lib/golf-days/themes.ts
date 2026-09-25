@@ -12,6 +12,12 @@ export interface GolfDayTheme {
   heroAlt: string
   /** Who is hosting, as players know them. */
   host: string
+  /**
+   * The venue on the label and the swing sheet, when players know the club
+   * by a shorter name than the courses table's. Null: the club's name as it
+   * is there.
+   */
+  venue: string | null
   /** One line under the prize. */
   tagline: string
   /** Colours for the label card, taken from the host's own artwork. */
@@ -27,6 +33,7 @@ export const DEFAULT_THEME: GolfDayTheme = {
   heroImage: null,
   heroAlt: '',
   host: 'Get Lucky',
+  venue: null,
   tagline: 'One swing each. Hole it and it’s yours.',
   ink: '#345231',
   accent: '#d7f34a',
@@ -41,6 +48,7 @@ const THEMES: Record<string, GolfDayTheme> = {
     heroImage: '/golf-days/bombsquad/hero.jpg',
     heroAlt: 'Two cans of Bomb Squad Lager raised in a toast',
     host: 'Bomb Squad Lager',
+    venue: 'Royal Johannesburg',
     tagline: 'Quench your thirst. Hole it on the day and it’s yours.',
     ink: '#1f3a2f',
     accent: '#b8914a',

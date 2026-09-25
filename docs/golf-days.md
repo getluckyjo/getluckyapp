@@ -24,8 +24,8 @@ or by hand at `/admin/golf-days`.
 | Holes | East 16, 152 m from the club tees; West 17, 161 m from the white tees (where golf days play it) |
 | Prize | R100 000, covered by Get Lucky (not insured by Indwe) |
 | Places | 200 |
-| Tab | "Bomb Squad" |
-| Look | The can: white stock, bottle-green line work, gold accent. Photo brightened in `public/golf-days/bombsquad/hero.jpg` |
+| Tab | "BS", with the bomb and BS shield from the can as its icon. Migration 029 seeds the label "Bomb Squad", which a narrow phone cuts to "BOMB SQ…"; production's is changed to "BS" in the admin |
+| Look | The can: white stock, bottle-green line work, gold accent. Photo brightened in `public/golf-days/bombsquad/hero.jpg`. The label says "Free swing" and names the venue "Royal Johannesburg" (the theme's `venue`), without "& Kensington" |
 
 Each course's signature par 3, with lengths from the club's own 2024
 scorecards:
@@ -64,7 +64,7 @@ Tap the link, sign in and tap *Join*. Then add Get Lucky to your home screen whe
 https://www.getluckyholeinone.com/golf-day/bombsquad
 
 *On the day:*
-At *East 16* or *West 17*, open the *Bomb Squad* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
+At *East 16* or *West 17*, open the *BS* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
 
 18+ only. One swing each.
 
@@ -92,6 +92,26 @@ On iPhone the home screen app keeps its own sign-in, separate from
 Safari's. The pop-up tells players to sign in once more with the code from
 their email. Their join is on their account, so the tab is there when they
 do.
+
+### Add to calendar
+
+Once joined, and until the day, the screen has an **Add to calendar**
+button, so the link is easy to find again. The event is all day on the
+golf day's date, with the holes, the tab to open and the link
+(`src/lib/golf-days/calendar.ts`):
+
+- **iPhone and computers:** the button opens `GET /api/golf-days/<slug>/calendar`,
+  an .ics file. Safari shows it as an event to add; a computer downloads
+  it. It carries a reminder at 7am on the day. From the installed app it
+  opens over the app.
+- **Android:** the button opens Google Calendar with the event filled in.
+  Google ignores reminders in a link, so the phone's default one applies.
+
+Every download has the same event ID, so adding it twice updates the
+event rather than repeating it. A switched-off golf day has no calendar
+file. Wallet passes were considered and left: Apple Wallet needs an Apple
+Developer account and a signing certificate, Google Wallet an approved
+issuer account.
 
 ## Going live
 
@@ -151,7 +171,10 @@ hand. Then Icons comes back.
 
 `__tests__/money/golf-day.test.ts` covers the day's time window, the
 routes, the tab, the admin and both races, staged through the test fake.
-`__tests__/money/auth-flow.test.ts` covers the way back from sign-in.
+`__tests__/money/auth-flow.test.ts` covers the way back from sign-in. The
+calendar event is pinned in `golf-day.test.ts` too (dates, escaping, line
+folding, the reminder, the Google link and the route), and the Bomb Squad
+file was read back with Python's `icalendar` parser.
 
 Migrations 001–029 were applied to a local Postgres 16. Every trigger rule
 was exercised there: full, over, not joined, wrong hole, wrong prize, not

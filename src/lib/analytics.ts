@@ -25,6 +25,7 @@ export type AnalyticsEvent =
   | 'promo_code_applied'
   | 'promo_swing_started'
   | 'golf_day_joined'
+  | 'golf_day_calendar_added'
   | 'golf_day_swing_started'
   | 'card_removed'
   | 'bet_created'

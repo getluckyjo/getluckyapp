@@ -2197,7 +2197,11 @@ button, [role="button"], [role="tab"] {
    (src/lib/golf-days/themes.ts) as --gd-* on the screen. The label card
    borrows the Bomb Squad can: white stock, a double rule in the ink colour,
    spaced capitals, a framed band. The accent is decoration only (rules and
-   the button's shadow): gold on white is too faint for text. */
+   the button's shadow): gold on white is too faint for text.
+   The label's type is sized to the label (cqi), not the browser window
+   (vw): on a computer the app sits in a 375 px phone frame while vw is the
+   whole window's. The vw sizes are the fallback for browsers without
+   container units. */
 .gd-screen { background: var(--gd-page); color: var(--gd-ink); }
 .gd-scroll { padding-top: 6px; }
 .gd-hero { border-radius: 16px; overflow: hidden; aspect-ratio: 5 / 4; background: #dfe3e0; }
@@ -2210,22 +2214,25 @@ button, [role="button"], [role="tab"] {
   outline: 1px solid var(--gd-ink); outline-offset: -7px;
   box-shadow: 0 10px 30px rgba(20, 38, 28, 0.14);
   animation: fadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+  container-type: inline-size;
 }
 .gd-hero + .gd-label { margin-top: -46px; }
 .gd-kicker {
   margin: 0 auto 10px; padding-bottom: 8px; width: max-content; max-width: 100%;
   border-bottom: 2px solid var(--gd-accent);
-  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+  font-family: 'Inter', sans-serif; font-size: 10px; font-size: clamp(9px, 3.9cqi, 11px); font-weight: 700; letter-spacing: 0.18em; line-height: 1.5; text-transform: uppercase; text-wrap: balance;
 }
-.gd-name { margin: 0; font-family: var(--font-heading); font-size: clamp(22px, 6.4vw, 27px); line-height: 1.05; letter-spacing: 0.04em; text-transform: uppercase; text-wrap: balance; }
-.gd-prize { margin: 8px 0 10px; font-family: var(--font-heading); font-weight: 800; font-size: clamp(46px, 14vw, 58px); line-height: 1; letter-spacing: 0.01em; }
+.gd-name { margin: 0; font-family: var(--font-heading); font-size: clamp(20px, 5.6vw, 27px); font-size: clamp(20px, 9cqi, 27px); line-height: 1.05; letter-spacing: 0.04em; text-transform: uppercase; text-wrap: balance; }
+.gd-prize { margin: 8px 0 12px; font-family: var(--font-heading); font-weight: 800; font-size: clamp(40px, 11vw, 52px); font-size: clamp(34px, 18cqi, 58px); line-height: 1; letter-spacing: 0.01em; white-space: nowrap; }
 .gd-band { margin: 0; }
 .gd-band span {
-  display: inline-block; padding: 6px 14px;
+  display: inline-block; max-width: 100%; padding: 6px 16px;
   border: 2px solid var(--gd-ink); outline: 1px solid var(--gd-ink); outline-offset: 2px;
-  font-family: var(--font-heading); font-size: 14px; font-weight: 800; letter-spacing: 0.26em; text-transform: uppercase;
+  font-family: var(--font-heading); font-size: 14px; font-size: clamp(12px, 5.4cqi, 16px); font-weight: 800; letter-spacing: 0.26em; text-transform: uppercase;
+  /* the spacing trails the last letter; pad it back so the word sits centred */
+  padding-right: calc(16px - 0.26em);
 }
-.gd-meta { margin: 14px 0 0; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; line-height: 1.6; text-transform: uppercase; }
+.gd-meta { margin: 14px 0 0; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; line-height: 1.6; text-transform: uppercase; text-wrap: balance; }
 .gd-tagline { margin: 10px 0 0; font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.45; opacity: 0.85; }
 .gd-copy { margin: 0 0 12px; font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.45; }
 .gd-action { display: flex; flex-direction: column; gap: 10px; margin: 0 0 16px; }
@@ -2273,3 +2280,16 @@ button, [role="button"], [role="tab"] {
   text-decoration: underline; text-underline-offset: 3px;
 }
 .gd-sheet-later { margin-top: 8px; }
+/* Add to calendar: the quiet partner to the host-ink button, in the label's own line work. */
+.gd-calendar {
+  text-decoration: none; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; min-height: 48px; padding: 0 16px; margin-top: 2px;
+  background: var(--gd-paper); color: var(--gd-ink);
+  border: 2px solid var(--gd-ink); border-radius: 6px;
+  font-family: var(--font-heading); font-size: 18px; font-weight: 800; line-height: 1; letter-spacing: 0.03em; text-transform: uppercase;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease;
+}
+.gd-calendar:active { transform: translate(1px, 2px); }
+.gd-calendar-note { margin: -4px 0 0; text-align: center; }

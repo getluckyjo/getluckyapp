@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { haptics } from '@/lib/haptics'
-import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon, FlagIcon } from '@/components/icons'
+import { HomeIcon, WinnersIcon, GolfBallIcon, ClubIcon, AccountIcon, FlagIcon, BombSquadIcon } from '@/components/icons'
 import { useGolfDayTab } from '@/hooks/useGolfDayTab'
 import { golfDayPath } from '@/lib/golf-days/rules'
 
@@ -39,6 +39,12 @@ const TABS: Tab[] = [
   { key: 'account',     label: 'Account', path: '/account',       Icon: AccountIcon, size: 22 },
 ]
 
+/** A golf day's tab shows its host's mark where there is one, keyed by slug; a pin flag otherwise. */
+const GOLF_DAY_ICONS: Record<string, Pick<Tab, 'Icon' | 'size'>> = {
+  bombsquad: { Icon: BombSquadIcon, size: 27 },
+}
+const GOLF_DAY_ICON_DEFAULT: Pick<Tab, 'Icon' | 'size'> = { Icon: FlagIcon, size: 22 }
+
 /** `active` may be omitted on pages that belong to no tab (legal, not found). */
 export default function BottomTabBar({ active }: { active?: ActiveTab }) {
   const router = useRouter()
@@ -46,7 +52,10 @@ export default function BottomTabBar({ active }: { active?: ActiveTab }) {
   // everyone else, signed out included, keeps Icons.
   const golfDay = useGolfDayTab()
   const tabs = golfDay
-    ? TABS.map(t => t.key !== 'icons' ? t : { key: 'golfday' as const, label: golfDay.tabLabel, path: golfDayPath(golfDay.slug), Icon: FlagIcon, size: 22 })
+    ? TABS.map(t => t.key !== 'icons' ? t : {
+        key: 'golfday' as const, label: golfDay.tabLabel, path: golfDayPath(golfDay.slug),
+        ...(GOLF_DAY_ICONS[golfDay.slug] ?? GOLF_DAY_ICON_DEFAULT),
+      })
     : TABS
   const paths = tabs.map(t => t.path).join('|')
 
