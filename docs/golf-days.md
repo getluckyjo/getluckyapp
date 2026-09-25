@@ -21,17 +21,27 @@ or by hand at `/admin/golf-days`.
 | Link | `https://www.getluckyholeinone.com/golf-day/bombsquad` |
 | Date | Friday 2 October 2026 (the swing works 00:00–23:59, South African time) |
 | Venue | Royal Johannesburg & Kensington, East and West courses |
-| Holes | East 2, 211 m from the club tees; West 17, 185 m from the yellow tees |
+| Holes | East 16, 152 m from the club tees; West 7, 144 m from the yellow tees |
 | Prize | R100 000, covered by Get Lucky (not insured by Indwe) |
 | Places | 200 |
 | Tab | "Bomb Squad" |
 | Look | The can: white stock, bottle-green line work, gold accent. Photo brightened in `public/golf-days/bombsquad/hero.jpg` |
 
-The holes are the longest par 3 on each course, going by the club's own
-2024 scorecards. Get Lucky is covering the prize itself, so the longest hole
-gives the lowest chance of paying out. If you want holes more players can
-reach, East 12 (168 m) and West 4 (178 m) are the alternatives; change them
-at `/admin/golf-days`.
+The brief was a signature par 3 of about 150 m on each course, with
+lengths taken from the club's own 2024 scorecards:
+
+- **East 16** (152 m from the club tees) plays over water. The club has
+  recently reworked it as a showpiece, and SA Top 100 reviewers pair it
+  with the 5th as "the par 3s over water".
+- **West 7** (144 m from the yellow tees) plays across water to a shelf
+  green. It is one of the West's "quartet of wonderful" par 3s.
+
+The West's most celebrated par 3 is the 17th, "one of the best par 3s in
+South Africa". But it is 185 m from the yellow tees, and around 150 m only
+from the whites (161 m). If you would rather use it, change the hole at
+`/admin/golf-days` and set its distance to the tee you will play. East 5,
+the other water hole, is 139 m from the club tees, under the app's 140 m
+minimum.
 
 Migration 029 also corrects the West course's par 3 distances to the
 club's 2024 card (yellow tees). They were out of date from migration 019.
@@ -41,7 +51,7 @@ club's 2024 card (yellow tees). They were out of date from migration 019.
 > **Bomb Squad Golf Day × Get Lucky: one free swing each for R100 000**
 >
 > 1. **Before Friday:** open www.getluckyholeinone.com/golf-day/bombsquad on your phone. Sign in with Google or your email, confirm you're 18 or older, and tap **Join**. A **Bomb Squad** tab appears at the bottom of the app. Tip: add the page to your home screen.
-> 2. **On the day:** at East hole 2 or West hole 17, open the **Bomb Squad** tab and tap the hole you're on.
+> 2. **On the day:** at East hole 16 or West hole 7, open the **Bomb Squad** tab and tap the hole you're on.
 > 3. **Film it:** hand your phone to a playing partner to film your tee shot in the app.
 >
 > Hole it, and once the club and your playing partners confirm it, R100 000 is yours.
@@ -50,8 +60,10 @@ club's 2024 card (yellow tees). They were out of date from migration 019.
 
 1. **Database.** In the Supabase SQL editor, run `028_golf_day_tier.sql`
    **on its own**, then `029_golf_days.sql`. The last select in 029 should
-   list the Bomb Squad day with East 2 (211 m) and West 17 (185 m): both
-   par 3, active and at partner courses.
+   list the Bomb Squad day with East 16 (152 m) and West 7 (144 m): both
+   par 3, active and at partner courses. If West 7 shows 139 m, its
+   distance was edited after migration 019 and the correction skipped it.
+   Set it to 144 m in Admin → Courses, or the swing there will be refused.
 2. **Deploy.** Merge the pull request.
 3. **Sign-ups.** Raise Supabase's email rate limit before the link goes
    out (Authentication → Rate Limits). The default of 30 an hour will stall

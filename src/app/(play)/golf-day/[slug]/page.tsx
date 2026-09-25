@@ -43,6 +43,12 @@ function venueOf(holes: GolfDayHole[]): string {
   return clubs.length === 1 ? clubs[0] : names.join(' · ')
 }
 
+/** "Bomb Squad Golf Day" sets as the host, then GOLF DAY on a line of its own. */
+function nameLines(name: string): [string, string | null] {
+  const m = /^(.*\S)\s+(golf day)$/i.exec(name.trim())
+  return m ? [m[1], m[2]] : [name, null]
+}
+
 function holeTitle(hole: GolfDayHole, all: GolfDayHole[]): string {
   const course = shortCourseName(hole.course.name, all.map(h => h.course.name))
   return `${course} · Hole ${hole.holeNumber}`
@@ -178,6 +184,7 @@ export default function GolfDayPage() {
   } as CSSProperties
 
   const golfDay = data?.golfDay
+  const [nameTop, nameBottom] = golfDay ? nameLines(golfDay.name) : ['', null]
   const me = data?.me ?? null
   const swingHole = me?.swing ? golfDay?.holes.find(h => h.holeId === me.swing!.holeId) ?? null : null
 
@@ -212,7 +219,7 @@ export default function GolfDayPage() {
             <>
               <section className="gd-label">
                 <p className="gd-kicker">{theme.host} <span aria-hidden>×</span> Get Lucky</p>
-                <h1 className="gd-name">{golfDay.name}</h1>
+                <h1 className="gd-name">{nameTop}{nameBottom && <><br />{nameBottom}</>}</h1>
                 <p className="gd-prize">{formatRand(golfDay.prizeZAR)}</p>
                 <p className="gd-band"><span>One free swing each</span></p>
                 <p className="gd-meta">{venueOf(golfDay.holes)}<br />{formatGolfDayDate(golfDay.playsOn)}</p>

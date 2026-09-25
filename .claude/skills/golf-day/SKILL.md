@@ -44,10 +44,16 @@ Ask for anything missing. Do not guess the date, prize or venue.
   migration (update only rows still carrying the old value).
 - A hole must be a par 3 of at least 140 m (`src/lib/holes.ts`), active, at a
   partner course. The admin refuses anything else.
-- If Get Lucky covers the prize itself, recommend the longest par 3 on each
-  course: it gives the lowest chance of paying out. Name a shorter
-  alternative in case the host wants a friendlier hole.
-- Say which tee the distance is from (club/yellow for men, usually).
+- Johannes's brief for golf days: a **signature par 3 of about 150 m** on
+  each course, not the longest. Find the signature holes in course reviews
+  (satop100courses.com course pages, the club's site): water carries,
+  elevated tees, holes the club has reworked as showpieces. Then pick the
+  one nearest 150 m from the tee the day will play.
+- Say which tee the distance is from (club/yellow for men, usually), and
+  name the alternative when the most famous hole is not near 150 m.
+  Example: Royal West 17 is 185 m from yellow and 161 m from white.
+- The app stores one distance per hole. If the day plays another tee,
+  change that hole's distance in Admin → Courses to match.
 
 ## 3. Create it
 
