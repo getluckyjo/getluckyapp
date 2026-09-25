@@ -24,7 +24,7 @@ or by hand at `/admin/golf-days`.
 | Holes | East 16, 152 m from the club tees; West 17, 161 m from the white tees (where golf days play it) |
 | Prize | R100 000, covered by Get Lucky (not insured by Indwe) |
 | Places | 200 |
-| Tab | "BS", with the bomb and BS shield from the can as its icon. Migration 029 seeds the label "Bomb Squad", which a narrow phone cuts to "BOMB SQ…"; production's is changed to "BS" in the admin |
+| Tab | "BS", with the bomb and BS shield from the can as its icon. Migration 029 seeded the label "Bomb Squad", which a narrow phone cuts to "BOMB SQ…"; migration 030 changes it to "BS" |
 | Look | The can: white stock, bottle-green line work, gold accent. Photo brightened in `public/golf-days/bombsquad/hero.jpg`. The label says "Free swing" and names the venue "Royal Johannesburg" (the theme's `venue`), without "& Kensington" |
 
 Each course's signature par 3, with lengths from the club's own 2024
@@ -60,7 +60,7 @@ are WhatsApp's bold.
 Every player gets ONE free swing for *R100 000* on Friday 2 October. Hole it and it's yours.
 
 *Before Friday (takes 2 minutes):*
-Tap the link, sign in and tap *Join*. Then add Get Lucky to your home screen when it asks.
+Tap the link, sign in and tap *Join*. Add Get Lucky to your home screen when it asks, and tap *Add to calendar* so the link is there on the day.
 https://www.getluckyholeinone.com/golf-day/bombsquad
 
 *On the day:*
@@ -70,6 +70,49 @@ At *East 16* or *West 17*, open the *BS* tab and tap your hole. Hand your phone 
 
 See you on the tee. Time to get lucky! 🍀
 ```
+
+## The SaSwazi Golf Trek
+
+| | |
+|---|---|
+| Link | `https://www.getluckyholeinone.com/golf-day/saswazi` |
+| Date | Friday 2 October 2026 (the same day as Bomb Squad; the swing works 00:00–23:59, South African time) |
+| Venue | Umdoni Park Golf Club, Pennington, KZN South Coast. One course |
+| Hole | 16, 185 m from the white (back) tees, about 178 m from the blue |
+| Prize | R100 000, covered by Get Lucky (not insured by Indwe) |
+| Places | 24 |
+| Tab | "SaSwazi", with the pin flag: the logo is a scene, not a mark that reads at tab size |
+| Look | The trek's sticker logo, shown whole above the label (`hero.kind: 'logo'`), in its colours: cream stock, bottle green, hot pink. The label names the venue "Umdoni Park" |
+
+Umdoni Park has four par 3s: 3 (116 m), 7 (155 m), 12, "Majuba" (110 m),
+and 16 (185 m), from the white tees. 3 and 12 are under the app's 140 m
+minimum. Johannes chose the 16th (25 September 2026): Umdoni's signature
+par 3, which "plummets steeply downhill" from an elevated tee (SA Top 100),
+so it plays shorter than its length. The 7th was the alternative nearest
+150 m. Distances are from the club's card as published by GolfPass
+(Black 170 and 202 yd, Red 148 and 195 yd for 7 and 16); its totals match
+SA Top 100's White 5 592 m and Blue 4 989 m.
+
+Migration 030 seeds it, and checks the hole.
+
+```
+*SaSwazi Golf Trek × Get Lucky* ⛳
+
+Every player gets ONE free swing for *R100 000* on Friday 2 October. Hole it and it's yours.
+
+*Before Friday (takes 2 minutes):*
+Tap the link, sign in and tap *Join*. Add Get Lucky to your home screen when it asks, and tap *Add to calendar* so the link is there on the day.
+https://www.getluckyholeinone.com/golf-day/saswazi
+
+*On the day:*
+At Umdoni Park's *16th*, open the *SaSwazi* tab and tap the hole. Hand your phone to a playing partner to film your tee shot. That's it.
+
+18+ only. One swing each.
+
+It's going to be wild on the Wild Coast, boys. Time to get lucky! 🍀
+```
+
+## Every golf day
 
 ### Home screen
 
@@ -118,7 +161,9 @@ issuer account.
 1. **Database.** In the Supabase SQL editor, run `028_golf_day_tier.sql`
    **on its own**, then `029_golf_days.sql`. The last select in 029 should
    list the Bomb Squad day with East 16 (152 m) and West 17 (185 m): both
-   par 3, active and at partner courses.
+   par 3, active and at partner courses. Then `030_saswazi_golf_trek.sql`:
+   its select should list SaSwazi with Umdoni Park 16 (185 m), and Bomb
+   Squad with the tab label BS.
 2. **Deploy.** Merge the pull request.
 3. **Sign-ups.** Raise Supabase's email rate limit before the link goes
    out (Authentication → Rate Limits). The default of 30 an hour will stall
@@ -128,7 +173,8 @@ issuer account.
 4. **Claims.** A claim asks the club to confirm by email. Johannes is the
    club official for Royal Johannesburg East and West (Admin → Courses →
    Contacts, 25 September 2026). Every claim at either course, golf day or
-   paid, emails him.
+   paid, emails him. Umdoni Park needs its own official before the
+   SaSwazi Golf Trek (Admin → Courses → Umdoni Park Golf Club → Contacts).
 5. **Terms.** `/terms` says every prize is insured by Indwe. The golf day
    screen says the prize is paid by Get Lucky. Johannes chose to leave the
    terms as they are (25 September 2026).

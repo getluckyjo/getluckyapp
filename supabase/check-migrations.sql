@@ -30,7 +30,8 @@ with checks(n, name, applied) as (values
   ('026', 'promo_swing_tier',     exists (select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='bet_tier' and e.enumlabel='tier_promo')),
   ('027', 'promo_codes',          to_regclass('public.promo_codes') is not null),
   ('028', 'golf_day_tier',        exists (select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='bet_tier' and e.enumlabel='tier_golf_day')),
-  ('029', 'golf_days',            to_regclass('public.golf_days') is not null)
+  ('029', 'golf_days',            to_regclass('public.golf_days') is not null),
+  ('030', 'saswazi_golf_trek',    to_regclass('public.golf_days') is not null and exists (select 1 from public.golf_days where slug = 'saswazi'))
 )
 select n, name, case when applied then 'applied' else 'MISSING' end as status
 from checks order by n;

@@ -506,6 +506,18 @@ describe('Add to calendar', () => {
     expect(event.url).toBe('https://www.getluckyholeinone.com/golf-day/bombsquad')
   })
 
+  it('a golf day on one course names the hole alone, and the club by its short name', () => {
+    const umdoni = {
+      holeId: 'u16', holeNumber: 16, par: 3, distanceMetres: 185,
+      course: { id: 'umdoni', name: 'Umdoni Park Golf Club', location: 'Pennington, KwaZulu-Natal', region: 'KwaZulu-Natal' },
+    }
+    const event = golfDayEvent({ ...DAY_OF, slug: 'saswazi', name: 'SaSwazi Golf Trek', tabLabel: 'SaSwazi', holes: [umdoni] }, { site: SITE, venue: 'Umdoni Park' })
+    expect(event.details).toContain('Play it at hole 16 (185 m).')
+    expect(event.details).toContain('open the SaSwazi tab')
+    expect(event.location).toBe('Umdoni Park, Pennington, KwaZulu-Natal')
+    expect(event.url).toBe('https://www.getluckyholeinone.com/golf-day/saswazi')
+  })
+
   it('writes a well-formed .ics: CRLF, lines of at most 75 bytes, text escaped, a reminder at 7am on the day', () => {
     const event = golfDayEvent({ ...DAY_OF, name: 'Smith, Jones; & Co\\ Golf Day' }, { site: SITE, venue: 'Royal Johannesburg' })
     const ics = toIcs(event, new Date('2026-09-25T10:11:12.345Z'))
