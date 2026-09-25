@@ -65,6 +65,8 @@ export default function AdminPromosPage() {
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Switching a code back on has no dialog to show its failure in.
+  const [rowError, setRowError] = useState<string | null>(null)
   // The code just made, shown until the next one so it can be copied and sent.
   const [created, setCreated] = useState<AdminPromo | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
@@ -140,10 +142,10 @@ export default function AdminPromosPage() {
   }
 
   async function switchOn(r: AdminPromo) {
-    setError(null)
+    setRowError(null)
     const sent = await send<AdminPromo>(`/api/admin/promos/${r.id}`, 'PATCH', { disabled: false })
     if (sent.ok) replace(sent.data)
-    else setError(sent.error)
+    else setRowError(`${r.code} was not switched on. ${sent.error}`)
   }
 
   async function confirm() {
@@ -223,6 +225,7 @@ export default function AdminPromosPage() {
       <form id="promo-edit" onSubmit={saveEdit} />
 
       <div style={{ marginTop: 18 }}>
+        {rowError && <p role="alert" className="adm-error" style={{ margin: '0 0 10px' }}>{rowError}</p>}
         {loading ? (
           <p className="adm-muted">Loading…</p>
         ) : !rows ? (

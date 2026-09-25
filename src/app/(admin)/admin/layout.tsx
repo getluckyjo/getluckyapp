@@ -16,8 +16,9 @@ import './admin.css'
  * profiles.is_admin. This gate asks it rather than trusting the browser's copy
  * of the profile, which arrives after the session.
  *
- * /api/admin/stats is that question and the sidebar's badge in one call. Its
- * two refusals mean different things and are handled differently:
+ * /api/admin/me is that question, and the sidebar's badge, in one light call
+ * (asked again on every page change and on focus). Its two refusals mean
+ * different things and are handled differently:
  *
  *   401 — the server saw no session. That is a sign-in problem, not a
  *         permission one, and it happens on a cold load while the access token

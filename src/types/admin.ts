@@ -10,16 +10,6 @@ export type VerificationRow = Database['public']['Tables']['verifications']['Row
 export type VerificationStatus = VerificationRow['status']
 export type BetStatus = BetRow['status']
 
-export interface AdminStats {
-  totalRevenue: number
-  activeBets: number
-  pendingClaims: number
-  totalPayouts: number
-  totalUsers: number
-  recentBets: AdminBetRecord[]
-  recentVerifications: VerificationQueueItem[]
-}
-
 export interface VerificationQueueItem {
   id: string
   betId: string

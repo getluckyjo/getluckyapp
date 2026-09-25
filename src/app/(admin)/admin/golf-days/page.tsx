@@ -235,7 +235,7 @@ export default function AdminGolfDaysPage() {
     setError(null)
     const sent = await send<AdminGolfDay>(`/api/admin/golf-days/${r.id}`, 'PATCH', { disabled: false })
     if (sent.ok) put(sent.data)
-    else setError(sent.error)
+    else setError(`${r.name} was not switched on. ${sent.error}`)
   }
 
   async function confirm() {

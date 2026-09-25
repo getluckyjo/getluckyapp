@@ -107,6 +107,9 @@
 /* ── Cards ── */
 .adm-card { background: var(--white); border-radius: 16px; padding: 20px 22px; }
 .adm-card + .adm-card { margin-top: 14px; }
+/* Cards side by side (a grid, a row, a stack, a row of stats) are spaced by the gap, not a margin. */
+.adm-grid-2 > .adm-card, .adm-row > .adm-card, .adm-stack > .adm-card, .adm-cards > .adm-card { margin-top: 0; }
+.adm-cards { display: flex; flex-wrap: wrap; gap: 14px; }
 .adm-card--form { border: 2px solid var(--green); }
 .adm-divider { border: none; border-top: 1px solid var(--surface); margin: 16px 0 12px; }
 
