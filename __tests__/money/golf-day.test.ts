@@ -15,6 +15,10 @@
  *  - admins make and change golf days, and only with holes that can be played
  *  - "Add to calendar" puts the day, the holes and the link in a player's
  *    calendar, as a well-formed .ics or a Google Calendar link
+ *  - a golf day's look is set in the admin (migration 031): saved checked,
+ *    shown to players, used by the calendar; a picture is uploaded, resized
+ *    and stored in the art bucket, as a logo or a photo, with colours
+ *    suggested; the admin says which courses have no club official
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, type FakeUser } from '../helpers/fake-supabase'
@@ -26,6 +30,8 @@ import { GET as listDays, POST as createDay } from '@/app/api/admin/golf-days/ro
 import { PATCH as patchDay } from '@/app/api/admin/golf-days/[golfDayId]/route'
 import { GET as listPlayers } from '@/app/api/admin/golf-days/[golfDayId]/players/route'
 import { GET as dayCalendar } from '@/app/api/golf-days/[slug]/calendar/route'
+import { POST as uploadArt } from '@/app/api/admin/golf-days/art/route'
+import sharp from 'sharp'
 import { golfDayEvent, googleCalendarUrl, toIcs, type CalendarDay } from '@/lib/golf-days/calendar'
 import { siteUrl } from '@/lib/email/layout'
 import {
@@ -569,5 +575,112 @@ describe('Add to calendar', () => {
     expect((await calendar('BAD SLUG')).status).toBe(404)
     expect((await calendar('off')).status).toBe(404)
     expect((await calendar()).status).toBe(200)
+  })
+})
+
+describe('the look, set in the admin', () => {
+  const SUPABASE = 'https://fake.supabase.co'
+  const ART = `${SUPABASE}/storage/v1/object/public/golf-day-art/`
+  const create = (body: Record<string, unknown>) => createDay(jsonRequest('http://x/api/admin/golf-days', body))
+  const patch = (id: string, body: Record<string, unknown>) => patchDay(jsonRequest('http://x', body, { method: 'PATCH' }), idParams(id))
+  const LOOK = {
+    host: 'Acme Brewing', venue: 'Royal', tagline: 'Hole it, win it.', footnote: 'Acme. 18+ only.',
+    ink: '#102030', accent: '#E0115F', paper: '#fffaf0', page: '#f5eedd',
+    hero: { src: `${ART}0f1e.webp`, alt: 'The Acme logo', width: 900, height: 900, kind: 'logo' },
+  }
+  const upload = (file: Blob | null) => {
+    const form = new FormData()
+    if (file) form.append('file', file, 'art')
+    return uploadArt(new Request('http://x/api/admin/golf-days/art', { method: 'POST', body: form }))
+  }
+
+  beforeEach(() => vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', SUPABASE))
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('is saved with a new golf day, checked, lower-cased, and shown to players', async () => {
+    asAdmin()
+    const res = await create({ slug: 'acme', name: 'Acme Golf Day', tabLabel: 'Acme', playsOn: addDays(today(), 5), prizeRand: 50000, maxPlayers: 40, holeIds: [EAST_12], look: LOOK })
+    expect(res.status).toBe(201)
+    expect((await res.json()).data.look).toMatchObject({ host: 'Acme Brewing', accent: '#e0115f', hero: { kind: 'logo' } })
+    expect(db.find('golf_days', d => d.slug === 'acme')!.look).toMatchObject({ ink: '#102030' })
+
+    asUser(null)
+    const shown = await (await read('acme')).json()
+    expect(shown.golfDay.look).toMatchObject({ host: 'Acme Brewing', venue: 'Royal', hero: { src: `${ART}0f1e.webp` } })
+  })
+
+  it('refuses a picture from anywhere but its own bucket, and a colour that is not #rrggbb', async () => {
+    asAdmin()
+    const base = { slug: 'acme', name: 'Acme Golf Day', tabLabel: 'Acme', playsOn: addDays(today(), 5), prizeRand: 50000, maxPlayers: 40, holeIds: [EAST_12] }
+    for (const look of [
+      { ...LOOK, hero: { ...LOOK.hero, src: 'https://evil.example/logo.webp' } },
+      { ...LOOK, hero: { ...LOOK.hero, src: `${SUPABASE}/storage/v1/object/public/verification-docs/x.webp` } },
+      { ...LOOK, ink: 'navy' },
+      { ...LOOK, host: 'x'.repeat(61) },
+    ]) expect((await create({ ...base, look })).status, JSON.stringify(look).slice(0, 80)).toBe(400)
+    expect(db.rows('golf_days')).toHaveLength(0)
+  })
+
+  it('is changed or cleared on its own, and a cleared look falls back to the Get Lucky look', async () => {
+    asAdmin(); const day = seedDay({ look: LOOK })
+    expect((await patch(String(day.id), { look: { ...LOOK, tagline: 'New line' } })).status).toBe(200)
+    expect(db.find('golf_days', d => d.id === day.id)!.look).toMatchObject({ tagline: 'New line', host: 'Acme Brewing' })
+    expect((await patch(String(day.id), { look: null })).status).toBe(200)
+    expect(db.find('golf_days', d => d.id === day.id)!.look).toBeNull()
+    asUser(null)
+    expect((await (await read()).json()).golfDay.look).toBeNull()
+  })
+
+  it("the calendar names the venue the way the look does", async () => {
+    seedDay({ slug: 'acme', look: { venue: 'The Royal' } })
+    const ics = await (await dayCalendar(new Request('http://x'), slugParams('acme'))).text()
+    expect(ics.replace(/\r\n /g, '')).toContain('LOCATION:The Royal\\, Linksfield\\, Gauteng')
+  })
+
+  it('the list says which courses have no club official to confirm a claim', async () => {
+    asAdmin(); seedDay()
+    db.seed('course_contacts', { course_id: EAST, name: 'Johannes', email: 'j@example.com', role: 'club_official' })
+    const { data } = await (await listDays()).json()
+    expect(data[0].missingOfficials).toEqual(['Royal Johannesburg & Kensington – West'])
+    db.seed('course_contacts', { course_id: WEST, name: 'Johannes', email: 'j@example.com', role: 'club_official' })
+    expect((await (await listDays()).json()).data[0].missingOfficials).toEqual([])
+  })
+
+  describe('uploading a picture', () => {
+    const png = (transparent: boolean) => sharp({ create: { width: 1400, height: 1400, channels: 4, background: transparent ? { r: 0, g: 0, b: 0, alpha: 0 } : { r: 251, g: 239, b: 208, alpha: 1 } } })
+      .composite([{ input: Buffer.from('<svg width="1400" height="1400"><circle cx="700" cy="700" r="500" fill="#082717"/><circle cx="700" cy="700" r="260" fill="#f0136d"/></svg>') }])
+      .png().toBuffer()
+
+    it('a logo with a see-through background: resized to 900 px WebP in the art bucket, colours suggested', async () => {
+      asAdmin()
+      const res = await upload(new Blob([new Uint8Array(await png(true))], { type: 'image/png' }))
+      expect(res.status).toBe(201)
+      const { hero, palette } = await res.json()
+      expect(hero).toMatchObject({ kind: 'logo', width: 900, height: 900, alt: '' })
+      expect(hero.src.startsWith(ART)).toBe(true)
+      expect(hero.src).toMatch(/\.webp$/)
+      const [path] = [...db.bucket('golf-day-art').keys()]
+      expect(hero.src).toBe(`${ART}${path}`)
+      expect(db.bucket('golf-day-art').get(path)).toMatch(/^image\/webp:\d+$/)
+      expect(palette.ink).toMatch(/^#[0-9a-f]{6}$/)
+      expect(palette.accent).toMatch(/^#[c-f][0-9a-f]/)
+    })
+
+    it('a photo without transparency: 1 000 px, kind photo', async () => {
+      asAdmin()
+      const jpeg = await sharp(await png(false)).flatten({ background: '#ffffff' }).jpeg().toBuffer()
+      const { hero } = await (await upload(new Blob([new Uint8Array(jpeg)], { type: 'image/jpeg' }))).json()
+      expect(hero).toMatchObject({ kind: 'photo', width: 1000, height: 1000 })
+    })
+
+    it('refuses no file, a file that is not a picture, a type it does not take, and anyone but an admin', async () => {
+      asAdmin()
+      expect((await upload(null)).status).toBe(400)
+      expect((await upload(new Blob(['not an image'], { type: 'image/png' }))).status).toBe(400)
+      expect((await upload(new Blob(['<svg/>'], { type: 'image/svg+xml' }))).status).toBe(400)
+      player()
+      expect((await upload(new Blob([new Uint8Array(await png(true))], { type: 'image/png' }))).status).toBe(403)
+      expect(db.bucket('golf-day-art').size).toBe(0)
+    })
   })
 })

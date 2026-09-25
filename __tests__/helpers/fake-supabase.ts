@@ -365,6 +365,8 @@ export interface FakeClientOptions {
   storageObjects?: Record<string, string>
   /** Make every `storage.from(bucket).remove()` fail with this message. */
   storageRemoveError?: string
+  /** Make every `storage.from(bucket).upload()` fail with this message. */
+  storageUploadError?: string
   /** Make `auth.admin.deleteUser()` fail with this message. */
   deleteUserError?: string
 }
@@ -598,6 +600,17 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           },
           async createSignedUrl(path: string) {
             return { data: { signedUrl: `https://storage.example/signed/${path}` }, error: null }
+          },
+          /** Keeps the bytes' length (and content type) under the path; enough to assert on. */
+          async upload(path: string, body: { length?: number; size?: number }, o: { contentType?: string; upsert?: boolean } = {}) {
+            if (opts.storageUploadError) return { data: null, error: { message: opts.storageUploadError } }
+            if (objects.has(path) && !o.upsert) return { data: null, error: { message: 'The resource already exists' } }
+            objects.set(path, `${o.contentType ?? 'application/octet-stream'}:${body.length ?? body.size ?? 0}`)
+            return { data: { path }, error: null }
+          },
+          getPublicUrl(path: string) {
+            const base = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? 'https://fake.supabase.co').replace(/\/$/, '')
+            return { data: { publicUrl: `${base}/storage/v1/object/public/${bucket}/${path}` } }
           },
           async download(path: string) {
             const obj = objects.get(path) ?? opts.storageObjects?.[path]

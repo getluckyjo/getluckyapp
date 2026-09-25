@@ -10,8 +10,8 @@ import { GOLF_DAY_SLUG_PATTERN, todayInSouthAfrica } from '@/lib/golf-days/rules
 /**
  * Golf days we sponsor (migration 029). Each has its own link,
  * /golf-day/<slug>; players who join through it get the golf day tab in
- * place of Icons and one free swing on the day. No deploy involved; a
- * branded look is the one part that lives in code (src/lib/golf-days/themes.ts).
+ * place of Icons and one free swing on the day. No deploy involved, look
+ * included (golf_days.look, migration 031); only a drawn tab icon is code.
  */
 
 const Create = z.object({
@@ -19,6 +19,7 @@ const Create = z.object({
     .regex(GOLF_DAY_SLUG_PATTERN, 'The link name is 2 to 40 lower-case letters, digits or dashes'),
   ...EditableFields,
   note: EditableFields.note.optional(),
+  look: EditableFields.look.optional(),
 }).refine(v => v.playsOn >= todayInSouthAfrica(), { message: 'The golf day cannot be in the past', path: ['playsOn'] })
 
 export async function GET() {
@@ -52,6 +53,7 @@ export async function POST(request: Request) {
         prize_pence: b.prizeRand * 100,
         max_players: b.maxPlayers,
         note: b.note || null,
+        ...(b.look ? { look: b.look } : {}),
         created_by: auth.user.id,
       })
       .select('id')

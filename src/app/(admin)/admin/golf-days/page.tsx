@@ -1,9 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { Copy, Check, Pencil, Power, Users, Plus } from 'lucide-react'
-import type { AdminGolfDay, GolfDayPhase } from '@/lib/golf-days/rules'
+import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle } from 'lucide-react'
+import type { AdminGolfDay, GolfDayHole, GolfDayPhase } from '@/lib/golf-days/rules'
 import { golfDayPath, todayInSouthAfrica } from '@/lib/golf-days/rules'
+import { golfDayMessage } from '@/lib/golf-days/message'
+import { themeFor } from '@/lib/golf-days/themes'
+import LookEditor, { BLANK_LOOK, lookFormFrom, lookFrom, type LookForm } from './LookEditor'
 
 interface CourseOption {
   id: string
@@ -29,9 +32,10 @@ interface Form {
   maxPlayers: string
   holeIds: string[]
   note: string
+  look: LookForm
 }
 
-const EMPTY: Form = { slug: '', name: '', tabLabel: '', playsOn: '', prizeRand: '100000', maxPlayers: '200', holeIds: [], note: '' }
+const EMPTY: Form = { slug: '', name: '', tabLabel: '', playsOn: '', prizeRand: '100000', maxPlayers: '200', holeIds: [], note: '', look: BLANK_LOOK }
 
 const PHASE: Record<GolfDayPhase, { label: string; bg: string; fg: string }> = {
   upcoming: { label: 'Coming up', bg: '#e8f0fe', fg: '#1a4fb0' },
@@ -59,6 +63,8 @@ export default function AdminGolfDaysPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  // The golf day whose WhatsApp message is open, and the message as edited before copying.
+  const [message, setMessage] = useState<{ id: string; text: string } | null>(null)
   // list: null while loading; failed: the list could not be read (never shown as "nobody").
   const [players, setPlayers] = useState<{ id: string; list: Player[] | null; failed?: boolean } | null>(null)
   const [refresh, setRefresh] = useState(0)
@@ -92,6 +98,16 @@ export default function AdminGolfDaysPage() {
     return map
   }, [courses, rows])
 
+  // Every hole the picker or a golf day knows, in the shape the preview's label reads.
+  const holeById = useMemo(() => {
+    const map = new Map<string, GolfDayHole>()
+    for (const c of courses) for (const h of c.holes) {
+      map.set(h.id, { holeId: h.id, holeNumber: h.hole_number, par: h.par, distanceMetres: h.distance_metres, course: { id: c.id, name: c.name, location: '', region: '' } })
+    }
+    for (const r of rows) for (const h of r.holes) map.set(h.holeId, h)
+    return map
+  }, [courses, rows])
+
   function startCreate() {
     setError(null)
     setEditing({ id: null, form: { ...EMPTY, playsOn: todayInSouthAfrica() } })
@@ -104,6 +120,7 @@ export default function AdminGolfDaysPage() {
       form: {
         slug: r.slug, name: r.name, tabLabel: r.tabLabel, playsOn: r.playsOn,
         prizeRand: String(r.prizeZAR), maxPlayers: String(r.maxPlayers), holeIds: r.holes.map(h => h.holeId), note: r.note ?? '',
+        look: lookFormFrom(themeFor(r.slug, r.look)),
       },
     })
   }
@@ -135,6 +152,7 @@ export default function AdminGolfDaysPage() {
     const fields = {
       name: f.name.trim(), tabLabel: f.tabLabel.trim(), playsOn: f.playsOn,
       prizeRand: Number(f.prizeRand), maxPlayers: Number(f.maxPlayers), holeIds: f.holeIds, note: f.note.trim() || null,
+      look: lookFrom(f.look, f.name.trim()),
     }
     setBusy(true)
     try {
@@ -165,12 +183,17 @@ export default function AdminGolfDaysPage() {
     }
   }
 
-  async function copy(r: AdminGolfDay) {
+  async function copy(key: string, text: string) {
     try {
-      await navigator.clipboard.writeText(`${origin}${golfDayPath(r.slug)}`)
-      setCopied(r.id)
+      await navigator.clipboard.writeText(text)
+      setCopied(key)
       setTimeout(() => setCopied(null), 1500)
-    } catch { /* clipboard blocked; the link is visible anyway */ }
+    } catch { /* clipboard blocked; the text is on screen to copy by hand */ }
+  }
+
+  function toggleMessage(r: AdminGolfDay) {
+    if (message?.id === r.id) { setMessage(null); return }
+    setMessage({ id: r.id, text: golfDayMessage(r, { site: origin, venue: themeFor(r.slug, r.look).venue }) })
   }
 
   const input: React.CSSProperties = { padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }
@@ -260,6 +283,17 @@ export default function AdminGolfDaysPage() {
               </select>
             </div>
           </div>
+          <fieldset style={{ border: 'none', borderTop: '1px solid #f0f0f0', padding: '14px 0 0', margin: 0 }}>
+            <legend style={{ fontSize: 13, fontWeight: 700, color: '#111', padding: '0 8px 0 0' }}>Look</legend>
+            <LookEditor
+              form={editing.form.look}
+              onChange={look => setField('look', look)}
+              name={editing.form.name.trim()}
+              prizeZAR={Number(editing.form.prizeRand)}
+              playsOn={editing.form.playsOn || todayInSouthAfrica()}
+              holes={editing.form.holeIds.map(id => holeById.get(id)).filter((h): h is GolfDayHole => Boolean(h))}
+            />
+          </fieldset>
           <div style={{ display: 'flex', gap: 10 }}>
             <button type="submit" disabled={busy || editing.form.holeIds.length === 0} style={{ padding: '9px 16px', borderRadius: 8, border: 'none', background: '#345231', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
               {busy ? 'Saving…' : editing.id ? 'Save changes' : 'Create golf day'}
@@ -267,8 +301,8 @@ export default function AdminGolfDaysPage() {
             <button type="button" onClick={() => setEditing(null)} style={{ padding: '9px 16px', borderRadius: 8, border: '1px solid #e5e5e5', background: '#fff', color: '#333', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
           </div>
           <p style={{ fontSize: 12, color: '#888', margin: 0 }}>
-            The link cannot change once made, because it has been sent out. A new golf day uses the Get Lucky look; a host&rsquo;s own look
-            (photo and colours) is added in code, in <code>src/lib/golf-days/themes.ts</code>.
+            The link cannot change once made, because it has been sent out. The look changes the moment you save, for everyone.
+            Only a drawn tab icon (Bomb Squad&rsquo;s bomb) is added in code; any other golf day&rsquo;s tab shows a flag.
           </p>
         </form>
       )}
@@ -293,23 +327,47 @@ export default function AdminGolfDaysPage() {
                 <p style={{ fontSize: 13, color: '#666', margin: '4px 0 0' }}>{r.holes.map(h => `${h.course.name}, hole ${h.holeNumber}`).join(' · ') || 'No holes'}</p>
                 <p style={{ fontSize: 13, margin: '8px 0 0', fontFamily: 'monospace', color: '#111' }}>
                   {origin}{golfDayPath(r.slug)}
-                  <button type="button" onClick={() => copy(r)} title="Copy the link" style={{ ...iconButton, marginLeft: 6, verticalAlign: 'middle' }}>
+                  <button type="button" onClick={() => copy(r.id, `${origin}${golfDayPath(r.slug)}`)} title="Copy the link" style={{ ...iconButton, marginLeft: 6, verticalAlign: 'middle' }}>
                     {copied === r.id ? <Check size={14} /> : <Copy size={14} />}
                   </button>
                 </p>
                 {r.note && <p style={{ fontSize: 12, color: '#888', margin: '6px 0 0' }}>{r.note}</p>}
+                {checks(r).map(c => (
+                  <p key={c.text} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#a35200', margin: '6px 0 0' }}>
+                    <AlertTriangle size={13} /> {c.text}
+                    {c.href && <a href={c.href} style={{ color: '#335231', fontWeight: 600 }}>{c.action}</a>}
+                  </p>
+                ))}
               </div>
               <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
                 <Stat label="Joined" value={`${r.players} of ${r.maxPlayers}`} />
                 <Stat label="Swings" value={String(r.swings)} />
                 <Stat label="Claims" value={String(r.claimed)} alert={r.claimed > 0} />
                 <div style={{ display: 'flex', gap: 2 }}>
+                  <button type="button" title="WhatsApp message for players" onClick={() => toggleMessage(r)} style={iconButton}><MessageCircle size={16} /></button>
                   <button type="button" title="Players" onClick={() => showPlayers(r)} style={iconButton}><Users size={16} /></button>
                   <button type="button" title="Edit" onClick={() => startEdit(r)} style={iconButton}><Pencil size={16} /></button>
                   <button type="button" title={r.disabledAt ? 'Switch on' : 'Switch off'} onClick={() => toggle(r)} style={{ ...iconButton, color: r.disabledAt ? '#1e6b30' : '#a35200' }}><Power size={16} /></button>
                 </div>
               </div>
             </div>
+
+            {message?.id === r.id && (
+              <div style={{ marginTop: 14, borderTop: '1px solid #f0f0f0', paddingTop: 10, display: 'grid', gap: 8, maxWidth: 560 }}>
+                <label style={label}>
+                  Message for players (WhatsApp: *bold*). Change anything before you copy it.
+                  <textarea value={message.text} onChange={e => setMessage({ id: r.id, text: e.target.value })} rows={14} style={{ ...input, fontFamily: 'inherit', lineHeight: 1.45, resize: 'vertical' }} />
+                </label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={() => copy(`msg-${r.id}`, message.text)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: 'none', background: '#345231', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                    {copied === `msg-${r.id}` ? <Check size={14} /> : <Copy size={14} />} {copied === `msg-${r.id}` ? 'Copied' : 'Copy message'}
+                  </button>
+                  <button type="button" onClick={() => setMessage({ id: r.id, text: golfDayMessage(r, { site: origin, venue: themeFor(r.slug, r.look).venue }) })} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #e5e5e5', background: '#fff', color: '#333', fontSize: 13, cursor: 'pointer' }}>
+                    Start again
+                  </button>
+                </div>
+              </div>
+            )}
 
             {players?.id === r.id && (
               <div style={{ marginTop: 14, borderTop: '1px solid #f0f0f0', paddingTop: 10, overflowX: 'auto' }}>
@@ -354,6 +412,18 @@ export default function AdminGolfDaysPage() {
       </p>
     </div>
   )
+}
+
+/** What still needs doing for a golf day that is not over: a course nobody can confirm a claim at, a tab label too long. */
+function checks(r: AdminGolfDay): { text: string; href?: string; action?: string }[] {
+  if (r.phase === 'over') return []
+  const out: { text: string; href?: string; action?: string }[] = r.missingOfficials.map(course => ({
+    text: `No club official for ${course}: a claim there has nobody to confirm it.`,
+    href: '/admin/courses',
+    action: 'Add one in Courses → Contacts',
+  }))
+  if (r.tabLabel.length > 7) out.push({ text: `The tab label is ${r.tabLabel.length} characters. Over 7 it is shrunk, and can be cut short on small phones.` })
+  return out
 }
 
 function Stat({ label, value, alert = false }: { label: string; value: string; alert?: boolean }) {

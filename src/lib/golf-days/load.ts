@@ -21,9 +21,16 @@ export interface GolfDayRow {
   note: string | null
   disabled_at: string | null
   created_at: string
+  /** The look set in the admin (migration 031); read with parseLook. Absent before 031 has run. */
+  look?: unknown
 }
 
-export const GOLF_DAY_SELECT = 'id, slug, name, tab_label, plays_on, prize_pence, max_players, note, disabled_at, created_at'
+/**
+ * Every column, rather than a list: `look` arrives with migration 031, and
+ * naming it would break every golf day screen on a database 031 has not
+ * reached yet. Callers map the row to what they show.
+ */
+export const GOLF_DAY_SELECT = '*'
 
 export async function golfDayBySlug(admin: Client, slug: string): Promise<GolfDayRow | null> {
   const { data, error } = await admin.from('golf_days').select(GOLF_DAY_SELECT).eq('slug', slug).maybeSingle()

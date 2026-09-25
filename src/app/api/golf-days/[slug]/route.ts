@@ -13,6 +13,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError } from '@/lib/api/http'
 import { golfDayBySlug, holesFor, playerCount } from '@/lib/golf-days/load'
+import { parseLook } from '@/lib/golf-days/look'
 import { GOLF_DAY_REFUSALS, GOLF_DAY_SLUG_PATTERN, golfDayPhase, type GolfDayMe, type PublicGolfDay } from '@/lib/golf-days/rules'
 
 type Ctx = { params: Promise<{ slug: string }> }
@@ -42,6 +43,7 @@ export async function GET(_request: Request, { params }: Ctx) {
       closed: Boolean(day.disabled_at),
       full: players >= day.max_players,
       holes: holes.get(day.id) ?? [],
+      look: parseLook(day.look),
     }
 
     const supabase = await createClient()
