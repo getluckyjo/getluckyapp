@@ -9,16 +9,17 @@ import { log } from '@/lib/observability/log'
 import { toCSV } from '@/lib/admin/csv'
 import { betFilters, betSearchConditions } from '../bets/filters'
 import { paymentFilters, paymentSearchConditions, paymentsSource } from '../payments/filters'
+import { filterUsers, userFilters, type UserFilters } from '../users/queries'
 
 /**
- * What to export. `bets` and `payments` take their list's filters, under the
+ * What to export. `bets`, `payments` and `users` take their list's filters, under the
  * same names as the list's query string, so the file holds what the page
  * shows. A caller that sends only `type` gets everything, as before.
  */
 const Body = z.discriminatedUnion('type', [
   z.object({ type: z.literal('bets'), ...betFilters }),
   z.object({ type: z.literal('payments'), ...paymentFilters, unmatched: z.boolean().optional() }),
-  z.object({ type: z.literal('users') }),
+  z.object({ type: z.literal('users'), ...userFilters }),
   z.object({ type: z.literal('verifications') }),
 ])
 
@@ -131,10 +132,10 @@ async function paymentsSheet(admin: SupabaseClient, f: PaymentsBody, before: str
   }
 }
 
-async function usersSheet(admin: SupabaseClient, before: string): Promise<Sheet> {
+async function usersSheet(admin: SupabaseClient, f: UserFilters, before: string): Promise<Sheet> {
   type P = { id: string; name: string | null; email: string | null; handicap: number | null; total_attempts: number | null; payment_method: string | null; is_admin: boolean | null; suspended_at: string | null; created_at: string }
   const { rows, capped } = await readAll<P>((from, to) =>
-    admin.from('profiles').select('id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, created_at')
+    filterUsers(admin.from('profiles').select('id, name, email, handicap, total_attempts, payment_method, is_admin, suspended_at, created_at'), f)
       .lte('created_at', before).order('created_at', { ascending: false }).order('id').range(from, to))
   return {
     headers: ['ID', 'Name', 'Email', 'Handicap', 'Total Attempts', 'Payment Method', 'Admin', 'Suspended', 'Created (SAST)'],
@@ -180,7 +181,7 @@ export async function POST(request: Request) {
     const sheet =
       f.type === 'bets' ? await betsSheet(admin, f, before)
       : f.type === 'payments' ? await paymentsSheet(admin, f, before)
-      : f.type === 'users' ? await usersSheet(admin, before)
+      : f.type === 'users' ? await usersSheet(admin, f, before)
       : await verificationsSheet(admin, before)
 
     log.info('admin.export', { admin_id: auth.user.id, type: f.type, rows: sheet.rows.length, capped: sheet.capped })

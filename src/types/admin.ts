@@ -182,6 +182,8 @@ export interface AdminCourseRecord extends CourseRow {
   holeCount: number
   activeHoleCount: number
   totalBets: number
+  /** Club officials who confirm claims at this course (course_contacts). */
+  officialCount: number
 }
 
 export interface PaginatedResponse<T> {

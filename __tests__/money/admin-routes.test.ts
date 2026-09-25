@@ -162,6 +162,18 @@ describe('CSV export', () => {
     expect(await lines(none)).toHaveLength(1)
   })
 
+  it('users take the list\'s filters: search and suspended', async () => {
+    seedPlaces()
+    db.seed('profiles', { id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', name: 'Sipho Dlamini', email: 'sipho.d@example.test', suspended_at: '2026-09-01T00:00:00Z', created_at: '2026-09-01T00:00:00Z' })
+    const all = (await lines(await post({ type: 'users' }))).length - 1
+    const bySearch = await lines(await post({ type: 'users', search: 'sipho.d@' }))
+    expect(bySearch).toHaveLength(2)
+    expect(bySearch[1]).toContain('"Sipho Dlamini"')
+    const suspended = await lines(await post({ type: 'users', suspended: 'true' }))
+    expect(suspended.slice(1).every(l => l.includes('"Sipho Dlamini"'))).toBe(true)
+    expect((await lines(await post({ type: 'users', suspended: 'false' }))).length - 1).toBe(all - 1)
+  })
+
   it('times are South African, and the file is named by the South African date', async () => {
     seedPlaces()
     db.seed('bets', bet({ created_at: '2026-09-24T22:30:00Z' }))
