@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ImagePlus, Trash2 } from 'lucide-react'
 import { GolfDayHeroArt, GolfDayLabel, themeVars } from '@/components/golf-days/GolfDayCard'
 import { HEX_COLOUR, alcoholFootnote, contrast, type GolfDayLook, type Palette } from '@/lib/golf-days/look'
@@ -108,6 +108,7 @@ export default function LookEditor({ form, onChange, name, prizeZAR, playsOn, ho
 }) {
   const [uploading, setUploading] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
   const set = <K extends keyof LookForm>(key: K, value: LookForm[K]) => onChange({ ...form, [key]: value })
 
   async function upload(file: File) {
@@ -137,16 +138,18 @@ export default function LookEditor({ form, onChange, name, prizeZAR, playsOn, ho
         <div className="adm-field">
           Picture <span className="adm-hint">The host&rsquo;s logo, or a photo</span>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <label className="adm-btn adm-btn--green" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
+            {/* A real button, so the keyboard reaches it; the file input itself is never shown. */}
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading} aria-busy={uploading} className="adm-btn adm-btn--green" style={{ cursor: uploading ? 'wait' : 'pointer' }}>
               <ImagePlus size={15} aria-hidden /> {uploading ? 'Uploading…' : form.hero ? 'Replace picture' : 'Upload picture'}
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                disabled={uploading}
-                style={{ display: 'none' }}
-                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }}
-              />
-            </label>
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              hidden
+              tabIndex={-1}
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void upload(f) }}
+            />
             {form.hero && (
               <>
                 <select value={form.hero.kind} onChange={e => set('hero', { ...form.hero!, kind: e.target.value as 'photo' | 'logo' })} className="adm-input" aria-label="How the picture is shown">

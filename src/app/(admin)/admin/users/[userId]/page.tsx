@@ -1,306 +1,288 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { ArrowLeft, AlertTriangle, Ban, CheckCircle, User, Trophy, Ticket, CreditCard } from 'lucide-react'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
+import { AlertTriangle, ArrowLeft, Ban, CheckCircle, CreditCard, Ticket, Trophy, User } from 'lucide-react'
 import StatCard from '@/components/admin/StatCard'
 import StatusBadge from '@/components/admin/StatusBadge'
 import ConfirmModal from '@/components/admin/ConfirmModal'
-import { formatZAR, timeAgo } from '@/lib/format'
+import LoadError from '@/components/admin/LoadError'
+import Pagination from '@/components/admin/Pagination'
+import { formatZAR } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminUserRecord, AdminBetRecord, AdminPaymentRecord } from '@/types/admin'
+import { showDate } from '../dates'
+
+/** A bet in the golfer's history, with the claim it made when they declared a hole-in-one. */
+type UserBet = AdminBetRecord & { claim: { id: string; status: string } | null }
+
+interface Detail {
+  user: AdminUserRecord
+  bets: UserBet[]
+  betsTotal: number
+  betsPage: number
+  betsPerPage: number
+  payments: AdminPaymentRecord[]
+}
+
+const OFFLINE = 'Could not reach the server. Check your connection and try again.'
+
+const PAYMENT_METHODS: Record<string, string> = { card: 'Credit or debit card', eft: 'EFT bank transfer', apple_pay: 'Apple Pay', google_pay: 'Google Pay' }
 
 export default function AdminUserDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const userId = params.userId as string
-  const [user, setUser] = useState<AdminUserRecord | null>(null)
-  const [bets, setBets] = useState<AdminBetRecord[]>([])
-  const [payments, setPayments] = useState<AdminPaymentRecord[]>([])
-  const [loading, setLoading] = useState(true)
+  const [betsPage, setBetsPage] = useState(1)
+  const [attempt, setAttempt] = useState(0)
+  const [detail, setDetail] = useState<Detail | null>(null)
+  const [loadError, setLoadError] = useState<{ notFound: boolean; detail: string | null } | null>(null)
+  // Loading is derived from the request the page is showing, not set in the effect.
+  const requestKey = `${userId}:${betsPage}:${attempt}`
+  const [loadedKey, setLoadedKey] = useState<string | null>(null)
+  const loading = loadedKey !== requestKey
+
   const [suspendModal, setSuspendModal] = useState(false)
   const [suspendReason, setSuspendReason] = useState('')
+  const [suspendBusy, setSuspendBusy] = useState(false)
+  const [suspendError, setSuspendError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(`/api/admin/users/${userId}`)
-      .then(r => r.json())
-      .then(data => {
-        setUser(data.user)
-        setBets(data.bets || [])
-        setPayments(data.payments || [])
+    let cancelled = false
+    fetch(`/api/admin/users/${userId}?betsPage=${betsPage}`)
+      .then(async res => {
+        const json = await res.json().catch(() => ({}))
+        if (cancelled) return
+        if (!res.ok) { setLoadError({ notFound: res.status === 404, detail: json.error ?? null }); return }
+        setLoadError(null)
+        setDetail(json as Detail)
       })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [userId])
+      .catch(() => { if (!cancelled) setLoadError({ notFound: false, detail: OFFLINE }) })
+      .finally(() => { if (!cancelled) setLoadedKey(`${userId}:${betsPage}:${attempt}`) })
+    return () => { cancelled = true }
+  }, [userId, betsPage, attempt])
+
+  const closeSuspend = () => { setSuspendModal(false); setSuspendReason(''); setSuspendError(null) }
 
   const handleToggleSuspend = async () => {
-    if (!user) return
-    const newSuspended = !user.suspendedAt
-    await fetch(`/api/admin/users/${userId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ suspended: newSuspended, reason: suspendReason }),
-    })
-    setSuspendModal(false)
-    setSuspendReason('')
-    // Refresh
-    const data = await fetch(`/api/admin/users/${userId}`).then(r => r.json())
-    setUser(data.user)
+    if (!detail) return
+    setSuspendBusy(true)
+    setSuspendError(null)
+    try {
+      const res = await fetch(`/api/admin/users/${userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suspended: !detail.user.suspendedAt, reason: suspendReason.trim() || undefined }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setSuspendError(json.error ?? 'That did not work. Please try again.'); return }
+      closeSuspend()
+      setAttempt(n => n + 1)
+    } catch {
+      setSuspendError(OFFLINE)
+    } finally {
+      setSuspendBusy(false)
+    }
   }
 
-  if (loading) {
+  if (loadError?.notFound) {
     return (
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <div style={{ width: 70, height: 32, background: '#e5e5e5', borderRadius: 6 }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ width: '30%', height: 20, background: '#e5e5e5', borderRadius: 4, marginBottom: 8 }} />
-            <div style={{ width: '40%', height: 14, background: '#f0f0f0', borderRadius: 4 }} />
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
-          {[1,2,3,4].map(i => <div key={i} style={{ flex: 1, height: 90, background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5' }} />)}
-        </div>
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', height: 300 }} />
+      <div className="adm-card" style={{ textAlign: 'center', padding: 36 }}>
+        <title>User not found · Get Lucky admin</title>
+        <p className="adm-h2" style={{ marginBottom: 8 }}>User not found</p>
+        <p className="adm-muted" style={{ margin: '0 0 16px' }}>They may have deleted their account.</p>
+        <Link href="/admin/users" className="adm-btn adm-btn--quiet" style={{ textDecoration: 'none' }}>Back to Users</Link>
       </div>
     )
   }
+  if (loadError && !loading) return <LoadError what="This golfer" detail={loadError.detail} onRetry={() => setAttempt(n => n + 1)} />
+  if (!detail) return <p className="adm-muted">Loading…</p>
 
-  if (!user) {
-    return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>User not found</div>
-  }
+  const { user, bets, payments, betsTotal, betsPerPage } = detail
+  const name = user.name || 'No name'
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button
-          onClick={() => router.push('/admin/users')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5',
-            background: '#fff', cursor: 'pointer', color: '#333', fontSize: 13,
-          }}
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', margin: 0, fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>{user.name || 'Unknown User'}{user.isAdmin && <span style={{ fontSize: 12, fontWeight: 600, color: '#335231', background: '#e6f4ea', padding: '2px 8px', borderRadius: 10, marginLeft: 8, verticalAlign: 'middle' }}>Admin</span>}</h1>
-          <p style={{ fontSize: 13, color: '#666', margin: 0 }}>{user.email} · Member since {new Date(user.createdAt).toLocaleDateString('en-ZA')}</p>
+      <title>{`${name} · Users · Get Lucky admin`}</title>
+      <Link href="/admin/users" className="adm-btn adm-btn--quiet" style={{ textDecoration: 'none', marginBottom: 18 }}>
+        <ArrowLeft size={15} aria-hidden /> Users
+      </Link>
+      <div className="adm-head">
+        <div>
+          <h1 className="adm-title">
+            {name}
+            {user.isAdmin && <span className="adm-pill adm-pill--gold" style={{ marginLeft: 12, verticalAlign: 'middle' }}>Admin</span>}
+          </h1>
+          <p className="adm-lead">
+            {user.email} · joined {showDate(user.createdAt)}
+            {user.paymentMethod && ` · pays by ${PAYMENT_METHODS[user.paymentMethod] ?? user.paymentMethod} through PayFast`}
+          </p>
         </div>
         {user.suspendedAt ? (
-          <button
-            onClick={() => setSuspendModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
-              borderRadius: 8, border: 'none', background: '#1a7f37', color: '#fff',
-              fontSize: 13, cursor: 'pointer', fontWeight: 600,
-            }}
-          >
-            <CheckCircle size={14} /> Unsuspend
+          <button type="button" onClick={() => setSuspendModal(true)} className="adm-btn adm-btn--green">
+            <CheckCircle size={14} aria-hidden /> Lift suspension
           </button>
         ) : (
-          <button
-            onClick={() => setSuspendModal(true)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px',
-              borderRadius: 8, border: 'none', background: '#c0392b', color: '#fff',
-              fontSize: 13, cursor: 'pointer', fontWeight: 600,
-            }}
-          >
-            <Ban size={14} /> Suspend User
+          <button type="button" onClick={() => setSuspendModal(true)} className="adm-btn adm-btn--quiet adm-btn--danger">
+            <Ban size={14} aria-hidden /> Suspend
           </button>
         )}
       </div>
 
-      {/* Suspended banner */}
       {user.suspendedAt && (
-        <div
-          style={{
-            padding: '12px 16px', borderRadius: 8, background: '#fde8e8',
-            border: '1px solid #f5c6cb', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8,
-          }}
-        >
-          <Ban size={16} color="#c0392b" />
-          <span style={{ fontSize: 13, color: '#c0392b', fontWeight: 500 }}>
-            Suspended: {user.suspendedReason || 'No reason provided'}
-          </span>
-        </div>
+        <p role="status" className="adm-card" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 16px', border: '2px solid #f3c7c7', color: 'var(--red)', fontWeight: 600, fontSize: 14 }}>
+          <Ban size={16} aria-hidden /> Suspended {showDate(user.suspendedAt)}: {user.suspendedReason || 'no reason given'}
+        </p>
       )}
 
-      {/* Stats row */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-        <StatCard title="Total Attempts" value={String(user.totalAttempts)} icon={Ticket} accent="#1565c0" />
-        <StatCard title="Total Staked" value={formatZAR(user.totalStaked)} icon={CreditCard} accent="#335231" />
-        <StatCard title="Total Won" value={user.totalWon > 0 ? formatZAR(user.totalWon) : 'R0'} icon={Trophy} accent="#b8860b" />
-        <StatCard title="Handicap" value={user.handicap !== null ? String(user.handicap) : '—'} icon={User} accent="#4a7a3d" />
+      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 16 }}>
+        <StatCard title="Attempts" value={String(user.totalAttempts)} icon={Ticket} />
+        <StatCard title="Staked" value={formatZAR(user.totalStaked)} icon={CreditCard} subtitle={`Over all ${betsTotal.toLocaleString('en-ZA')} bet${betsTotal === 1 ? '' : 's'}`} />
+        <StatCard title="Won" value={formatZAR(user.totalWon)} icon={Trophy} subtitle="Verified and paid prizes" />
+        <StatCard title="Handicap" value={user.handicap !== null ? String(user.handicap) : '—'} icon={User} />
       </div>
 
       {/* Age check and saved card: the two things support is asked about */}
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-        <div style={{ flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #e5e5e5' }}>
-          <CheckCircle size={18} color={user.ageVerifiedAt ? '#1a7f37' : '#c0392b'} />
+      <div className="adm-grid-2" style={{ marginBottom: 16 }}>
+        <div className="adm-card" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {user.ageVerifiedAt
+            ? <CheckCircle size={20} aria-hidden />
+            : <AlertTriangle size={20} aria-hidden style={{ color: 'var(--red)' }} />}
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
-              {user.ageVerifiedAt ? 'Age verified' : 'Age not verified'}
-            </div>
-            <div style={{ fontSize: 12, color: '#999' }}>
-              {user.ageVerifiedAt
-                ? new Date(user.ageVerifiedAt).toLocaleDateString('en-ZA')
-                : 'No bet can be granted until this passes'}
+            <div className="adm-h3">{user.ageVerifiedAt ? 'Age verified' : 'Age not verified'}</div>
+            <div className="adm-small">
+              {user.ageVerifiedAt ? showDate(user.ageVerifiedAt) : 'No bet can be granted until this passes'}
             </div>
           </div>
         </div>
-        <div style={{ flex: '1 1 240px', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #e5e5e5' }}>
-          <CreditCard size={18} color="#335231" />
+        <div className="adm-card" style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 0 }}>
+          <CreditCard size={20} aria-hidden />
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
-              {user.savedCard ? user.savedCard.label : 'No saved card'}
-            </div>
-            <div style={{ fontSize: 12, color: '#999' }}>
+            <div className="adm-h3">{user.savedCard ? user.savedCard.label : 'No saved card'}</div>
+            <div className="adm-small">
               {user.savedCard
-                ? `Saved ${new Date(user.savedCard.savedAt).toLocaleDateString('en-ZA')}${user.savedCard.lastUsedAt ? ` · used ${timeAgo(user.savedCard.lastUsedAt)}` : ''} · held by PayFast`
-                : 'The golfer removes or adds this under Account'}
+                ? `Saved ${showDate(user.savedCard.savedAt)}${user.savedCard.lastUsedAt ? `, last used ${showDate(user.savedCard.lastUsedAt, { time: true })}` : ''} · held by PayFast`
+                : 'The golfer adds or removes one under Account'}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Payments: the money, and whether each one became a bet */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden', marginBottom: 24 }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e5e5' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>Payments ({payments.length})</h3>
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Course</th>
-              <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Amount</th>
-              <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Status</th>
-              <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Paid with</th>
-              <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Bet</th>
-              <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {payments.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: 30, textAlign: 'center', color: '#999' }}>No payments</td></tr>
-            ) : (
-              payments.map((payment) => {
-                const needsAttention = payment.status === 'complete' && !payment.betId
-                return (
-                  <tr key={payment.mPaymentId} style={{ borderBottom: '1px solid #f0f0f0', background: needsAttention ? '#fffdf5' : undefined }}>
-                    <td style={{ padding: '10px 14px', color: '#111' }}>
-                      {payment.courseName ? `${payment.courseName}${payment.holeNumber ? `, H${payment.holeNumber}` : ''}` : '—'}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#111' }}>{formatZAR(payment.amountCents)}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      <StatusBadge status={payment.status} small variant={payment.status === 'complete' ? 'success' : payment.status === 'pending' ? 'warning' : 'danger'} />
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'center', color: '#666', fontSize: 12 }}>
-                      {payment.source === 'saved_card' ? 'Saved card' : 'Checkout'}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'center' }}>
-                      {payment.betId ? (
-                        <button
-                          onClick={() => router.push(`/admin/bets/${payment.betId}`)}
-                          style={{ background: 'none', border: 'none', padding: 0, color: '#335231', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
-                        >
-                          Open bet
-                        </button>
-                      ) : needsAttention ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#a07820', fontWeight: 600, fontSize: 12 }}>
-                          <AlertTriangle size={13} /> None
-                        </span>
-                      ) : (
-                        <span style={{ color: '#999' }}>—</span>
-                      )}
-                    </td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', color: '#999', fontSize: 12 }}>{timeAgo(payment.createdAt)}</td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* PayFast payment method */}
-      {user.paymentMethod && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', borderRadius: 10, border: '1px solid #e5e5e5', marginBottom: 24 }}>
-          <CreditCard size={18} color="#335231" />
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
-              {user.paymentMethod === 'card' ? 'Credit/Debit Card' : user.paymentMethod === 'eft' ? 'EFT Bank Transfer' : user.paymentMethod === 'apple_pay' ? 'Apple Pay' : user.paymentMethod === 'google_pay' ? 'Google Pay' : user.paymentMethod}
-            </div>
-            <div style={{ fontSize: 12, color: '#999' }}>Processed via PayFast</div>
-          </div>
-        </div>
-      )}
-
-      {/* Bet history */}
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e5e5' }}>
-          <h3 style={{ fontSize: 15, fontWeight: 700, color: '#111' }}>Bet History ({bets.length})</h3>
-        </div>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Course</th>
-              <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }}>Tier</th>
-              <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Stake</th>
-              <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Potential Win</th>
-              <th style={{ padding: '10px 14px', textAlign: 'center', fontWeight: 600, color: '#666' }}>Status</th>
-              <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#666' }}>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bets.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: 30, textAlign: 'center', color: '#999' }}>No bets</td></tr>
-            ) : (
-              bets.map((bet) => (
-                <tr
-                  key={bet.id}
-                  className="admin-tr"
-                  style={{ borderBottom: '1px solid #f0f0f0', cursor: 'pointer' }}
-                  onClick={() => router.push(`/admin/bets/${bet.id}`)}
-                >
-                  <td style={{ padding: '10px 14px', color: '#111' }}>{bet.courseName}, H{bet.holeNumber}</td>
-                  <td style={{ padding: '10px 14px', color: '#335231', fontWeight: 600, fontSize: 12 }}>{TIER_LABELS[bet.tier]}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', color: '#111' }}>{formatZAR(bet.stakeCents)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 600, color: '#111' }}>{formatZAR(bet.potentialWinCents)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'center' }}><StatusBadge status={bet.status} small /></td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', color: '#999', fontSize: 12 }}>{timeAgo(bet.createdAt)}</td>
+      <section className="adm-card">
+        <h2 className="adm-h2">Bets</h2>
+        <p className="adm-small" style={{ margin: '6px 0 12px' }}>
+          {betsTotal === 0 ? 'None yet.' : `${betsTotal.toLocaleString('en-ZA')} in all, newest first, ${betsPerPage} a page.`}
+        </p>
+        {bets.length > 0 && (
+          <div className="adm-table-wrap" style={{ opacity: loading ? 0.6 : 1 }}>
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>Course and hole</th>
+                  <th>Tier</th>
+                  <th style={{ textAlign: 'right' }}>Stake</th>
+                  <th style={{ textAlign: 'right' }}>Prize</th>
+                  <th>Status</th>
+                  <th>Claim</th>
+                  <th style={{ textAlign: 'right' }}>Date</th>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {bets.map((bet) => (
+                  <tr key={bet.id}>
+                    <td><Link href={`/admin/bets/${bet.id}`} className="adm-row-link">{bet.courseName || 'Unknown course'}, hole {bet.holeNumber || '?'}</Link></td>
+                    <td>{TIER_LABELS[bet.tier] ?? bet.tier}</td>
+                    <td style={{ textAlign: 'right' }}>{formatZAR(bet.stakeCents)}</td>
+                    <td style={{ textAlign: 'right', fontWeight: 600 }}>{formatZAR(bet.potentialWinCents)}</td>
+                    <td><StatusBadge status={bet.status} small /></td>
+                    <td>
+                      {bet.claim
+                        ? <Link href={`/admin/verification-queue/${bet.claim.id}`} aria-label={`Open the claim (${bet.claim.status.replace(/_/g, ' ')})`} style={{ textDecoration: 'none' }}><StatusBadge status={bet.claim.status} small /></Link>
+                        : <span className="adm-muted">—</span>}
+                    </td>
+                    <td className="adm-muted" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{showDate(bet.createdAt, { time: true })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Pagination page={betsPage} totalPages={Math.ceil(betsTotal / betsPerPage)} total={betsTotal} onPageChange={setBetsPage} />
+      </section>
 
-      {/* Suspend modal */}
+      <section className="adm-card">
+        <h2 className="adm-h2">Payments</h2>
+        <p className="adm-small" style={{ margin: '6px 0 12px' }}>
+          {payments.length === 0 ? 'None yet.' : payments.length >= 50 ? 'The latest 50, newest first.' : 'Newest first.'} A completed payment with no bet is money taken for nothing: it needs a person.
+        </p>
+        {payments.length > 0 && (
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>Course and hole</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th>Status</th>
+                  <th>Paid with</th>
+                  <th>Bet</th>
+                  <th style={{ textAlign: 'right' }}>Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((payment) => {
+                  const needsAttention = payment.status === 'complete' && !payment.betId
+                  return (
+                    <tr key={payment.mPaymentId} style={needsAttention ? { background: '#fff8e6' } : undefined}>
+                      <td>{payment.courseName ? `${payment.courseName}${payment.holeNumber ? `, hole ${payment.holeNumber}` : ''}` : '—'}</td>
+                      <td style={{ textAlign: 'right' }}>{formatZAR(payment.amountCents)}</td>
+                      <td>
+                        <StatusBadge status={payment.status} small variant={payment.status === 'complete' ? 'success' : payment.status === 'pending' ? 'warning' : 'danger'} />
+                      </td>
+                      <td>{payment.source === 'saved_card' ? 'Saved card' : 'Checkout'}</td>
+                      <td>
+                        {payment.betId ? (
+                          <Link href={`/admin/bets/${payment.betId}`} className="adm-row-link">Open bet</Link>
+                        ) : needsAttention ? (
+                          <span className="adm-warn"><AlertTriangle size={13} aria-hidden /> None</span>
+                        ) : (
+                          <span className="adm-muted">—</span>
+                        )}
+                      </td>
+                      <td className="adm-muted" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>{showDate(payment.createdAt, { time: true })}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
       <ConfirmModal
         open={suspendModal}
-        title={user.suspendedAt ? 'Unsuspend User' : 'Suspend User'}
+        title={user.suspendedAt ? `Lift ${name}'s suspension?` : `Suspend ${name}?`}
         message={user.suspendedAt
-          ? `This will restore ${user.name}'s access to the platform.`
-          : `This will prevent ${user.name} from placing new bets or accessing the platform.`}
-        confirmLabel={user.suspendedAt ? 'Unsuspend' : 'Suspend'}
+          ? 'They can sign in and play again straight away.'
+          : 'They cannot place new bets or use the app until you lift it. Bets and claims already made carry on.'}
+        confirmLabel={user.suspendedAt ? 'Lift suspension' : 'Suspend'}
         variant={user.suspendedAt ? 'success' : 'danger'}
         onConfirm={handleToggleSuspend}
-        onCancel={() => { setSuspendModal(false); setSuspendReason('') }}
+        onCancel={closeSuspend}
+        busy={suspendBusy}
+        error={suspendError}
       >
         {!user.suspendedAt && (
-          <input
-            type="text"
-            value={suspendReason}
-            onChange={(e) => setSuspendReason(e.target.value)}
-            placeholder="Reason for suspension (optional)"
-            style={{
-              width: '100%', padding: 10, borderRadius: 8, border: '1px solid #e5e5e5',
-              fontSize: 13, fontFamily: "'Inter', system-ui, sans-serif",
-            }}
-          />
+          <label className="adm-field">
+            Reason <span className="adm-hint">optional, kept on their record</span>
+            <input
+              type="text"
+              value={suspendReason}
+              onChange={(e) => setSuspendReason(e.target.value)}
+              maxLength={500}
+              placeholder="Chargeback on 12 Sep"
+              className="adm-input"
+            />
+          </label>
         )}
       </ConfirmModal>
     </div>

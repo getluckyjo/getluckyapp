@@ -21,10 +21,14 @@ export async function POST(request: Request, { params }: Params) {
   if (!body.ok) return body.response
 
   try {
-    const { data: course } = await auth.adminClient.from('courses').select('id').eq('id', courseId).maybeSingle()
-    if (!course) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const { data: dup } = await auth.adminClient.from('course_contacts').select('id').eq('course_id', courseId).eq('email', body.data.email).maybeSingle()
-    if (dup) return NextResponse.json({ error: 'That email is already a contact for this course', code: 'DUPLICATE' }, { status: 409 })
+    const [courseRes, dupRes] = await Promise.all([
+      auth.adminClient.from('courses').select('id').eq('id', courseId).maybeSingle(),
+      auth.adminClient.from('course_contacts').select('id').eq('course_id', courseId).eq('email', body.data.email).limit(1),
+    ])
+    if (courseRes.error) throw courseRes.error
+    if (dupRes.error) throw dupRes.error
+    if (!courseRes.data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (dupRes.data?.length) return NextResponse.json({ error: 'That email is already a contact for this course', code: 'DUPLICATE' }, { status: 409 })
     const { data, error } = await auth.adminClient
       .from('course_contacts')
       .insert({ course_id: courseId, name: body.data.name, email: body.data.email })
@@ -45,6 +49,7 @@ export async function DELETE(request: Request, { params }: Params) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const { courseId } = await params
+  if (!uuid.safeParse(courseId).success) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const q = parseQuery(request.url, DeleteQuery)
   if (!q.ok) return q.response
 

@@ -9,32 +9,38 @@ import type { BatchActionResult } from '@/types/admin'
 
 const Body = z.object({
   ids: z.array(uuid).min(1).max(50),
+  // 'approve' is still recognised so an old client gets a reason, not a schema error.
   action: z.enum(['approve', 'reject', 'under_review']),
   notes: z.string().trim().max(1000).optional(),
 })
 
-const STATUS = { approve: 'approved', reject: 'rejected', under_review: 'under_review' } as const
+const STATUS = { reject: 'rejected', under_review: 'under_review' } as const
 
+/**
+ * POST — reject, or mark under review, several claims at once. Each claim is
+ * tried on its own; `results` says which went through and why the others did
+ * not. Approving is never batched: it pays out, so it goes through each
+ * claim's own checklist on its review page.
+ */
 export async function POST(request: Request) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const body = await parseBody(request, Body)
   if (!body.ok) return body.response
   const { ids, action, notes } = body.data
+  if (action === 'approve') {
+    return NextResponse.json({ error: 'Claims are approved one at a time, on each claim\'s own page, with its checklist.', code: 'BATCH_APPROVE_NOT_ALLOWED' }, { status: 400 })
+  }
   const newStatus = STATUS[action]
-  if ((action === 'approve' || action === 'reject') && (notes ?? '').length < MIN_DECISION_NOTES) {
+  if (action === 'reject' && (notes ?? '').length < MIN_DECISION_NOTES) {
     return NextResponse.json({ error: `Say why, in at least ${MIN_DECISION_NOTES} characters. The reason is part of the record for every claim in the batch.`, code: 'NOTES_REQUIRED' }, { status: 400 })
   }
-  // A batch approval skips the per-claim checklist; the record says so.
-  const extra = action === 'approve'
-    ? { review_checklist: { batch: true, completed_by: auth.user.id, completed_at: new Date().toISOString() } }
-    : {}
 
   try {
     const results: BatchActionResult[] = []
     for (const id of ids) {
       try {
-        await reviewVerification(auth.adminClient, { verificationId: id, to: newStatus, actorId: auth.user.id, notes, extra })
+        await reviewVerification(auth.adminClient, { verificationId: id, to: newStatus, actorId: auth.user.id, notes })
         results.push({ id, success: true })
       } catch (err) {
         if (err instanceof ClaimError) {

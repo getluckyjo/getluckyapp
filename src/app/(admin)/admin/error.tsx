@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect } from 'react'
+import { AlertTriangle, RotateCw } from 'lucide-react'
 
+/** What any admin page shows when it throws while rendering, inside the admin's own frame. */
 export default function AdminError({
   error,
   reset,
@@ -14,61 +16,18 @@ export default function AdminError({
   }, [error])
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      minHeight: '60vh',
-      padding: 32,
-      background: '#f7f7f8',
-      fontFamily: "'Inter', system-ui, sans-serif",
-      textAlign: 'center',
-    }}>
-      <div style={{
-        width: 64,
-        height: 64,
-        borderRadius: '50%',
-        background: '#fee2e2',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: 28,
-        marginBottom: 20,
-      }}>
-        ⚠️
-      </div>
-      <h2 style={{
-        fontSize: 22,
-        fontWeight: 700,
-        color: '#1a1a1a',
-        marginBottom: 8,
-      }}>
-        Dashboard Error
-      </h2>
-      <p style={{
-        fontSize: 14,
-        color: '#6b7280',
-        lineHeight: 1.6,
-        maxWidth: 360,
-        marginBottom: 24,
-      }}>
-        Something went wrong loading this section. Please try again or navigate to another page.
+    <div role="alert" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, minHeight: '50vh', padding: 24, textAlign: 'center' }}>
+      <title>Something went wrong · Get Lucky admin</title>
+      <span aria-hidden className="adm-icon-btn" style={{ width: 56, height: 56, background: '#fde8e8', color: 'var(--red)', cursor: 'default' }}>
+        <AlertTriangle size={26} />
+      </span>
+      <h1 className="adm-title" style={{ margin: 0 }}>Something went wrong on this page</h1>
+      <p className="adm-lead" style={{ maxWidth: 440 }}>
+        Nothing you saved has been lost. Try again, or open another page from the menu.
+        {error.digest && <span className="adm-small" style={{ display: 'block', marginTop: 8 }}>Reference: <span className="adm-mono">{error.digest}</span></span>}
       </p>
-      <button
-        onClick={reset}
-        style={{
-          background: '#335231',
-          color: 'white',
-          border: 'none',
-          borderRadius: 10,
-          padding: '12px 28px',
-          fontSize: 14,
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        Try Again
+      <button type="button" onClick={reset} className="adm-btn">
+        <RotateCw size={17} aria-hidden /> Try again
       </button>
     </div>
   )

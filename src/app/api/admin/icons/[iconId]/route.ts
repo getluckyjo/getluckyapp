@@ -10,9 +10,10 @@ const Patch = z.object({
   isCaptain: z.boolean().optional(),
   tagline: z.string().trim().max(120).nullable().optional(),
   photoUrl: z.url().max(500).nullable().optional(),
-  sortOrder: z.coerce.number().int().min(0).max(10000).optional(),
+  // An emptied box is "no change", not 0 (z.coerce reads '' as 0).
+  sortOrder: z.preprocess(v => (typeof v === 'string' && v.trim() === '' ? undefined : v), z.coerce.number().int().min(0).max(10000).optional()),
   isActive: z.boolean().optional(),
-}).refine(v => Object.keys(v).length > 0, { message: 'Nothing to update' })
+}).refine(v => Object.values(v).some(x => x !== undefined), { message: 'Nothing to update' })
 
 type Ctx = { params: Promise<{ iconId: string }> }
 
@@ -54,8 +55,9 @@ export async function DELETE(_request: Request, { params }: Ctx) {
   const { iconId } = await params
   if (!uuid.safeParse(iconId).success) return NextResponse.json({ error: 'Invalid id', code: 'INVALID_INPUT' }, { status: 400 })
   try {
-    const { error } = await auth.adminClient.from('icons').delete().eq('id', iconId)
+    const { data, error } = await auth.adminClient.from('icons').delete().eq('id', iconId).select('id')
     if (error) throw error
+    if (!data || data.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     log.info('admin.icons.removed', { id: iconId, by: auth.user.id })
     return NextResponse.json({ ok: true })
   } catch (err) {

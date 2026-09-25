@@ -19,7 +19,8 @@ const PROMO_SELECT = 'id, code, max_uses, expires_at, note, disabled_at, created
 
 const Patch = z.object({
   maxUses: z.coerce.number().int().min(1).max(100000).optional(),
-  expiresAt: dateLike.optional(),
+  // Refused as on create. To stop a code now, switch it off (`disabled`).
+  expiresAt: dateLike.refine(s => Date.parse(s) > Date.now(), 'The expiry must be in the future').optional(),
   disabled: z.boolean().optional(),
   note: z.string().trim().max(200).nullable().optional(),
 }).refine(v => Object.keys(v).length > 0, { message: 'Nothing to update' })

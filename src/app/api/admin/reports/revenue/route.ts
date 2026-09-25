@@ -1,8 +1,16 @@
+/**
+ * GET /api/admin/reports/revenue
+ *
+ * Stakes taken and prizes paid, in all and by tier and course. "Revenue" is
+ * the sum of stakes (what golfers staked, not what PayFast settled), and
+ * netProfit is stakes minus prizes paid: prizes owed (verified, not yet
+ * paid) are reported beside it, null before migration 032.
+ */
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError } from '@/lib/api/http'
-import { adminTotals } from '@/lib/admin/data'
 import { TIER_LABELS } from '@/lib/tiers'
+import { readTotals } from '../../stats/totals'
 
 interface TierRow { tier: string; bet_count: number; revenue_cents: number; payout_cents: number }
 interface CourseRow { course_id: string; course_name: string; bet_count: number; revenue_cents: number }
@@ -14,7 +22,7 @@ export async function GET() {
 
   try {
     const [totals, tierRes, courseRes] = await Promise.all([
-      adminTotals(admin),
+      readTotals(admin),
       admin.rpc('admin_revenue_by_tier'),
       admin.rpc('admin_revenue_by_course'),
     ])
@@ -28,16 +36,17 @@ export async function GET() {
     })
     const byCourse = ((courseRes.data ?? []) as CourseRow[]).map(r => ({ name: r.course_name, revenue: Number(r.revenue_cents), count: Number(r.bet_count) }))
 
-    const totalRevenue = totals.total_revenue_cents
-    const totalPayouts = totals.total_payout_cents
+    const totalRevenue = totals.stakesCents
+    const totalPayouts = totals.prizesPaidCents
     return NextResponse.json({
       totalRevenue,
       totalPayouts,
       netProfit: totalRevenue - totalPayouts,
       margin: totalRevenue > 0 ? ((totalRevenue - totalPayouts) / totalRevenue * 100).toFixed(1) : '0',
+      prizesOwed: totals.prizesOwedCents,
       byTier,
       byCourse,
-      totalBets: totals.total_bets,
+      totalBets: totals.totalBets,
     })
   } catch (err) {
     return apiError('admin.reports.revenue_failed', err, { path: 'admin_review' })

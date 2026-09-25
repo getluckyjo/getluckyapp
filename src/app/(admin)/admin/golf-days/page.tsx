@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle, Trash2 } from 'lucide-react'
+import ConfirmModal from '@/components/admin/ConfirmModal'
+import LoadError from '@/components/admin/LoadError'
 import type { AdminGolfDay, GolfDayHole, GolfDayPhase } from '@/lib/golf-days/rules'
 import { golfDayPath, todayInSouthAfrica } from '@/lib/golf-days/rules'
 import { golfDayMessage } from '@/lib/golf-days/message'
@@ -46,6 +48,32 @@ const PHASE: Record<GolfDayPhase, { label: string; pill: string }> = {
 
 const SWING: Record<string, string> = { active: 'Started', miss: 'Missed', claimed: 'Claimed', verified: 'Verified', paid: 'Paid' }
 
+/** Where the form is going when it has unsaved changes: closed, to a new golf day, or to another one. */
+type Leave = { to: 'close' } | { to: 'create' } | { to: 'edit'; row: AdminGolfDay }
+
+type Sent<T> = { ok: true; data: T } | { ok: false; error: string }
+
+/** A change to a golf day, and what the server answered. Never throws: a dropped connection is an answer too. */
+async function send<T>(url: string, method: string, body?: unknown): Promise<Sent<T>> {
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) return { ok: false, error: json.error ?? 'That did not work. Please try again.' }
+    return { ok: true, data: json.data as T }
+  } catch {
+    return { ok: false, error: 'That did not reach the server. Check your connection, then try again.' }
+  }
+}
+
+const sameSet = (a: string[], b: string[]) => a.length === b.length && new Set([...a, ...b]).size === new Set(a).size
+
+/** The list's order: the latest date first, as the server sends it. */
+const byDate = (a: AdminGolfDay, b: AdminGolfDay) => b.playsOn.localeCompare(a.playsOn)
+
 function showDate(playsOn: string): string {
   return new Date(`${playsOn}T12:00:00+02:00`).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' })
 }
@@ -56,46 +84,80 @@ function showDate(playsOn: string): string {
  * on its holes, for its prize. Nobody else sees any of it.
  */
 export default function AdminGolfDaysPage() {
-  const [rows, setRows] = useState<AdminGolfDay[]>([])
-  const [loaded, setLoaded] = useState(false)
-  const [courses, setCourses] = useState<CourseOption[]>([])
-  const [editing, setEditing] = useState<{ id: string | null; form: Form } | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  // rows null: the list could not be loaded (never shown as "no golf days", which invites a duplicate).
+  const [list, setList] = useState<{ attempt: number; rows: AdminGolfDay[] | null; detail: string | null } | null>(null)
+  const [courseAttempt, setCourseAttempt] = useState(0)
+  const [courseList, setCourseList] = useState<{ attempt: number; courses: CourseOption[] | null } | null>(null)
+  // form is what the admin has typed; saved is the golf day as the form opened, to tell what changed.
+  const [editing, setEditing] = useState<{ id: string | null; form: Form; saved: Form } | null>(null)
+  // Bumped each time the form opens, to bring it into view.
+  const [opens, setOpens] = useState(0)
+  const [leaving, setLeaving] = useState<Leave | null>(null)
   const [pickCourse, setPickCourse] = useState('')
   const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<{ action: 'off' | 'delete'; row: AdminGolfDay } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   // The golf day whose WhatsApp message is open, and the message as edited before copying.
   const [message, setMessage] = useState<{ id: string; text: string } | null>(null)
   // list: null while loading; failed: the list could not be read (never shown as "nobody").
   const [players, setPlayers] = useState<{ id: string; list: Player[] | null; failed?: boolean } | null>(null)
-  const [refresh, setRefresh] = useState(0)
+  const formRef = useRef<HTMLFormElement>(null)
+  const headingRef = useRef<HTMLHeadingElement>(null)
   // This site's address, for the full link to send out; empty while server-rendered.
   const origin = useSyncExternalStore(() => () => {}, () => window.location.origin, () => '')
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/admin/golf-days')
-      .then(r => r.json())
-      .then(json => { if (!cancelled) setRows(json.data ?? []) })
-      .catch(() => { if (!cancelled) setRows([]) })
-      .finally(() => { if (!cancelled) setLoaded(true) })
+    fetch('/api/admin/golf-days', { cache: 'no-store' })
+      .then(async res => {
+        const json = await res.json().catch(() => null)
+        if (cancelled) return
+        setList(res.ok && Array.isArray(json?.data) ? { attempt, rows: json.data, detail: null } : { attempt, rows: null, detail: json?.error ?? null })
+      })
+      .catch(() => { if (!cancelled) setList({ attempt, rows: null, detail: null }) })
     return () => { cancelled = true }
-  }, [refresh])
+  }, [attempt])
 
-  // Partner courses and their holes, for the hole picker.
+  // Partner courses and their holes, for the hole picker. Not from the browser's
+  // cache: /api/courses may be kept for minutes, and a course just made a
+  // partner has to be here now.
   useEffect(() => {
     let cancelled = false
-    fetch('/api/courses')
-      .then(r => r.json())
-      .then(json => { if (!cancelled) setCourses(((json.courses ?? []) as CourseOption[]).filter(c => c.is_partner)) })
-      .catch(() => {})
+    fetch('/api/courses', { cache: 'no-store' })
+      .then(async res => {
+        const json = await res.json().catch(() => null)
+        if (cancelled) return
+        setCourseList(res.ok && Array.isArray(json?.courses)
+          ? { attempt: courseAttempt, courses: (json.courses as CourseOption[]).filter(c => c.is_partner) }
+          : { attempt: courseAttempt, courses: null })
+      })
+      .catch(() => { if (!cancelled) setCourseList({ attempt: courseAttempt, courses: null }) })
     return () => { cancelled = true }
-  }, [])
+  }, [courseAttempt])
+
+  // The form opens at the top of the page: bring it into view, and the keyboard with it.
+  useEffect(() => {
+    if (!opens) return
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    formRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
+    headingRef.current?.focus({ preventScroll: true })
+  }, [opens])
+
+  const loading = list?.attempt !== attempt
+  const rows = loading ? null : list.rows
+  const courses = useMemo(() => courseList?.courses ?? [], [courseList])
+  const coursesLoading = courseList?.attempt !== courseAttempt
+  const coursesFailed = !coursesLoading && courseList.courses === null
 
   const holeLabel = useMemo(() => {
     const map = new Map<string, string>()
     for (const c of courses) for (const h of c.holes) map.set(h.id, `${c.name}, hole ${h.hole_number} (${h.distance_metres ?? '?'} m)`)
-    for (const r of rows) for (const h of r.holes) map.set(h.holeId, `${h.course.name}, hole ${h.holeNumber} (${h.distanceMetres ?? '?'} m)`)
+    for (const r of rows ?? []) for (const h of r.holes) map.set(h.holeId, `${h.course.name}, hole ${h.holeNumber} (${h.distanceMetres ?? '?'} m)`)
     return map
   }, [courses, rows])
 
@@ -105,24 +167,35 @@ export default function AdminGolfDaysPage() {
     for (const c of courses) for (const h of c.holes) {
       map.set(h.id, { holeId: h.id, holeNumber: h.hole_number, par: h.par, distanceMetres: h.distance_metres, course: { id: c.id, name: c.name, location: '', region: '' } })
     }
-    for (const r of rows) for (const h of r.holes) map.set(h.holeId, h)
+    for (const r of rows ?? []) for (const h of r.holes) map.set(h.holeId, h)
     return map
   }, [courses, rows])
 
-  function startCreate() {
-    setError(null)
-    setEditing({ id: null, form: { ...EMPTY, playsOn: todayInSouthAfrica() } })
+  const dirty = editing !== null && JSON.stringify(editing.form) !== JSON.stringify(editing.saved)
+  const newPicture = editing !== null && editing.form.look.hero?.src !== editing.saved.look.hero?.src && Boolean(editing.form.look.hero)
+
+  function open(id: string | null, form: Form) {
+    setFormError(null)
+    setEditing({ id, form, saved: form })
+    setOpens(n => n + 1)
   }
 
-  function startEdit(r: AdminGolfDay) {
-    setError(null)
-    setEditing({
-      id: r.id,
-      form: {
-        slug: r.slug, name: r.name, tabLabel: r.tabLabel, playsOn: r.playsOn,
-        prizeRand: String(r.prizeZAR), maxPlayers: String(r.maxPlayers), holeIds: r.holes.map(h => h.holeId), note: r.note ?? '',
-        look: lookFormFrom(themeFor(r.slug, r.look)),
-      },
+  /** Close the form, or open it for another golf day, asking first when that would throw changes away. */
+  function leave(next: Leave) {
+    if (next.to === 'edit' && editing?.id === next.row.id) { setOpens(n => n + 1); return }
+    if (dirty) { setLeaving(next); return }
+    go(next)
+  }
+
+  function go(next: Leave) {
+    setLeaving(null)
+    if (next.to === 'close') { setEditing(null); setFormError(null); return }
+    if (next.to === 'create') { open(null, { ...EMPTY, playsOn: todayInSouthAfrica() }); return }
+    const r = next.row
+    open(r.id, {
+      slug: r.slug, name: r.name, tabLabel: r.tabLabel, playsOn: r.playsOn,
+      prizeRand: String(r.prizeZAR), maxPlayers: String(r.maxPlayers), holeIds: r.holes.map(h => h.holeId), note: r.note ?? '',
+      look: lookFormFrom(themeFor(r.slug, r.look)),
     })
   }
 
@@ -130,46 +203,62 @@ export default function AdminGolfDaysPage() {
     setEditing(e => (e ? { ...e, form: { ...e.form, [key]: value } } : e))
   }
 
-  async function send(url: string, method: string, body?: unknown): Promise<boolean> {
-    setError(null)
-    const res = await fetch(url, {
-      method,
-      headers: body ? { 'Content-Type': 'application/json' } : undefined,
-      body: body ? JSON.stringify(body) : undefined,
-    })
-    const json = await res.json().catch(() => ({}))
-    if (!res.ok) {
-      setError(json.error ?? 'That did not work. Please try again.')
-      return false
-    }
-    setRefresh(n => n + 1)
-    return true
+  /** Put the server's copy of a golf day into the list, in date order. */
+  function put(row: AdminGolfDay) {
+    setList(l => (l?.rows ? { ...l, rows: [...l.rows.filter(r => r.id !== row.id), row].sort(byDate) } : l))
   }
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
     if (!editing) return
     const f = editing.form
-    const fields = {
+    const fields: Record<string, unknown> = {
       name: f.name.trim(), tabLabel: f.tabLabel.trim(), playsOn: f.playsOn,
-      prizeRand: Number(f.prizeRand), maxPlayers: Number(f.maxPlayers), holeIds: f.holeIds, note: f.note.trim() || null,
+      prizeRand: Number(f.prizeRand), maxPlayers: Number(f.maxPlayers), note: f.note.trim() || null,
       look: lookFrom(f.look, f.name.trim()),
     }
+    // The holes only when they changed: the server then leaves them alone, and
+    // does not re-check a hole the day already has.
+    if (!editing.id || !sameSet(f.holeIds, editing.saved.holeIds)) fields.holeIds = f.holeIds
+    setFormError(null)
     setBusy(true)
-    try {
-      const ok = editing.id
-        ? await send(`/api/admin/golf-days/${editing.id}`, 'PATCH', fields)
-        : await send('/api/admin/golf-days', 'POST', { slug: f.slug.trim().toLowerCase(), ...fields })
-      if (ok) setEditing(null)
-    } finally {
-      setBusy(false)
-    }
+    const sent = editing.id
+      ? await send<AdminGolfDay>(`/api/admin/golf-days/${editing.id}`, 'PATCH', fields)
+      : await send<AdminGolfDay>('/api/admin/golf-days', 'POST', { slug: f.slug.trim().toLowerCase(), ...fields })
+    setBusy(false)
+    if (!sent.ok) { setFormError(sent.error); return }
+    put(sent.data)
+    setEditing(null)
   }
 
-  async function toggle(r: AdminGolfDay) {
-    const off = !r.disabledAt
-    if (off && !confirm(`Switch off ${r.name}? Its tab disappears and nobody can take a swing until you switch it on again.`)) return
-    await send(`/api/admin/golf-days/${r.id}`, 'PATCH', { disabled: off })
+  async function switchOn(r: AdminGolfDay) {
+    setError(null)
+    const sent = await send<AdminGolfDay>(`/api/admin/golf-days/${r.id}`, 'PATCH', { disabled: false })
+    if (sent.ok) put(sent.data)
+    else setError(sent.error)
+  }
+
+  async function confirm() {
+    if (!confirming) return
+    const { action, row } = confirming
+    setConfirmError(null)
+    setConfirmBusy(true)
+    const sent = action === 'off'
+      ? await send<AdminGolfDay>(`/api/admin/golf-days/${row.id}`, 'PATCH', { disabled: true })
+      : await send<unknown>(`/api/admin/golf-days/${row.id}`, 'DELETE')
+    setConfirmBusy(false)
+    if (!sent.ok) { setConfirmError(sent.error); return }
+    if (action === 'off') put(sent.data as AdminGolfDay)
+    else {
+      setList(l => (l?.rows ? { ...l, rows: l.rows.filter(r => r.id !== row.id) } : l))
+      if (editing?.id === row.id) setEditing(null)
+    }
+    setConfirming(null)
+  }
+
+  function ask(action: 'off' | 'delete', row: AdminGolfDay) {
+    setConfirmError(null)
+    setConfirming({ action, row })
   }
 
   async function showPlayers(r: AdminGolfDay) {
@@ -201,6 +290,7 @@ export default function AdminGolfDaysPage() {
 
   return (
     <div>
+      <title>Golf days · Get Lucky admin</title>
       <div className="adm-head">
         <div>
           <h1 className="adm-title">Golf days</h1>
@@ -210,7 +300,7 @@ export default function AdminGolfDaysPage() {
           </p>
         </div>
         {!editing && (
-          <button type="button" onClick={startCreate} className="adm-btn">
+          <button type="button" onClick={() => leave({ to: 'create' })} className="adm-btn">
             <Plus size={18} aria-hidden /> New golf day
           </button>
         )}
@@ -219,8 +309,8 @@ export default function AdminGolfDaysPage() {
       {error && <p role="alert" className="adm-error" style={{ marginBottom: 12 }}>{error}</p>}
 
       {editing && (
-        <form onSubmit={save} className="adm-card adm-card--form adm-stack" style={{ marginBottom: 22 }}>
-          <h2 className="adm-h2">{editing.id ? `Edit ${editing.form.name || 'golf day'}` : 'New golf day'}</h2>
+        <form ref={formRef} onSubmit={save} className="adm-card adm-card--form adm-stack" style={{ marginBottom: 22, scrollMarginTop: 16 }}>
+          <h2 ref={headingRef} tabIndex={-1} className="adm-h2">{editing.id ? `Edit ${editing.saved.name || 'golf day'}` : 'New golf day'}</h2>
           <div className="adm-row">
             <label className="adm-field">
               Link
@@ -272,8 +362,8 @@ export default function AdminGolfDaysPage() {
               {editing.form.holeIds.length === 0 && <span className="adm-hint">None yet</span>}
             </div>
             <div className="adm-row">
-              <select value={pickCourse} onChange={e => setPickCourse(e.target.value)} className="adm-input" style={{ minWidth: 280 }} aria-label="Course">
-                <option value="">Course…</option>
+              <select value={pickCourse} onChange={e => setPickCourse(e.target.value)} disabled={coursesLoading || coursesFailed} className="adm-input" style={{ minWidth: 280 }} aria-label="Course">
+                <option value="">{coursesLoading ? 'Loading courses…' : 'Course…'}</option>
                 {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <select value="" onChange={e => { if (e.target.value && !editing.form.holeIds.includes(e.target.value)) setField('holeIds', [...editing.form.holeIds, e.target.value]) }} disabled={!pickCourse} className="adm-input" aria-label="Add a hole">
@@ -281,6 +371,12 @@ export default function AdminGolfDaysPage() {
                 {pickable.map(h => <option key={h.id} value={h.id}>Hole {h.hole_number} · par {h.par} · {h.distance_metres} m</option>)}
               </select>
             </div>
+            {coursesFailed && (
+              <span role="alert" className="adm-error" style={{ fontWeight: 400 }}>
+                The courses could not be loaded, so no hole can be added.{' '}
+                <button type="button" onClick={() => setCourseAttempt(n => n + 1)} className="adm-link">Try again</button>
+              </span>
+            )}
           </div>
           <fieldset className="adm-fieldset">
             <legend className="adm-h3">Look</legend>
@@ -293,11 +389,12 @@ export default function AdminGolfDaysPage() {
               holes={editing.form.holeIds.map(id => holeById.get(id)).filter((h): h is GolfDayHole => Boolean(h))}
             />
           </fieldset>
+          {formError && <p role="alert" className="adm-error" style={{ margin: 0 }}>{formError}</p>}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
             <button type="submit" disabled={busy || editing.form.holeIds.length === 0} className="adm-btn">
               {busy ? 'Saving…' : editing.id ? 'Save changes' : 'Create golf day'}
             </button>
-            <button type="button" onClick={() => setEditing(null)} className="adm-btn adm-btn--quiet">Cancel</button>
+            <button type="button" onClick={() => leave({ to: 'close' })} disabled={busy} className="adm-btn adm-btn--quiet">Cancel</button>
           </div>
           <p className="adm-small" style={{ margin: 0 }}>
             The link cannot change once made, because it has been sent out. The look changes the moment you save, for everyone.
@@ -306,8 +403,10 @@ export default function AdminGolfDaysPage() {
         </form>
       )}
 
-      {!loaded ? (
+      {loading ? (
         <p className="adm-muted">Loading…</p>
+      ) : !rows ? (
+        <LoadError what="The golf days" onRetry={() => setAttempt(n => n + 1)} detail={list.detail} />
       ) : rows.length === 0 ? (
         <div className="adm-card" style={{ textAlign: 'center', padding: 36 }}>
           <p className="adm-h2" style={{ marginBottom: 6 }}>No golf days yet</p>
@@ -348,8 +447,11 @@ export default function AdminGolfDaysPage() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button type="button" title="WhatsApp message for players" aria-label="WhatsApp message for players" onClick={() => toggleMessage(r)} className="adm-icon-btn" aria-pressed={message?.id === r.id}><MessageCircle size={17} /></button>
                   <button type="button" title="Players" aria-label="Players" onClick={() => showPlayers(r)} className="adm-icon-btn" aria-pressed={players?.id === r.id}><Users size={17} /></button>
-                  <button type="button" title="Edit" aria-label={`Edit ${r.name}`} onClick={() => startEdit(r)} className="adm-icon-btn"><Pencil size={17} /></button>
-                  <button type="button" title={r.disabledAt ? 'Switch on' : 'Switch off'} aria-label={r.disabledAt ? `Switch ${r.name} on` : `Switch ${r.name} off`} onClick={() => toggle(r)} className={`adm-icon-btn${r.disabledAt ? ' adm-icon-btn--ok' : ' adm-icon-btn--warn'}`}><Power size={17} /></button>
+                  <button type="button" title="Edit" aria-label={`Edit ${r.name}`} onClick={() => leave({ to: 'edit', row: r })} className="adm-icon-btn"><Pencil size={17} /></button>
+                  <button type="button" title={r.disabledAt ? 'Switch on' : 'Switch off'} aria-label={r.disabledAt ? `Switch ${r.name} on` : `Switch ${r.name} off`} onClick={() => (r.disabledAt ? void switchOn(r) : ask('off', r))} className={`adm-icon-btn${r.disabledAt ? ' adm-icon-btn--ok' : ' adm-icon-btn--warn'}`}><Power size={17} /></button>
+                  {r.players === 0 && r.swings === 0 && (
+                    <button type="button" title="Delete" aria-label={`Delete ${r.name}`} onClick={() => ask('delete', r)} className="adm-icon-btn" style={{ color: 'var(--red)' }}><Trash2 size={17} /></button>
+                  )}
                 </div>
               </div>
             </div>
@@ -409,6 +511,27 @@ export default function AdminGolfDaysPage() {
       <p className="adm-small" style={{ marginTop: 16, maxWidth: 720 }}>
         A golf day&rsquo;s prize is Get Lucky&rsquo;s own, not Indwe&rsquo;s. Its swings go through the same claim and review as any entry, and a claim shows up in the Verification Queue.
       </p>
+
+      <ConfirmModal
+        open={confirming !== null}
+        title={confirming?.action === 'delete' ? `Delete ${confirming.row.name}?` : `Switch ${confirming?.row.name ?? ''} off?`}
+        message={confirming?.action === 'delete'
+          ? `Nobody has joined it, so nothing is lost. ${golfDayPath(confirming.row.slug)} stops working, and the name is free for another golf day.`
+          : 'Its tab disappears and nobody can take a swing until you switch it on again.'}
+        confirmLabel={confirming?.action === 'delete' ? 'Delete' : 'Switch off'}
+        onConfirm={confirm}
+        onCancel={() => setConfirming(null)}
+        busy={confirmBusy}
+        error={confirmError}
+      />
+      <ConfirmModal
+        open={leaving !== null}
+        title="Throw away your changes?"
+        message={`Your changes to ${editing?.id ? editing.saved.name : 'the new golf day'} have not been saved${newPicture ? ', including the picture you uploaded' : ''}.`}
+        confirmLabel="Throw away"
+        onConfirm={() => { if (leaving) go(leaving) }}
+        onCancel={() => setLeaving(null)}
+      />
     </div>
   )
 }

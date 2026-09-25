@@ -66,7 +66,7 @@ export async function POST(request: Request) {
     }
 
     try {
-      await setHoles(auth.adminClient, data.id, b.holeIds)
+      await setHoles(auth.adminClient, data.id, b.holeIds, [])
     } catch (holesError) {
       // Without holes the golf day is no use; take it back out rather than leave half of it.
       await auth.adminClient.from('golf_days').delete().eq('id', data.id)

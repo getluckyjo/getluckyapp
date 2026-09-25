@@ -21,9 +21,12 @@ export async function GET(_request: Request, { params }: Params) {
   const admin = auth.adminClient
 
   try {
-    const { data: verification } = await admin.from('verifications').select('*').eq('id', verificationId).maybeSingle()
+    // A read that fails is a 500, never a "Not found" the admin would believe.
+    const { data: verification, error: vError } = await admin.from('verifications').select('*').eq('id', verificationId).maybeSingle()
+    if (vError) throw vError
     if (!verification) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-    const { data: bet } = await admin.from('bets').select('*').eq('id', verification.bet_id).maybeSingle()
+    const { data: bet, error: betError } = await admin.from('bets').select('*').eq('id', verification.bet_id).maybeSingle()
+    if (betError) throw betError
     if (!bet) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const [profile, course, hole, events, witnesses, payments] = await Promise.all([

@@ -12,6 +12,9 @@ import { holesFor } from '@/lib/golf-days/load'
 
 type Ctx = { params: Promise<{ golfDayId: string }> }
 
+/** Profiles are read this many ids at a time. */
+const PROFILE_CHUNK = 200
+
 export async function GET(_request: Request, { params }: Ctx) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
@@ -28,13 +31,19 @@ export async function GET(_request: Request, { params }: Ctx) {
     if (error) throw error
     if (swingsError) throw swingsError
 
+    // In chunks: every id goes in the query string, and 5 000 of them are far
+    // past what a URL can carry.
+    type Profile = { id: string; name: string | null; email: string | null }
     const userIds = (players ?? []).map((p: { user_id: string }) => p.user_id)
-    const { data: profiles, error: profilesError } = userIds.length
-      ? await admin.from('profiles').select('id, name, email').in('id', userIds)
-      : { data: [], error: null }
-    if (profilesError) throw profilesError
+    const chunks: string[][] = []
+    for (let i = 0; i < userIds.length; i += PROFILE_CHUNK) chunks.push(userIds.slice(i, i + PROFILE_CHUNK))
+    const profiles: Profile[] = []
+    for (const res of await Promise.all(chunks.map(ids => admin.from('profiles').select('id, name, email').in('id', ids)))) {
+      if (res.error) throw res.error
+      profiles.push(...((res.data ?? []) as Profile[]))
+    }
 
-    const profileById = new Map(((profiles ?? []) as { id: string; name: string | null; email: string | null }[]).map(p => [p.id, p]))
+    const profileById = new Map(profiles.map(p => [p.id, p]))
     type Swing = { id: string; user_id: string; status: string; hole_id: string; created_at: string }
     const swingByUser = new Map(((swings ?? []) as Swing[]).map(s => [s.user_id, s]))
     const holeById = new Map((holes.get(golfDayId) ?? []).map(h => [h.holeId, h]))

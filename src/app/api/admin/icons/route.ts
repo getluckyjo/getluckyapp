@@ -18,17 +18,24 @@ const Create = z.object({
 export async function GET() {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
+  const admin = auth.adminClient
   try {
-    const [{ data: icons, error }, { data: votes }] = await Promise.all([
-      auth.adminClient.from('icons').select('id, name, team, is_captain, tagline, photo_url, sort_order, is_active, created_at').order('team').order('sort_order').order('name'),
-      auth.adminClient.from('icon_votes').select('icon_id'),
+    const [iconsRes, totalRes] = await Promise.all([
+      admin.from('icons').select('id, name, team, is_captain, tagline, photo_url, sort_order, is_active, created_at').order('team').order('sort_order').order('name'),
+      admin.from('icon_votes').select('icon_id', { count: 'exact', head: true }),
     ])
-    if (error) throw error
-    const counts = new Map<string, number>()
-    for (const v of votes ?? []) counts.set(v.icon_id, (counts.get(v.icon_id) ?? 0) + 1)
+    if (iconsRes.error) throw iconsRes.error
+    if (totalRes.error) throw totalRes.error
+    const icons = (iconsRes.data ?? []) as { id: string }[]
+
+    // A head count per Icon: exact at any size, where reading the icon_votes
+    // rows stopped counting at PostgREST's 1,000-row cap. The field is tens.
+    const counts = await Promise.all(icons.map(i => admin.from('icon_votes').select('icon_id', { count: 'exact', head: true }).eq('icon_id', i.id)))
+    for (const c of counts) if (c.error) throw c.error
+
     return NextResponse.json({
-      data: (icons ?? []).map(i => ({ ...i, votes: counts.get(i.id) ?? 0 })),
-      totalVotes: (votes ?? []).length,
+      data: icons.map((i, n) => ({ ...i, votes: counts[n].count ?? 0 })),
+      totalVotes: totalRes.count ?? 0,
     })
   } catch (err) {
     return apiError('admin.icons.list_failed', err)

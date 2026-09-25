@@ -12,7 +12,9 @@
  *  - the swing passes the same target check as every entry
  *  - only joined players see the tab; switching the day off takes it away
  *  - a signed-out visitor sees the day, not who or how many joined
- *  - admins make and change golf days, and only with holes that can be played
+ *  - admins make and change golf days, and only with holes that can be played;
+ *    changing the holes adds before it removes, and checks only the new ones;
+ *    a golf day nobody has joined can be deleted, one with players cannot
  *  - "Add to calendar" puts the day, the holes and the link in a player's
  *    calendar, as a well-formed .ics or a Google Calendar link
  *  - a golf day's look is set in the admin (migration 031): saved checked,
@@ -21,13 +23,13 @@
  *    suggested; the admin says which courses have no club official
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, type FakeUser } from '../helpers/fake-supabase'
+import { Builder, FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, type FakeUser } from '../helpers/fake-supabase'
 import { GET as readDay } from '@/app/api/golf-days/[slug]/route'
 import { POST as joinDay } from '@/app/api/golf-days/[slug]/join/route'
 import { POST as swingDay } from '@/app/api/golf-days/[slug]/swing/route'
 import { GET as myTab } from '@/app/api/golf-days/route'
 import { GET as listDays, POST as createDay } from '@/app/api/admin/golf-days/route'
-import { PATCH as patchDay } from '@/app/api/admin/golf-days/[golfDayId]/route'
+import { PATCH as patchDay, DELETE as deleteDay } from '@/app/api/admin/golf-days/[golfDayId]/route'
 import { GET as listPlayers } from '@/app/api/admin/golf-days/[golfDayId]/players/route'
 import { GET as dayCalendar } from '@/app/api/golf-days/[slug]/calendar/route'
 import { POST as uploadArt } from '@/app/api/admin/golf-days/art/route'
@@ -459,6 +461,53 @@ describe('admin', () => {
     expect((await patch(USER_C.id, { maxPlayers: 5 })).status).toBe(404)
   })
 
+  it('an edit without holes leaves them alone, and only a hole being added is checked', async () => {
+    const day = seedDay(); asAdmin()
+    const kept = db.rows('golf_day_holes').map(h => h.id)
+    // West stops being a partner after the day was set up on it.
+    db.find('courses', c => c.id === WEST)!.is_partner = false
+    const note = await patch(String(day.id), { note: 'Shotgun start at 11' })
+    expect(note.status).toBe(200)
+    expect(db.rows('golf_day_holes').map(h => h.id)).toEqual(kept)
+
+    // Adding East 12 alongside the two it has: East 12 is checked, West 17 is not.
+    const more = await patch(String(day.id), { holeIds: [EAST_2, WEST_17, EAST_12] })
+    expect(more.status).toBe(200)
+    expect(db.rows('golf_day_holes').map(h => h.hole_id).sort()).toEqual([EAST_12, EAST_2, WEST_17].sort())
+    expect(db.rows('golf_day_holes').filter(h => kept.includes(h.id))).toHaveLength(2)
+    // A hole at a course that is not a partner cannot be added, though.
+    expect((await patch(String(day.id), { holeIds: [EAST_2, ELSEWHERE_3] })).status).toBe(400)
+  })
+
+  it('changing the holes adds the new ones before it removes the old: a failure leaves the day its holes', async () => {
+    const day = seedDay(); asAdmin()
+    db.beforeInsert = table => { if (table === 'golf_day_holes') throw new Error('connection reset') }
+    const res = await patch(String(day.id), { holeIds: [EAST_12] })
+    expect(res.status).toBe(500)
+    expect(db.rows('golf_day_holes').map(h => h.hole_id).sort()).toEqual([EAST_2, WEST_17].sort())
+  })
+
+  it('deletes a golf day nobody has joined; one with players or swings stays', async () => {
+    const del = (id: string) => deleteDay(new Request('http://x', { method: 'DELETE' }), idParams(id))
+    const empty = seedDay({ slug: 'typo' }, [EAST_12])
+    const withPlayer = seedDay({ slug: 'joined' }); joined(withPlayer)
+    const withSwing = seedDay({ slug: 'swung' })
+    db.seed('bets', { user_id: USER_B.id, tier: 'tier_golf_day', golf_day_id: withSwing.id, status: 'miss', hole_id: EAST_2 })
+
+    player()
+    expect((await del(String(empty.id))).status).toBe(403)
+    asAdmin()
+    expect((await del('nope')).status).toBe(400)
+    expect((await del(USER_C.id)).status).toBe(404)
+    for (const day of [withPlayer, withSwing]) {
+      const res = await del(String(day.id))
+      expect(res.status).toBe(409)
+      expect((await res.json()).code).toBe('GOLF_DAY_IN_USE')
+    }
+    expect((await del(String(empty.id))).status).toBe(200)
+    expect(db.rows('golf_days').map(d => d.slug).sort()).toEqual(['joined', 'swung'])
+  })
+
   it('lists the players and where each swing stands', async () => {
     const day = seedDay()
     db.seed('profiles', { id: USER_A.id, name: 'Alice', email: USER_A.email }, { id: USER_B.id, name: 'Bob', email: USER_B.email })
@@ -470,6 +519,21 @@ describe('admin', () => {
       ['Alice', null, null],
       ['Bob', 'miss', 'Royal Johannesburg & Kensington – West, hole 17'],
     ])
+  })
+
+  it('reads the players\' names a few hundred at a time, so a big day does not overflow the URL', async () => {
+    const day = seedDay({ max_players: 5000 })
+    const ids = Array.from({ length: 450 }, (_, i) => `a0000000-0000-4000-8000-${String(i).padStart(12, '0')}`)
+    for (const [i, id] of ids.entries()) {
+      db.seed('profiles', { id, name: `Player ${i}` })
+      db.seed('golf_day_players', { golf_day_id: day.id, user_id: id, joined_at: new Date(Date.now() + i).toISOString() })
+    }
+    asAdmin()
+    const inSpy = vi.spyOn(Builder.prototype, 'in')
+    const { data } = await (await listPlayers(new Request('http://x'), idParams(String(day.id)))).json()
+    expect(data).toHaveLength(450)
+    expect(data.every((p: { name: string | null }, i: number) => p.name === `Player ${i}`)).toBe(true)
+    expect(Math.max(...inSpy.mock.calls.map(([, vals]) => (vals as unknown[]).length))).toBe(200)
   })
 })
 

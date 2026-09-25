@@ -80,10 +80,31 @@ async function coursesWithOfficials(admin: Client, courseIds: string[]): Promise
   return new Set((data ?? []).map((c: { course_id: string }) => c.course_id))
 }
 
-/** Point a golf day at exactly these holes. */
-export async function setHoles(admin: Client, golfDayId: string, holeIds: string[]): Promise<void> {
-  const { error: delError } = await admin.from('golf_day_holes').delete().eq('golf_day_id', golfDayId)
-  if (delError) throw delError
-  const { error } = await admin.from('golf_day_holes').insert([...new Set(holeIds)].map(hole_id => ({ golf_day_id: golfDayId, hole_id })))
+/** The holes a golf day is played on now, by id. */
+export async function currentHoleIds(admin: Client, golfDayId: string): Promise<string[]> {
+  const { data, error } = await admin.from('golf_day_holes').select('hole_id').eq('golf_day_id', golfDayId)
   if (error) throw error
+  return (data ?? []).map((h: { hole_id: string }) => h.hole_id)
+}
+
+/**
+ * Point a golf day at exactly these holes, given the ones it has now.
+ *
+ * A diff, adding before removing: PostgREST gives no transaction across
+ * the two, and if the second step fails the day keeps holes to play
+ * (old and new together) rather than none. Holes it keeps are not touched.
+ */
+export async function setHoles(admin: Client, golfDayId: string, holeIds: string[], current: string[]): Promise<void> {
+  const want = new Set(holeIds)
+  const have = new Set(current)
+  const added = [...want].filter(id => !have.has(id))
+  const removed = [...have].filter(id => !want.has(id))
+  if (added.length) {
+    const { error } = await admin.from('golf_day_holes').insert(added.map(hole_id => ({ golf_day_id: golfDayId, hole_id })))
+    if (error) throw error
+  }
+  if (removed.length) {
+    const { error } = await admin.from('golf_day_holes').delete().eq('golf_day_id', golfDayId).in('hole_id', removed)
+    if (error) throw error
+  }
 }

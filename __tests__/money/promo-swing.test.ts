@@ -424,6 +424,18 @@ describe('admin: making and watching codes', () => {
     expect((await playCode('GOLFDAY')).status).toBe(200)
   })
 
+  it('PATCH refuses a past expiry, as create does, and leaves the code as it was', async () => {
+    const code = seedCode()
+    const before = code.expires_at
+    asAdmin()
+    const res = await patchPromo(jsonRequest('http://x', { expiresAt: new Date(Date.now() - 1000).toISOString(), note: 'moved' }, { method: 'PATCH' }), params(String(code.id)))
+    expect(res.status).toBe(400)
+    expect(code).toMatchObject({ expires_at: before, note: null })
+    // The note on its own is fine.
+    const note = await patchPromo(jsonRequest('http://x', { note: 'Zimbali open day' }, { method: 'PATCH' }), params(String(code.id)))
+    expect((await note.json()).data).toMatchObject({ note: 'Zimbali open day', expiresAt: before })
+  })
+
   it('PATCH: 400 for an empty body or a bad id, 404 for a code that is not there', async () => {
     asAdmin()
     const id = String(seedCode().id)

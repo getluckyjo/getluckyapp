@@ -1,10 +1,10 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Save } from 'lucide-react'
-
-const REGIONS = ['Western Cape', 'Gauteng', 'KwaZulu-Natal', 'Mpumalanga', 'North West', 'Eastern Cape', 'Free State', 'Limpopo', 'Northern Cape']
+import { ArrowLeft } from 'lucide-react'
+import { OFFLINE, REGIONS, parseCoords, reasonFrom } from '../course-fields'
 
 export default function AdminNewCoursePage() {
   const router = useRouter()
@@ -12,7 +12,6 @@ export default function AdminNewCoursePage() {
     name: '',
     location_text: '',
     region: '',
-    country: 'South Africa',
     lat: '',
     lng: '',
     is_partner: false,
@@ -22,7 +21,9 @@ export default function AdminNewCoursePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!form.name.trim()) { setError('Course name is required'); return }
+    if (!form.name.trim()) { setError('Give the course a name.'); return }
+    const coords = parseCoords(form.lat, form.lng)
+    if (!coords.ok) { setError(coords.error); return }
     setSaving(true)
     setError('')
     try {
@@ -30,136 +31,96 @@ export default function AdminNewCoursePage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...form,
-          lat: form.lat ? parseFloat(form.lat) : null,
-          lng: form.lng ? parseFloat(form.lng) : null,
+          name: form.name.trim(),
+          location_text: form.location_text.trim() || null,
+          region: form.region || null,
+          is_partner: form.is_partner,
+          lat: coords.lat,
+          lng: coords.lng,
         }),
       })
-      const data = await res.json()
-      if (data.success) {
-        router.push('/admin/courses')
-      } else {
-        setError(data.error || 'Failed to create course')
-      }
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.id) { setError(reasonFrom(data, 'The course could not be created. Please try again.')); return }
+      // Straight to the course, where its holes and club officials are added.
+      router.push(`/admin/courses/${data.id}`)
     } catch {
-      setError('Failed to create course')
+      setError(OFFLINE)
     } finally {
       setSaving(false)
     }
   }
 
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 12px',
-    borderRadius: 8,
-    border: '1px solid #e5e5e5',
-    fontSize: 14,
-    color: '#111',
-    fontFamily: "'Inter', system-ui, sans-serif",
-  }
-
   return (
-    <div style={{ maxWidth: 640 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <button
-          onClick={() => router.push('/admin/courses')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5',
-            background: '#fff', cursor: 'pointer', color: '#333', fontSize: 13,
-          }}
-        >
-          <ArrowLeft size={16} /> Back
-        </button>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>Add New Course</h1>
+    <div style={{ maxWidth: 680 }}>
+      <title>New course · Get Lucky admin</title>
+      <Link href="/admin/courses" className="adm-btn adm-btn--quiet" style={{ textDecoration: 'none', marginBottom: 18 }}>
+        <ArrowLeft size={15} aria-hidden /> Courses
+      </Link>
+      <div className="adm-head">
+        <div>
+          <h1 className="adm-title">New course</h1>
+          <p className="adm-lead">Holes and club officials are added on the next page.</p>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 24 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Course Name *</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. Leopard Creek Country Club"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Location</label>
-              <input
-                type="text"
-                value={form.location_text}
-                onChange={(e) => setForm({ ...form, location_text: e.target.value })}
-                placeholder="e.g. Malelane, Mpumalanga"
-                style={inputStyle}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Region</label>
-              <select
-                value={form.region}
-                onChange={(e) => setForm({ ...form, region: e.target.value })}
-                style={inputStyle}
-              >
-                <option value="">Select region</option>
-                {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Latitude</label>
-                <input type="text" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} placeholder="-33.96" style={inputStyle} />
-              </div>
-              <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#333', marginBottom: 6 }}>Longitude</label>
-                <input type="text" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} placeholder="22.38" style={inputStyle} />
-              </div>
-            </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#333', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={form.is_partner}
-                onChange={(e) => setForm({ ...form, is_partner: e.target.checked })}
-                style={{ width: 18, height: 18 }}
-              />
-              Partner course
-            </label>
-          </div>
+      <form onSubmit={handleSubmit} className="adm-card adm-card--form adm-stack">
+        <label className="adm-field">
+          Course name
+          <input
+            type="text"
+            required
+            maxLength={120}
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="Leopard Creek Country Club"
+            className="adm-input"
+          />
+        </label>
+        <div className="adm-grid-2">
+          <label className="adm-field">
+            Location
+            <input
+              type="text"
+              maxLength={200}
+              value={form.location_text}
+              onChange={(e) => setForm({ ...form, location_text: e.target.value })}
+              placeholder="Malelane, Mpumalanga"
+              className="adm-input"
+            />
+          </label>
+          <label className="adm-field">
+            Region
+            <select value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} className="adm-input">
+              <option value="">Choose a region</option>
+              {REGIONS.map(r => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </label>
+        </div>
+        <div className="adm-grid-2">
+          <label className="adm-field">
+            Latitude
+            <input type="text" inputMode="decimal" value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value })} placeholder="-33.96" className="adm-input" />
+          </label>
+          <label className="adm-field">
+            Longitude
+            <input type="text" inputMode="decimal" value={form.lng} onChange={(e) => setForm({ ...form, lng: e.target.value })} placeholder="22.38" className="adm-input" />
+          </label>
+        </div>
+        <p className="adm-hint" style={{ margin: '-6px 0 0' }}>
+          Both or neither. Used to measure how far from the course a claim&apos;s footage was recorded: in Google Maps, right-click the clubhouse and copy the first line.
+        </p>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer' }}>
+          <input type="checkbox" checked={form.is_partner} onChange={(e) => setForm({ ...form, is_partner: e.target.checked })} style={{ width: 18, height: 18 }} />
+          Partner course <span className="adm-hint">golfers can pay to play here</span>
+        </label>
 
-          {error && (
-            <div style={{ marginTop: 16, padding: '10px 14px', borderRadius: 8, background: '#fde8e8', color: '#c0392b', fontSize: 13 }}>
-              {error}
-            </div>
-          )}
+        {error && <p role="alert" className="adm-error" style={{ margin: 0 }}>{error}</p>}
 
-          <div style={{ marginTop: 20, display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              onClick={() => router.push('/admin/courses')}
-              style={{
-                padding: '10px 20px', borderRadius: 8, border: '1px solid #e5e5e5',
-                background: '#fff', fontSize: 14, cursor: 'pointer', color: '#333',
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '10px 20px', borderRadius: 8, border: 'none',
-                background: '#335231', color: '#fff', fontSize: 14,
-                cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 600,
-                opacity: saving ? 0.7 : 1,
-              }}
-            >
-              <Save size={16} /> {saving ? 'Creating...' : 'Create Course'}
-            </button>
-          </div>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button type="submit" disabled={saving} className="adm-btn">
+            {saving ? 'Creating…' : 'Create course'}
+          </button>
+          <Link href="/admin/courses" className="adm-btn adm-btn--quiet" style={{ textDecoration: 'none' }}>Cancel</Link>
         </div>
       </form>
     </div>
