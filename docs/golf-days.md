@@ -41,9 +41,9 @@ scorecards:
 Golf days at Royal normally play the white tees, so production has West
 17 at 161 m (set by hand on 25 September 2026). Migration 029 on its own
 leaves it at 185 m from the yellow tees. The East's scorecard names its
-tees Championship, Club, Executive and Classic, and East 16 is shown from
-the Club tee (152 m). From the Executive tee it is 127 m, under the app's
-140 m minimum.
+tees Championship, Club, Executive and Classic. The challenge on East 16
+is played from the Club tee, 152 m (Johannes, 25 September 2026). From the
+Executive tee it would be 127 m, under the app's 140 m minimum.
 
 Migration 029 also corrects the West course's par 3 distances to the
 club's 2024 card (yellow tees). They were out of date from migration 019.
