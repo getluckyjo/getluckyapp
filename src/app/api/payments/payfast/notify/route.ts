@@ -7,7 +7,7 @@ import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { resolvePayfastConfig, type PayfastConfig } from '@/lib/payfast/config'
 import { isFromPayfastLive } from '@/lib/payfast/ips'
-import { isMembershipReference, relayMembershipItn } from '@/lib/payfast/membership'
+import { isMembershipReference } from '@/lib/payfast/membership'
 import { grantBetForPayment } from '@/lib/claims/grant'
 
 /** How long we give PayFast's validate endpoint before failing closed. */
@@ -105,22 +105,12 @@ export async function POST(request: NextRequest) {
     })
 
     // ── 4b. A membership renewal (GLG-…) sent to this account's Notify URL.
-    // Not ours to record: hand it, whatever its status, to the membership
-    // site, and let its answer decide whether PayFast retries.
+    // Memberships are being phased out and are not tracked: acknowledge it so
+    // PayFast stops retrying, and record nothing (src/lib/payfast/membership.ts).
     const reference = (params.m_payment_id ?? '').trim()
     if (isMembershipReference(reference)) {
-      const relay = await relayMembershipItn(rawBody)
-      if (relay.ok) {
-        log.info('payfast.itn.membership_relayed', { m_payment_id: reference, pf_payment_id: params.pf_payment_id ?? null, payment_status: params.payment_status ?? null })
-        return new NextResponse('OK', { status: 200 })
-      }
-      await alertOps({
-        event: 'payfast.itn.membership_relay_failed',
-        path: 'payfast_itn',
-        summary: `Membership payment ${reference} reached this app and could not be handed to the membership site (${relay.detail}). PayFast will retry.`,
-        details: { m_payment_id: reference, pf_payment_id: params.pf_payment_id ?? null, payment_status: params.payment_status ?? null, relay_status: relay.status },
-      })
-      return new NextResponse('Membership relay failed', { status: 502 })
+      log.info('payfast.itn.membership_ignored', { m_payment_id: reference, pf_payment_id: params.pf_payment_id ?? null, payment_status: params.payment_status ?? null })
+      return new NextResponse('OK', { status: 200 })
     }
 
     // Only COMPLETE payments touch the ledger
