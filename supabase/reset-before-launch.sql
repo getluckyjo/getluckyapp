@@ -10,7 +10,9 @@
 -- risk history, outbox jobs, rate-limit counters, deleted-account memory,
 -- and every object in the two storage buckets.
 -- What it keeps: courses, holes, course contacts, profiles (your admin
--- and any team accounts), auth users.
+-- and any team accounts), auth users, promo codes (their uses start again
+-- from nought, because the bets that used them are gone; delete test
+-- codes at /admin/promos).
 --
 -- Test *accounts* you want gone: delete them under Authentication → Users
 -- afterwards; the cascade takes their profile. Or leave them; with no bets

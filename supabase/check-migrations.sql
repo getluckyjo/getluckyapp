@@ -22,7 +22,13 @@ with checks(n, name, applied) as (values
   ('018', 'icons',                to_regclass('public.icon_votes') is not null),
   ('019', 'top100_courses',       exists (select 1 from public.courses where lower(name) = 'st francis links' and is_partner)),
   ('020', 'course_photos',        exists (select 1 from public.courses where lower(name) = 'st francis links' and image_url is not null)),
-  ('021', 'saved_cards',          to_regclass('public.payment_cards') is not null)
+  ('021', 'saved_cards',          to_regclass('public.payment_cards') is not null),
+  ('022', 'free_swing_tier',      exists (select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='bet_tier' and e.enumlabel='tier_free')),
+  ('023', 'free_swing_limit',     to_regclass('public.bets_one_free_swing_per_user') is not null),
+  ('024', 'free_swing_report',    to_regprocedure('public.admin_free_swing_funnel()') is not null),
+  ('025', 'icons_new_announcements', exists (select 1 from public.icons where name = 'Roland Schoeman')),
+  ('026', 'promo_swing_tier',     exists (select 1 from pg_enum e join pg_type t on t.oid=e.enumtypid where t.typname='bet_tier' and e.enumlabel='tier_promo')),
+  ('027', 'promo_codes',          to_regclass('public.promo_codes') is not null)
 )
 select n, name, case when applied then 'applied' else 'MISSING' end as status
 from checks order by n;

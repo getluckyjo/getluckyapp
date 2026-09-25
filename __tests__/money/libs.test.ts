@@ -4,7 +4,7 @@
  * real modules; the previous version of this file tested private copies.
  */
 import { describe, it, expect, vi } from 'vitest'
-import { ALL_TIERS, BET_TIERS, FREE_TIER, TIER_LABELS, TIER_STAKE_CENTS, TIER_WIN_CENTS, isFreeTier, tierByKey } from '@/lib/tiers'
+import { ALL_TIERS, BET_TIERS, FREE_TIER, PROMO_TIER, TIER_LABELS, TIER_STAKE_CENTS, TIER_WIN_CENTS, isFreeTier, isNoStakeTier, isPromoTier, tierByKey } from '@/lib/tiers'
 import { verifyPaymentAmount, parseAmountToCents, expectedStakeCents } from '@/lib/payments'
 import { PAYFAST_IPS, isFromPayfast, isFromPayfastLive, resetResolvedPayfastIps } from '@/lib/payfast/ips'
 import { toCSV } from '@/lib/admin/csv'
@@ -47,13 +47,38 @@ describe('FREE_TIER', () => {
   })
 
   it('is still a describable bet: ALL_TIERS and tierByKey know it', () => {
-    expect(ALL_TIERS).toHaveLength(BET_TIERS.length + 1)
+    expect(ALL_TIERS).toHaveLength(BET_TIERS.length + 2)
     expect(tierByKey('tier_free')).toBe(FREE_TIER)
     expect(tierByKey('tier_1')?.stakeZAR).toBe(50)
     expect(tierByKey('tier_99')).toBeUndefined()
     expect(isFreeTier('tier_free')).toBe(true)
     expect(isFreeTier('tier_1')).toBe(false)
     expect(isFreeTier(null)).toBe(false)
+  })
+})
+
+describe('PROMO_TIER', () => {
+  it('is one more free swing: no stake, the free swing\'s prize', () => {
+    expect(PROMO_TIER).toMatchObject({ tier: 'tier_promo', stakeZAR: 0, winZAR: FREE_TIER.winZAR })
+    expect(TIER_WIN_CENTS.tier_promo).toBe(1_000_000)
+    expect(TIER_STAKE_CENTS.tier_promo).toBe(0)
+    expect(TIER_LABELS.tier_promo).toBeTruthy()
+  })
+
+  it('is never sellable, and is its own tier, not the free swing', () => {
+    expect(BET_TIERS.map(t => t.tier)).not.toContain('tier_promo')
+    expect(expectedStakeCents('tier_promo')).toBeNull()
+    expect(verifyPaymentAmount('tier_promo', 0).ok).toBe(false)
+    expect(isFreeTier('tier_promo')).toBe(false)
+    expect(isPromoTier('tier_promo')).toBe(true)
+  })
+
+  it('is describable, and counts as a no-stake entry with the free swing', () => {
+    expect(tierByKey('tier_promo')).toBe(PROMO_TIER)
+    expect(isNoStakeTier('tier_promo')).toBe(true)
+    expect(isNoStakeTier('tier_free')).toBe(true)
+    expect(isNoStakeTier('tier_1')).toBe(false)
+    expect(isNoStakeTier(undefined)).toBe(false)
   })
 })
 

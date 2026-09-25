@@ -26,7 +26,7 @@ export type Json =
 export type WitnessRole = 'witness' | 'club_official'
 export type WitnessSource = 'claimant' | 'course'
 export type WitnessResponse = 'confirmed' | 'denied'
-export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6' | 'tier_free'
+export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6' | 'tier_free' | 'tier_promo'
 export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
 export type LeadLane = 'partner' | 'investor'
@@ -203,6 +203,7 @@ export interface Database {
           risk_flags: Json | null
           risk_evaluated_at: string | null
           payout_reference: string | null
+          promo_code_id: string | null
           declared_result: 'miss' | 'win' | null
           declared_at: string | null
           expires_at: string
@@ -241,6 +242,7 @@ export interface Database {
           risk_flags?: Json | null
           risk_evaluated_at?: string | null
           payout_reference?: string | null
+          promo_code_id?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -591,6 +593,36 @@ export interface Database {
         Update: { note?: string | null }
         Relationships: []
       }
+      promo_codes: {
+        Row: {
+          id: string
+          code: string
+          max_uses: number
+          expires_at: string
+          note: string | null
+          disabled_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          code: string
+          max_uses: number
+          expires_at: string
+          note?: string | null
+          disabled_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          max_uses?: number
+          expires_at?: string
+          note?: string | null
+          disabled_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       feedback: {
         Row: {
           id: number
@@ -694,6 +726,10 @@ export interface Database {
       admin_revenue_by_course: {
         Args: Record<string, never>
         Returns: { course_id: string; course_name: string; bet_count: number; revenue_cents: number }[]
+      }
+      admin_promo_code_usage: {
+        Args: Record<string, never>
+        Returns: { promo_code_id: string; uses: number; claimed: number; converted: number }[]
       }
     }
     Enums: {

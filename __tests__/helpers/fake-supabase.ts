@@ -21,6 +21,10 @@
  * Two constraints from the schema are modelled because the handlers branch on
  * them: the partial unique index on `bets.payment_intent_id` (error 23505) and
  * the unique `payfast_payments.m_payment_id` that `upsert(onConflict)` targets.
+ * So is one trigger: migration 027's promo code check on inserting a bet
+ * (error P0001), which runs before the unique check as a BEFORE trigger does.
+ * `db.beforeInsert` lets a test slip a row in just ahead of an insert, which
+ * is how a race between a route's check and its write is staged.
  */
 import { randomUUID } from 'node:crypto'
 
@@ -51,6 +55,25 @@ const UNIQUE: Record<string, string[]> = {
   payfast_payments: ['m_payment_id'],
   verifications: ['bet_id'],
   beta_access: ['value'],
+  promo_codes: ['code'],
+}
+
+type Trigger = (db: FakeDb, row: Row) => PostgrestError | null
+
+/** BEFORE INSERT triggers, per table. */
+const BEFORE_INSERT: Record<string, Trigger> = {
+  // Mirrors enforce_promo_code() in migration 027.
+  bets: (db, row) => {
+    if (row.promo_code_id == null) return null
+    const refuse = (message: string): PostgrestError => ({ code: 'P0001', message })
+    const code = db.find('promo_codes', c => c.id === row.promo_code_id)
+    if (!code) return refuse('PROMO_CODE_INVALID')
+    if (code.disabled_at) return refuse('PROMO_CODE_DISABLED')
+    if (Date.parse(String(code.expires_at)) <= Date.now()) return refuse('PROMO_CODE_EXPIRED')
+    const used = db.rows('bets').filter(b => b.promo_code_id === row.promo_code_id).length
+    if (used >= Number(code.max_uses)) return refuse('PROMO_CODE_EXHAUSTED')
+    return null
+  },
 }
 
 export class FakeDb {
@@ -59,6 +82,8 @@ export class FakeDb {
   objects = new Map<string, Map<string, string>>()
   /** Ids passed to auth.admin.deleteUser(), in order. */
   deletedUsers: string[] = []
+  /** Runs before every insert through the builder: a test's way to stage a race. */
+  beforeInsert: ((table: string, row: Row) => void) | null = null
 
   bucket(name: string): Map<string, string> {
     if (!this.objects.has(name)) this.objects.set(name, new Map())
@@ -240,7 +265,8 @@ export class Builder implements PromiseLike<Result> {
         const stored: Row[] = []
         for (const p of incoming) {
           const row = { id: randomUUID(), created_at: new Date().toISOString(), ...p }
-          const err = this.uniqueViolation(row)
+          this.db.beforeInsert?.(this.table, row)
+          const err = BEFORE_INSERT[this.table]?.(this.db, row) ?? this.uniqueViolation(row)
           if (err) return { data: null, error: err }
           this.db.rows(this.table).push(row)
           stored.push(row)
@@ -362,16 +388,17 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
         }
         return { data: [...byCourse.values()].sort((a, b) => b.revenue_cents - a.revenue_cents), error: null }
       }
-      // Mirrors migration 024. `free` is one row per golfer (migration 023),
-      // and a swing counts towards the seven-day rate only once its week has
-      // closed — the same `matured` rule the SQL uses.
+      // Mirrors migration 024 as amended by 027. `free` is one row per golfer
+      // (migration 023), "paid" means a bet with a stake, and a swing counts
+      // towards the seven-day rate only once its week has closed — the same
+      // `matured` rule the SQL uses.
       if (fn === 'admin_free_swing_funnel' || fn === 'admin_free_swing_by_week') {
         const now = Date.now()
         const WEEK = 7 * 24 * 3_600_000
         const at = (r: Row) => Date.parse(String(r.created_at))
         const free = db.rows('bets').filter(b => b.tier === 'tier_free')
         const paidAfter = (userId: unknown, freeAt: number) => db.rows('bets')
-          .filter(b => b.user_id === userId && b.tier !== 'tier_free' && at(b) > freeAt)
+          .filter(b => b.user_id === userId && Number(b.stake_pence ?? 0) > 0 && at(b) > freeAt)
         const firstPaidAt = (f: Row) => {
           const times = paidAfter(f.user_id, at(f)).map(at)
           return times.length ? Math.min(...times) : null
@@ -413,6 +440,21 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           claimed:        free.filter(f => ['claimed', 'verified', 'paid'].includes(String(f.status))).length,
           median_hours_to_first_paid: gaps.length ? gaps[Math.floor((gaps.length - 1) / 2)] : null,
         }, error: null }
+      }
+      // Mirrors migration 027: per code, uses, the ones claimed, and the
+      // golfers who staked after their promo swing.
+      if (fn === 'admin_promo_code_usage') {
+        const at = (r: Row) => Date.parse(String(r.created_at))
+        const byCode = new Map<string, { promo_code_id: string; uses: number; claimed: number; converted: number }>()
+        for (const p of db.rows('bets').filter(b => b.promo_code_id != null)) {
+          const id = String(p.promo_code_id)
+          const u = byCode.get(id) ?? { promo_code_id: id, uses: 0, claimed: 0, converted: 0 }
+          u.uses++
+          if (['claimed', 'verified', 'paid'].includes(String(p.status))) u.claimed++
+          if (db.rows('bets').some(b => b.user_id === p.user_id && Number(b.stake_pence ?? 0) > 0 && at(b) > at(p))) u.converted++
+          byCode.set(id, u)
+        }
+        return { data: [...byCode.values()], error: null }
       }
       if (fn === 'beta_check') {
         const { p_email, p_code } = args as { p_email: string | null; p_code: string | null }
