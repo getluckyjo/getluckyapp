@@ -7,7 +7,7 @@ import { track } from '@/lib/analytics'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
-import { FREE_TIER, tierByKey } from '@/lib/tiers'
+import { FREE_TIER, PROMO_TIER, tierByKey } from '@/lib/tiers'
 import { useAuth } from '@/context/AuthContext'
 import { formatRand } from '@/lib/format'
 
@@ -17,6 +17,9 @@ interface SavedCard { label: string; savedAt: string; lastUsedAt: string | null 
 
 /** What /api/bets/free says about this golfer's one free swing. */
 interface FreeSwing { eligible: boolean; used: boolean; ageVerified: boolean }
+
+/** A promo code /api/bets/promo has accepted for this golfer: one more free swing. */
+interface PromoSwing { code: string }
 
 declare global {
   interface Window {
@@ -84,11 +87,20 @@ export default function ChooseStakePage() {
   const savedCard = user ? savedCardState : null
   // Keyed by user, so a sign-out never offers the previous golfer's free swing.
   const [freeSwing, setFreeSwing]   = useState<{ userId: string; value: FreeSwing } | null>(null)
+  // A promo code typed on this screen; keyed by user for the same reason.
+  const [promo, setPromo]           = useState<{ userId: string; value: PromoSwing } | null>(null)
+  const [promoOpen, setPromoOpen]   = useState(false)
+  const [promoInput, setPromoInput] = useState('')
+  const [promoError, setPromoError] = useState('')
+  const [promoChecking, setPromoChecking] = useState(false)
 
   const loading = step !== 'idle'
   const activeTier = tierByKey(selected)
   const freeSelected = selected === FREE_TIER.tier
+  const promoSelected = selected === PROMO_TIER.tier
+  const noStakeSelected = freeSelected || promoSelected
   const showFree = Boolean(user && freeSwing?.userId === user.id && freeSwing.value.eligible)
+  const promoSwing = user && promo?.userId === user.id ? promo.value : null
 
   // Guard: if no course selected, send back to select-course
   useEffect(() => {
@@ -155,6 +167,73 @@ export default function ChooseStakePage() {
       setStep('idle')
     } catch {
       setErrorMsg('Your free swing could not be started. Please try again.')
+      setStep('idle')
+    }
+  }
+
+  /**
+   * Check a typed promo code. Nothing is spent here: the code is used only
+   * when the swing starts. A good code shows its card and opens the sheet.
+   */
+  async function handleApplyPromo(e: React.FormEvent) {
+    e.preventDefault()
+    if (!user || promoChecking || loading) return
+    const typed = promoInput.trim()
+    if (!typed) return
+    setPromoChecking(true)
+    setPromoError('')
+    try {
+      const res = await fetch(`/api/bets/promo?code=${encodeURIComponent(typed)}`)
+      const data = await res.json().catch(() => ({})) as { code?: string; error?: string }
+      if (res.ok && data.code) {
+        setPromo({ userId: user.id, value: { code: data.code } })
+        setPromoOpen(false)
+        setPromoInput('')
+        track('promo_code_applied', { tier: PROMO_TIER.tier })
+        handleSelectTier(PROMO_TIER.tier)
+        return
+      }
+      setPromoError(data.error ?? 'That code could not be checked. Please try again.')
+    } catch {
+      setPromoError('That code could not be checked. Please try again.')
+    } finally {
+      setPromoChecking(false)
+    }
+  }
+
+  /** A promo swing, like the free one, needs no payment: one call and the bet is live. */
+  async function handlePlayPromo() {
+    if (!selectedCourse || !selectedHole || !promoSwing) return
+    setStep('paying')
+    setErrorMsg('')
+    selectTier(PROMO_TIER.tier)
+    try {
+      const res = await fetch('/api/bets/promo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: promoSwing.code, courseId: selectedCourse.id, holeId: selectedHole.id }),
+      })
+      const data = await res.json().catch(() => ({})) as { betId?: string; error?: string; code?: string }
+
+      if (res.ok && data.betId) {
+        setBetId(data.betId)
+        track('promo_swing_started', { tier: PROMO_TIER.tier })
+        router.push('/record')
+        return
+      }
+      if (data.code === 'AGE_NOT_VERIFIED') {
+        router.push('/age-check')
+        return
+      }
+      if (data.code?.startsWith('PROMO_CODE_')) {
+        // Used up, switched off or already played since it was checked. The
+        // card goes away behind the sheet; the message in the sheet says why.
+        setPromo(null)
+      }
+      setErrorMsg(data.error ?? 'Your promo swing could not be started. Please try again.')
+      setStep('idle')
+    } catch {
+      setErrorMsg('Your promo swing could not be started. Please try again.')
       setStep('idle')
     }
   }
@@ -335,6 +414,27 @@ export default function ChooseStakePage() {
             </button>
           )}
 
+          {promoSwing && (
+            <button
+              type="button"
+              className={`stake-card stake-card--free${promoSelected ? ' is-selected' : ''}`}
+              onClick={() => handleSelectTier(PROMO_TIER.tier)}
+              aria-pressed={promoSelected}
+              disabled={loading}
+            >
+              <span className="stake-flag stake-flag--free">Code {promoSwing.code}</span>
+              <span className="stake-amount">
+                FREE
+                <small>no card needed</small>
+              </span>
+              <span className="stake-mult">Promo swing</span>
+              <span className="stake-win">
+                <small>win</small>
+                {prizeShort(PROMO_TIER.winZAR)}
+              </span>
+            </button>
+          )}
+
           {BET_TIERS.map((tier, i) => {
             const isSelected = selected === tier.tier
             return (
@@ -361,6 +461,38 @@ export default function ChooseStakePage() {
             )
           })}
 
+          {user && !promoSwing && (
+            promoOpen ? (
+              <form className="stake-promo" onSubmit={handleApplyPromo}>
+                <label className="stake-promo-label" htmlFor="promo-code">Promo code</label>
+                <div className="stake-promo-row">
+                  <input
+                    id="promo-code"
+                    className="acct-input stake-promo-input"
+                    value={promoInput}
+                    onChange={e => { setPromoInput(e.target.value); setPromoError('') }}
+                    placeholder="e.g. GOLFDAY"
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    maxLength={60}
+                    disabled={promoChecking || loading}
+                    autoFocus
+                  />
+                  <button type="submit" className="stake-change stake-promo-apply" disabled={promoChecking || loading || !promoInput.trim()}>
+                    {promoChecking ? 'Checking…' : 'Apply'}
+                  </button>
+                </div>
+                {promoError && <p className="stake-promo-error" role="alert">{promoError}</p>}
+              </form>
+            ) : (
+              <button type="button" className="stake-promo-toggle" onClick={() => setPromoOpen(true)} disabled={loading}>
+                Have a promo code?
+              </button>
+            )
+          )}
+
           <p className="stake-trust">
             <LockIcon /> Secure checkout via PayFast
             <span className="stake-trust-sep">&middot;</span>
@@ -377,7 +509,7 @@ export default function ChooseStakePage() {
             <div className="cs-sheet stake-sheet" role="dialog" aria-modal="true" aria-label="Confirm your entry">
               <div className="cs-sheet-top">
                 <div>
-                  <div className="stake-sheet-title">{freeSelected ? 'Your free swing' : 'Confirm your entry'}</div>
+                  <div className="stake-sheet-title">{freeSelected ? 'Your free swing' : promoSelected ? 'Your promo swing' : 'Confirm your entry'}</div>
                 </div>
                 {!loading && (
                   <button type="button" className="cs-sheet-close" aria-label="Cancel" onClick={() => setConfirming(false)}>×</button>
@@ -387,7 +519,7 @@ export default function ChooseStakePage() {
               <dl className="stake-rows">
                 <div><dt>Course</dt><dd>{selectedCourse.name}</dd></div>
                 <div><dt>Hole</dt><dd>Hole {selectedHole.holeNumber} · Par {selectedHole.par} · {selectedHole.distanceMetres}m</dd></div>
-                <div><dt>Your stake</dt><dd>{freeSelected ? 'Free — no charge' : formatRand(activeTier.stakeZAR)}</dd></div>
+                <div><dt>Your stake</dt><dd>{noStakeSelected ? 'Free — no charge' : formatRand(activeTier.stakeZAR)}</dd></div>
                 <div className="stake-rows-win"><dt>You could win</dt><dd>{formatRand(activeTier.winZAR)}</dd></div>
               </dl>
 
@@ -408,6 +540,21 @@ export default function ChooseStakePage() {
                   <p className="stake-free-note">
                     One free swing per golfer, on us. Same shot, same footage, same review —
                     and a real {formatRand(FREE_TIER.winZAR)} if it goes in.
+                  </p>
+                </>
+              ) : promoSelected ? (
+                <>
+                  <button
+                    type="button"
+                    className="btn-lime btn-lime--block"
+                    onClick={handlePlayPromo}
+                    disabled={loading || !promoSwing}
+                  >
+                    {step === 'paying' ? 'Setting up your shot…' : 'Play my promo swing'}
+                  </button>
+                  <p className="stake-free-note">
+                    {promoSwing ? `Code ${promoSwing.code}: one` : 'One'} extra free swing, on us. Same shot, same footage,
+                    same review — and a real {formatRand(PROMO_TIER.winZAR)} if it goes in.
                   </p>
                 </>
               ) : savedCard ? (
@@ -444,7 +591,7 @@ export default function ChooseStakePage() {
               )}
 
               <p className="stake-sheet-legal">
-                {freeSelected
+                {noStakeSelected
                   ? 'No payment, no card. Prizes fully insured by Indwe Risk Services (FSP 3425). '
                   : 'Secure payment via PayFast. Prizes fully insured by Indwe Risk Services (FSP 3425). '}
                 <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>

@@ -17,6 +17,7 @@ PayFast · Resend · Sentry · Vercel.
 | The safety net: staging, tests, CI, alerts, backups | [`docs/stage-2-safety-net.md`](./docs/stage-2-safety-net.md), [`docs/restore-runbook.md`](./docs/restore-runbook.md) |
 | What each remediation batch changed and how to test it | `docs/batch-*.md` |
 | Going live with PayFast | [`docs/payfast-go-live.md`](./docs/payfast-go-live.md) |
+| Promo codes (an extra free swing per code) | [`docs/promo-codes.md`](./docs/promo-codes.md) |
 | Sign-in and the branded auth email | [`docs/auth-email-setup.md`](./docs/auth-email-setup.md) |
 | Design tokens and screen comps | [`design/`](./design/) |
 

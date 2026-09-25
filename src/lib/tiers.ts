@@ -11,6 +11,8 @@
  *              It is NOT in BET_TIERS: a R0 checkout is not a thing, and a
  *              free entry must never be reachable through the money path.
  *              /api/bets/free grants it directly.
+ *   PROMO_TIER one extra free swing per promo code (migration 027). Same
+ *              rules as FREE_TIER, granted by /api/bets/promo.
  *
  * Anything that merely *describes* a bet after the fact (admin labels, the
  * result screens) reads ALL_TIERS, because a free bet is a real bet.
@@ -18,14 +20,14 @@
 
 /** Tiers that are bought. */
 export type PaidBetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6'
-/** Every tier a bet row can carry, free included. */
-export type BetTier = PaidBetTier | 'tier_free'
+/** Every tier a bet row can carry, free and promo included. */
+export type BetTier = PaidBetTier | 'tier_free' | 'tier_promo'
 
 export interface BetTierData {
   tier: BetTier
   stakeZAR: number
   winZAR: number
-  /** Prize ÷ stake. Zero for the free swing, which has no stake to multiply. */
+  /** Prize ÷ stake. Zero for the free and promo swings, which have no stake to multiply. */
   multiplier: number
   label: string
 }
@@ -51,8 +53,19 @@ export const FREE_TIER: BetTierData = {
 /** How many free swings an account ever gets. */
 export const FREE_SWINGS_PER_ACCOUNT = 1
 
-/** Paid tiers plus the free one — every tier a bet row can carry. */
-export const ALL_TIERS: BetTierData[] = [...BET_TIERS, FREE_TIER]
+/**
+ * The promo swing: one extra free swing, granted by a promo code made at
+ * /admin/promos. The free swing's prize and the free swing's rules; its own
+ * tier so the one-per-account limit on the free swing (migration 023) is
+ * not touched by it. Each code is good for one per golfer, up to its cap
+ * and until its date (migration 027).
+ */
+export const PROMO_TIER: BetTierData = {
+  tier: 'tier_promo', stakeZAR: 0, winZAR: 10000, multiplier: 0, label: 'Promo swing → R10,000',
+}
+
+/** Paid tiers plus the free and promo ones — every tier a bet row can carry. */
+export const ALL_TIERS: BetTierData[] = [...BET_TIERS, FREE_TIER, PROMO_TIER]
 
 /** Look a tier up by key, free included. Undefined for a key we do not know. */
 export function tierByKey(tier: string | null | undefined): BetTierData | undefined {
@@ -62,6 +75,16 @@ export function tierByKey(tier: string | null | undefined): BetTierData | undefi
 /** Is this the free swing? */
 export function isFreeTier(tier: string | null | undefined): boolean {
   return tier === FREE_TIER.tier
+}
+
+/** Is this a promo swing? */
+export function isPromoTier(tier: string | null | undefined): boolean {
+  return tier === PROMO_TIER.tier
+}
+
+/** Was this entry played without a stake (free or promo swing)? */
+export function isNoStakeTier(tier: string | null | undefined): boolean {
+  return isFreeTier(tier) || isPromoTier(tier)
 }
 
 // ── Derived maps for admin / API use ──

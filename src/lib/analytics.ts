@@ -22,6 +22,8 @@ export type AnalyticsEvent =
   | 'payment_onsite_closed'
   | 'payment_saved_card'
   | 'free_swing_started'
+  | 'promo_code_applied'
+  | 'promo_swing_started'
   | 'card_removed'
   | 'bet_created'
   | 'result_declared'

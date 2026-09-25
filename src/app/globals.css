@@ -1268,6 +1268,22 @@ body {
 }
 .stake-trust svg { flex-shrink: 0; }
 .stake-trust-sep { opacity: 0.6; }
+/* Promo code: a quiet link under the tiers that opens into one field. */
+.stake-promo-toggle {
+  align-self: center; min-height: 44px; padding: 0 12px; border: none; background: none; cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: var(--text-sm); font-weight: 700; color: var(--green);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.stake-promo-toggle:disabled { opacity: 0.6; cursor: default; }
+.stake-promo { display: flex; flex-direction: column; gap: 6px; }
+.stake-promo-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.7; }
+.stake-promo-row { display: flex; gap: 8px; align-items: stretch; }
+/* Two classes, so it outranks .acct-input, which comes later in this file. */
+.stake-promo-row .stake-promo-input { flex: 1; min-width: 0; background: var(--white); text-transform: uppercase; letter-spacing: 0.06em; }
+.stake-promo-row .stake-promo-input::placeholder { text-transform: none; letter-spacing: 0; }
+.stake-promo-apply { min-height: 46px; background: var(--green); color: var(--white); }
+.stake-promo-apply:disabled { opacity: 0.5; cursor: default; }
+.stake-promo-error { margin: 0; font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.45; color: #b00020; }
 .stake-backdrop { position: absolute; inset: 0; z-index: 55; background: rgba(30,49,32,0.45); animation: fadeIn 0.2s both; }
 .stake-sheet { padding-bottom: 14px; }
 .stake-sheet-title { font-family: var(--font-heading); font-size: clamp(22px, 6.5vw, 26px); text-transform: uppercase; line-height: 1.1; color: var(--green); }

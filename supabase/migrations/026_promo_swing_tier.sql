@@ -1,0 +1,13 @@
+-- 026_promo_swing_tier.sql
+-- Adds the promo swing ('tier_promo') to the bet_tier enum: one extra free
+-- swing, granted by a promo code (migration 027), on top of the one free
+-- swing every account gets. No stake, the free swing's R10,000 prize, no
+-- ledger row.
+--
+-- Its own value rather than 'tier_free', so the one-free-swing-per-account
+-- index from migration 023 keeps meaning exactly what it says.
+--
+-- Idempotent. Run on its own, before 027, which uses the new value in a
+-- check constraint (Postgres refuses to read a value in the transaction
+-- that added it).
+alter type public.bet_tier add value if not exists 'tier_promo';
