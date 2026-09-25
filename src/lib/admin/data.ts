@@ -66,6 +66,8 @@ export async function namesForBets(admin: SupabaseClient, bets: Pick<BetRowLike,
     courseIds.length ? admin.from('courses').select('id, name').in('id', courseIds) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     holeIds.length ? admin.from('holes').select('id, hole_number').in('id', holeIds) : Promise.resolve({ data: [] as { id: string; hole_number: number }[] }),
   ])
+  // A failed lookup is an error, not a page of blank names.
+  for (const r of [profiles, courses, holes]) if ('error' in r && r.error) throw r.error
 
   return {
     users: new Map((profiles.data ?? []).map((p: { id: string; name: string | null }) => [p.id, p.name])),

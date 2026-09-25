@@ -31,7 +31,7 @@ export function getInitials(name: string | null | undefined, email: string | nul
   return 'GL'
 }
 
-/** Admin timestamps: "just now", "5m ago", "3h ago", "2d ago", then "14 Aug" after a week. */
+/** Admin timestamps: "just now", "5m ago", "3h ago", "2d ago", then "14 Aug" after a week ("14 Aug 2025" from another year), in South African time. */
 export function timeAgo(dateStr: string): string {
   const mins = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60_000)
   if (mins < 1) return 'just now'
@@ -40,5 +40,10 @@ export function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`
   const days = Math.floor(hours / 24)
   if (days < 7) return `${days}d ago`
-  return new Date(dateStr).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' })
+  const date = new Date(dateStr)
+  const year = (d: Date) => d.toLocaleDateString('en-ZA', { year: 'numeric', timeZone: 'Africa/Johannesburg' })
+  return date.toLocaleDateString('en-ZA', {
+    day: 'numeric', month: 'short', timeZone: 'Africa/Johannesburg',
+    ...(year(date) === year(new Date()) ? {} : { year: 'numeric' }),
+  })
 }

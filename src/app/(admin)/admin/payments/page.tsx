@@ -1,16 +1,15 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
-import { AlertTriangle } from 'lucide-react'
+import Link from 'next/link'
+import { AlertTriangle, Check, Copy, Download } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import SearchInput from '@/components/admin/SearchInput'
 import Pagination from '@/components/admin/Pagination'
+import LoadError from '@/components/admin/LoadError'
 import { formatZAR, timeAgo } from '@/lib/format'
 import type { AdminPaymentRecord, PaginatedResponse } from '@/types/admin'
-
-const th: React.CSSProperties = { padding: '12px 14px', textAlign: 'left', fontWeight: 600, color: '#666' }
-const td: React.CSSProperties = { padding: '12px 14px', color: '#333' }
+import { downloadExport, getJson, sastDateTime } from '../bets/client-helpers'
 
 const STATUS_VARIANT: Record<AdminPaymentRecord['status'], 'success' | 'warning' | 'danger'> = {
   complete: 'success',
@@ -19,158 +18,255 @@ const STATUS_VARIANT: Record<AdminPaymentRecord['status'], 'success' | 'warning'
   amount_mismatch: 'danger',
 }
 
+const COLUMNS = 8
+
+interface Loaded {
+  key: string
+  /** null when the request failed: never shown as "no payments". */
+  list: PaginatedResponse<AdminPaymentRecord> | null
+  /** What the server said when it failed. */
+  detail?: string
+}
+
+/** Money was taken: complete, or complete for the wrong amount. */
+const tookMoney = (p: AdminPaymentRecord) => p.status === 'complete' || p.status === 'amount_mismatch'
+
 /**
  * The PayFast ledger: every payment the app has recorded, and the bet it
- * produced. "Needs attention" is the one that matters — a complete payment
- * with no bet means a golfer paid and has nothing to play, which no amount
- * of waiting fixes.
+ * produced. "Paid, but no bet" is the one that matters: money taken and no
+ * bet anywhere means a golfer paid and has nothing to play, which no amount
+ * of waiting fixes. Both references are shown and copyable, to find the
+ * payment in PayFast's dashboard.
  */
 export default function AdminPaymentsPage() {
-  const router = useRouter()
-  const [data, setData] = useState<AdminPaymentRecord[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [unmatchedOnly, setUnmatchedOnly] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [copied, setCopied] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [exportNote, setExportNote] = useState<{ error: boolean; text: string } | null>(null)
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), limit: '20' })
     if (search) params.set('search', search)
-    if (statusFilter) params.set('status', statusFilter)
     if (unmatchedOnly) params.set('unmatched', 'true')
+    else if (statusFilter) params.set('status', statusFilter)
     return params.toString()
   }, [page, search, statusFilter, unmatchedOnly])
-  const [loadedQuery, setLoadedQuery] = useState<string | null>(null)
-  const loading = loadedQuery !== query
+
+  // Loading is derived from the request for what the page shows (and this
+  // attempt at it), so an older answer cannot replace a newer one.
+  const key = `${query}#${attempt}`
+  const [loaded, setLoaded] = useState<Loaded | null>(null)
+  const loading = loaded?.key !== key
 
   useEffect(() => {
     let cancelled = false
-    fetch(`/api/admin/payments?${query}`)
-      .then(res => res.json() as Promise<PaginatedResponse<AdminPaymentRecord>>)
-      .then(json => {
-        if (cancelled) return
-        setData(json.data || [])
-        setTotal(json.total || 0)
-        setTotalPages(json.totalPages || 1)
-      })
-      .catch(() => { if (!cancelled) setData([]) })
-      .finally(() => { if (!cancelled) setLoadedQuery(query) })
+    getJson<PaginatedResponse<AdminPaymentRecord>>(`/api/admin/payments?${query}`)
+      .then(list => { if (!cancelled) setLoaded({ key, list }) })
+      .catch((err: unknown) => { if (!cancelled) setLoaded({ key, list: null, detail: err instanceof Error ? err.message : undefined }) })
     return () => { cancelled = true }
-  }, [query])
+  }, [key, query])
+
+  /** A new filter starts again from page 1, and an export note about the old one goes. */
+  function filter(apply: () => void) {
+    apply()
+    setPage(1)
+    setExportNote(null)
+  }
+
+  async function copy(id: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(id)
+      setTimeout(() => setCopied(c => (c === id ? null : c)), 1500)
+    } catch { /* clipboard blocked; the reference is on screen to select by hand */ }
+  }
+
+  async function handleExport() {
+    setExporting(true)
+    setExportNote(null)
+    const body: { type: string } & Record<string, unknown> = { type: 'payments' }
+    if (search) body.search = search
+    if (unmatchedOnly) body.unmatched = true
+    else if (statusFilter) body.status = statusFilter
+    const result = await downloadExport(body)
+    setExporting(false)
+    if (!result.ok) setExportNote({ error: true, text: `The export failed. ${result.error}` })
+    else if (result.cappedAt) setExportNote({ error: false, text: `The file holds the newest ${result.cappedAt.toLocaleString('en-ZA')} payments only. Narrow the filters to export the rest.` })
+  }
+
+  const list = loaded?.list ?? null
+  const failed = !loading && loaded !== null && loaded.list === null
+  const empty = unmatchedOnly && !search
+    ? 'Every payment that took money has its bet. Nothing to chase.'
+    : search || statusFilter || unmatchedOnly ? 'No payments match these filters.' : 'No payments yet.'
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: '#111', marginBottom: 4, fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>Payments</h1>
-        <p style={{ fontSize: 14, color: '#666' }}>Every payment PayFast has recorded, and the bet it produced</p>
+      <title>Payments · Get Lucky admin</title>
+      <div className="adm-head">
+        <div>
+          <h1 className="adm-title">Payments</h1>
+          <p className="adm-lead">
+            Every payment PayFast has recorded, and the bet it produced. <strong>Paid, but no bet</strong> lists money taken
+            (complete, or the wrong amount) with no bet anywhere: a golfer who paid and has nothing to play. The export follows the filters.
+          </p>
+        </div>
+        <button type="button" onClick={handleExport} disabled={exporting} aria-busy={exporting} className="adm-btn adm-btn--quiet">
+          <Download size={14} aria-hidden /> {exporting ? 'Exporting…' : 'Export CSV'}
+        </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+      {exportNote && (
+        <p role={exportNote.error ? 'alert' : 'status'} className={exportNote.error ? 'adm-error' : 'adm-warn'} style={{ margin: '0 0 14px' }}>
+          {exportNote.text}
+        </p>
+      )}
+
+      <div className="adm-row" style={{ marginBottom: 16 }}>
         <SearchInput
-          placeholder="Search golfer or reference..."
+          placeholder="Search golfer, email or reference"
           value={search}
-          onChange={(v) => { setSearch(v); setPage(1) }}
+          onChange={v => filter(() => setSearch(v))}
         />
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }}
-          style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 13, color: '#333', background: '#fff' }}
-        >
-          <option value="">All statuses</option>
-          <option value="complete">Complete</option>
-          <option value="pending">Pending</option>
-          <option value="failed">Failed</option>
-          <option value="amount_mismatch">Amount mismatch</option>
-        </select>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#333', cursor: 'pointer' }}>
+        <label className="adm-field">
+          Status
+          <select
+            value={statusFilter}
+            onChange={e => filter(() => setStatusFilter(e.target.value))}
+            disabled={unmatchedOnly}
+            title={unmatchedOnly ? 'Paid, but no bet covers complete and amount mismatch payments' : undefined}
+            className="adm-input"
+          >
+            <option value="">All statuses</option>
+            <option value="complete">Complete</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+            <option value="amount_mismatch">Amount mismatch</option>
+          </select>
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, minHeight: 44, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
           <input
             type="checkbox"
             checked={unmatchedOnly}
-            onChange={(e) => { setUnmatchedOnly(e.target.checked); setPage(1) }}
+            onChange={e => {
+              const on = e.target.checked
+              filter(() => { setUnmatchedOnly(on); if (on) setStatusFilter('') })
+            }}
           />
           Paid, but no bet
         </label>
       </div>
 
-      <div style={{ background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #e5e5e5', background: '#fafafa' }}>
-              <th style={th}>Golfer</th>
-              <th style={th}>Course / Hole</th>
-              <th style={{ ...th, textAlign: 'right' }}>Amount</th>
-              <th style={{ ...th, textAlign: 'center' }}>Status</th>
-              <th style={{ ...th, textAlign: 'center' }}>Paid with</th>
-              <th style={{ ...th, textAlign: 'center' }}>Bet</th>
-              <th style={{ ...th, textAlign: 'right' }}>Taken</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              Array.from({ length: 8 }).map((_, i) => (
-                <tr key={i} style={{ borderBottom: '1px solid #f0f0f0' }}>
-                  {Array.from({ length: 7 }).map((_, j) => (
-                    <td key={j} style={{ padding: 14 }}>
-                      <div style={{ height: 16, background: '#f0f0f0', borderRadius: 4, width: '70%' }} />
-                    </td>
-                  ))}
+      {failed ? (
+        <LoadError what="The payments" detail={loaded?.detail} onRetry={() => setAttempt(n => n + 1)} />
+      ) : (
+        <div className="adm-card">
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>Golfer</th>
+                  <th>Reference</th>
+                  <th>Course / hole</th>
+                  <th style={{ textAlign: 'right' }}>Amount</th>
+                  <th style={{ textAlign: 'center' }}>Status</th>
+                  <th>Paid with</th>
+                  <th style={{ textAlign: 'center' }}>Bet</th>
+                  <th style={{ textAlign: 'right' }}>Taken (SA time)</th>
                 </tr>
-              ))
-            ) : data.length === 0 ? (
-              <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#999' }}>No payments found</td></tr>
-            ) : (
-              data.map(payment => {
-                const needsAttention = payment.status === 'complete' && !payment.betId
-                return (
-                  <tr key={payment.mPaymentId} style={{ borderBottom: '1px solid #f0f0f0', background: needsAttention ? '#fffdf5' : undefined }}>
-                    <td style={{ ...td, fontWeight: 500, color: '#111' }}>
-                      {payment.userId ? (
-                        <button
-                          onClick={() => router.push(`/admin/users/${payment.userId}`)}
-                          style={{ background: 'none', border: 'none', padding: 0, color: '#335231', fontWeight: 600, fontSize: 13, cursor: 'pointer', textAlign: 'left' }}
-                        >
-                          {payment.userName || payment.userEmail || 'Unknown'}
-                        </button>
-                      ) : 'Unknown'}
-                    </td>
-                    <td style={{ ...td, color: '#666' }}>
-                      {payment.courseName ? `${payment.courseName}${payment.holeNumber ? `, H${payment.holeNumber}` : ''}` : '—'}
-                    </td>
-                    <td style={{ ...td, textAlign: 'right', color: '#111' }}>{formatZAR(payment.amountCents)}</td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      <StatusBadge status={payment.status} small variant={STATUS_VARIANT[payment.status]} />
-                    </td>
-                    <td style={{ ...td, textAlign: 'center', color: '#666', fontSize: 12 }}>
-                      {payment.source === 'saved_card' ? 'Saved card' : 'Checkout'}
-                    </td>
-                    <td style={{ ...td, textAlign: 'center' }}>
-                      {payment.betId ? (
-                        <button
-                          onClick={() => router.push(`/admin/bets/${payment.betId}`)}
-                          style={{ background: 'none', border: 'none', padding: 0, color: '#335231', fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
-                        >
-                          Open bet
-                        </button>
-                      ) : needsAttention ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#a07820', fontWeight: 600, fontSize: 12 }}>
-                          <AlertTriangle size={13} /> None
-                        </span>
-                      ) : (
-                        <span style={{ color: '#999' }}>—</span>
-                      )}
-                    </td>
-                    <td style={{ ...td, textAlign: 'right', color: '#999', fontSize: 12 }}>{timeAgo(payment.createdAt)}</td>
-                  </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={COLUMNS} className="adm-muted" style={{ padding: 32, textAlign: 'center' }}>Loading payments…</td></tr>
+                ) : !list || list.data.length === 0 ? (
+                  <tr><td colSpan={COLUMNS} className="adm-muted" style={{ padding: 32, textAlign: 'center' }}>{empty}</td></tr>
+                ) : (
+                  list.data.map(payment => {
+                    const needsAttention = tookMoney(payment) && !payment.betId
+                    const pf = payment.pfPaymentId
+                    return (
+                      <tr key={payment.mPaymentId} style={needsAttention ? { background: '#fffbea' } : undefined}>
+                        <td>
+                          {payment.userId ? (
+                            <Link href={`/admin/users/${payment.userId}`} className="adm-row-link">
+                              {payment.userName || payment.userEmail || 'Unknown'}
+                            </Link>
+                          ) : <span className="adm-muted">Unknown</span>}
+                          {payment.userName && payment.userEmail && <div className="adm-small">{payment.userEmail}</div>}
+                        </td>
+                        <td>
+                          <Reference
+                            value={payment.mPaymentId}
+                            label="our reference"
+                            copied={copied === `m:${payment.mPaymentId}`}
+                            onCopy={() => copy(`m:${payment.mPaymentId}`, payment.mPaymentId)}
+                          />
+                          {pf && (
+                            <Reference
+                              value={pf}
+                              label="the PayFast reference"
+                              prefix="PayFast"
+                              copied={copied === `pf:${payment.mPaymentId}`}
+                              onCopy={() => copy(`pf:${payment.mPaymentId}`, pf)}
+                            />
+                          )}
+                        </td>
+                        <td className="adm-muted">
+                          {payment.courseName ? `${payment.courseName}${payment.holeNumber ? `, H${payment.holeNumber}` : ''}` : '—'}
+                        </td>
+                        <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatZAR(payment.amountCents)}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <StatusBadge status={payment.status} small variant={STATUS_VARIANT[payment.status]} />
+                        </td>
+                        <td className="adm-small">{payment.source === 'saved_card' ? 'Saved card' : 'Checkout'}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          {payment.betId ? (
+                            <Link href={`/admin/bets/${payment.betId}`} className="adm-link">Open bet</Link>
+                          ) : needsAttention ? (
+                            <span className="adm-pill adm-pill--amber"><AlertTriangle size={12} aria-hidden /> None</span>
+                          ) : (
+                            <span className="adm-muted">—</span>
+                          )}
+                        </td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          <time dateTime={payment.createdAt}>{sastDateTime(payment.createdAt)}</time>
+                          <div className="adm-small">{timeAgo(payment.createdAt)}</div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
-      <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+      {list && <Pagination page={page} totalPages={list.totalPages || 1} total={list.total} onPageChange={setPage} />}
+    </div>
+  )
+}
+
+/** A payment reference in mono, with a button that copies it. */
+function Reference({ value, label, prefix, copied, onCopy }: {
+  value: string
+  /** What is copied, for the button's name: "our reference". */
+  label: string
+  prefix?: string
+  copied: boolean
+  onCopy: () => void
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }} className={prefix ? 'adm-small' : undefined}>
+      {prefix && <span>{prefix}</span>}
+      <span className="adm-mono" style={prefix ? { fontSize: 12 } : undefined}>{value}</span>
+      <button type="button" onClick={onCopy} aria-label={`Copy ${label}`} title={`Copy ${label}`} className="adm-icon-btn" style={{ width: 26, height: 26 }}>
+        {copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+      </button>
     </div>
   )
 }

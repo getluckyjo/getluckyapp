@@ -243,3 +243,20 @@ textarea.adm-input { line-height: 1.5; resize: vertical; }
 @media (max-width: 480px) {
   .adm-top-tag { display: none; }
 }
+
+/* ── Table details ── */
+.adm-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.adm-table th.adm-num { text-align: right; }
+.adm-tr-link { cursor: pointer; transition: background 0.12s; }
+.adm-tr-link:hover > td { background: rgba(214, 251, 75, 0.18); }
+.adm-attention > td { background: #fff7e0; }
+.adm-attention > td:first-child { box-shadow: inset 4px 0 0 #e0a100; }
+
+/* ── A label and its value, one pair per row ── */
+.adm-dl { display: grid; grid-template-columns: minmax(110px, max-content) 1fr; gap: 8px 16px; margin: 0; font-size: 14px; }
+.adm-dl dt { font-family: var(--font-heading); font-weight: 800; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.62; padding-top: 2px; }
+.adm-dl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+
+/* ── A checkbox with its label ── */
+.adm-check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.adm-check input { width: 17px; height: 17px; accent-color: var(--green); }

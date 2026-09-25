@@ -1,27 +1,44 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import { ArrowLeft, AlertTriangle, CreditCard, ExternalLink, ShieldAlert } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import ConfirmModal from '@/components/admin/ConfirmModal'
+import LoadError from '@/components/admin/LoadError'
 import { formatZAR, timeAgo } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import { RULE_LABELS, describeFlag } from '@/lib/risk/labels'
 import type { AdminBetDetail } from '@/types/admin'
+import { RequestError, getJson, sastDate, sastDateTime } from '../client-helpers'
 
-const card: React.CSSProperties = { background: '#fff', borderRadius: 12, border: '1px solid #e5e5e5', padding: 18, marginBottom: 16 }
-const h2: React.CSSProperties = { fontSize: 13, fontWeight: 700, color: '#666', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }
-const label: React.CSSProperties = { fontSize: 12, color: '#888', marginBottom: 2 }
-const value: React.CSSProperties = { fontSize: 14, color: '#111', fontWeight: 500 }
-const mono: React.CSSProperties = { fontFamily: "'Space Mono', ui-monospace, monospace", fontSize: 12, color: '#333', wordBreak: 'break-all' }
+/** The shortest payout reference PATCH /api/admin/bets/[betId] accepts. */
+const MIN_REFERENCE = 3
 
+/** Why the latest load failed: a real 404, or anything else (which is never shown as "not found"). */
+type Failure = { notFound: true } | { notFound: false; detail?: string }
+
+/** One labelled value in a card's list. */
 function Field({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={label}>{name}</div>
-      <div style={value}>{children}</div>
+      <dt className="adm-small">{name}</dt>
+      <dd style={{ margin: '2px 0 0', fontSize: 14, fontWeight: 600, overflowWrap: 'anywhere' }}>{children}</dd>
     </div>
+  )
+}
+
+/** A time in South African time, with how long ago. */
+function When({ at }: { at: string }) {
+  return <time dateTime={at}>{sastDateTime(at)} <span className="adm-small">({timeAgo(at)})</span></time>
+}
+
+function BackToBets() {
+  return (
+    <Link href="/admin/bets" className="adm-link" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 14 }}>
+      <ArrowLeft size={14} aria-hidden /> Bets
+    </Link>
   )
 }
 
@@ -35,257 +52,310 @@ function Field({ name, children }: { name: string; children: React.ReactNode }) 
  */
 export default function AdminBetDetailPage() {
   const params = useParams()
-  const router = useRouter()
   const betId = params.betId as string
-  const [bet, setBet] = useState<AdminBetDetail | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [notFound, setNotFound] = useState(false)
-  const [payoutModal, setPayoutModal] = useState(false)
+  // The last bet loaded, and which id it was loaded for.
+  const [loadedBet, setLoadedBet] = useState<{ id: string; detail: AdminBetDetail } | null>(null)
+  const [attempt, setAttempt] = useState(0)
+  const [outcome, setOutcome] = useState<{ key: string; failure: Failure | null } | null>(null)
+  const [payoutOpen, setPayoutOpen] = useState(false)
   const [payoutReference, setPayoutReference] = useState('')
   const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
+  const [payoutError, setPayoutError] = useState<string | null>(null)
 
-  const load = useCallback(() => {
-    return fetch(`/api/admin/bets/${betId}`)
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((data: AdminBetDetail) => setBet(data))
-      .catch(() => setNotFound(true))
-      .finally(() => setLoading(false))
-  }, [betId])
+  // Loading until the request for this bet (and this attempt) has answered;
+  // a slower, older answer is dropped.
+  const key = `${betId}#${attempt}`
+  const loading = outcome?.key !== key
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    let cancelled = false
+    getJson<AdminBetDetail>(`/api/admin/bets/${betId}`)
+      .then(detail => {
+        if (cancelled) return
+        setLoadedBet({ id: betId, detail })
+        setOutcome({ key, failure: null })
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        const notFound = err instanceof RequestError && err.status === 404
+        setOutcome({ key, failure: notFound ? { notFound: true } : { notFound: false, detail: err instanceof Error ? err.message : undefined } })
+      })
+    return () => { cancelled = true }
+  }, [key, betId])
+
+  const reference = payoutReference.trim()
+
+  function closePayout() {
+    setPayoutOpen(false)
+    setPayoutError(null)
+  }
 
   async function confirmPayout() {
+    if (reference.length < MIN_REFERENCE) return
     setSaving(true)
-    setError('')
+    setPayoutError(null)
     try {
       const res = await fetch(`/api/admin/bets/${betId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'paid', payoutReference }),
+        body: JSON.stringify({ status: 'paid', payoutReference: reference }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: string }
-        throw new Error(body.error ?? 'Could not record the payout.')
+        setPayoutError(body.error ?? 'The payout could not be recorded. Nothing has changed; please try again.')
+        return
       }
-      setPayoutModal(false)
+      // Recorded: show it at once, so a failed reload cannot leave the payout button up.
+      setLoadedBet(b => (b ? { ...b, detail: { ...b.detail, status: 'paid', payoutReference: reference } } : b))
+      setPayoutOpen(false)
       setPayoutReference('')
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not record the payout.')
+      setAttempt(n => n + 1)
+    } catch {
+      setPayoutError('The server could not be reached, so the payout may not have been recorded. Reload the page to check before trying again.')
     } finally {
       setSaving(false)
     }
   }
 
-  if (loading) {
+  const bet = loadedBet?.id === betId ? loadedBet.detail : null
+  const failure = loading ? null : outcome?.failure ?? null
+  const retry = () => setAttempt(n => n + 1)
+
+  if (!bet) {
     return (
-      <div>
-        <div style={{ width: 200, height: 24, background: '#e5e5e5', borderRadius: 6, marginBottom: 24 }} />
-        {[1, 2, 3].map(i => <div key={i} style={{ ...card, height: 140 }} />)}
+      <div style={{ maxWidth: 900 }}>
+        <title>Bet · Get Lucky admin</title>
+        <BackToBets />
+        {failure?.notFound ? (
+          <div className="adm-card" style={{ textAlign: 'center', padding: 36 }}>
+            <h1 className="adm-h2" style={{ marginBottom: 6 }}>No such bet</h1>
+            <p className="adm-muted" style={{ margin: 0 }}>There is no bet with this id. A bet goes when its golfer&rsquo;s account is deleted.</p>
+          </div>
+        ) : failure ? (
+          <LoadError what="The bet" detail={failure.detail} onRetry={retry} />
+        ) : (
+          <p className="adm-muted">Loading the bet…</p>
+        )}
       </div>
     )
-  }
-  if (notFound || !bet) {
-    return <div style={{ padding: 40, textAlign: 'center', color: '#999' }}>Bet not found</div>
   }
 
   const paidOut = bet.status === 'paid'
   const unmatchedPayment = bet.payment && bet.payment.status !== 'complete'
+  const payee = bet.user.name || bet.user.email || 'the golfer'
 
   return (
     <div style={{ maxWidth: 900 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-        <button
-          onClick={() => router.push('/admin/bets')}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer', color: '#333', fontSize: 13 }}
-        >
-          <ArrowLeft size={14} /> Bets
-        </button>
-        <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111', fontFamily: "'Poster Gothic', Georgia, sans-serif" }}>
-            {bet.courseName}, Hole {bet.holeNumber}
-          </h1>
-          <div style={{ fontSize: 13, color: '#666' }}>
-            {TIER_LABELS[bet.tier]} · {formatZAR(bet.stakeCents)} to win {formatZAR(bet.potentialWinCents)} · {timeAgo(bet.createdAt)}
-          </div>
+      <title>{`Bet at ${bet.courseName} · Get Lucky admin`}</title>
+      <BackToBets />
+      <div className="adm-head">
+        <div>
+          <h1 className="adm-title">{bet.courseName}, hole {bet.holeNumber}</h1>
+          <p className="adm-lead">
+            {TIER_LABELS[bet.tier]} · {formatZAR(bet.stakeCents)} to win {formatZAR(bet.potentialWinCents)} · placed <When at={bet.createdAt} />
+          </p>
         </div>
         <StatusBadge status={bet.status} />
       </div>
 
+      {failure && (
+        <LoadError
+          what="The latest version of this bet"
+          detail={failure.notFound ? 'There is no longer a bet with this id.' : failure.detail}
+          onRetry={retry}
+        />
+      )}
+
       {bet.user.suspendedAt && (
-        <div style={{ ...card, background: '#fde8e8', borderColor: '#f5c6c6', display: 'flex', gap: 10, alignItems: 'center' }}>
-          <ShieldAlert size={18} color="#c0392b" />
-          <span style={{ fontSize: 13, color: '#c0392b' }}>This golfer&apos;s account is suspended.</span>
+        <div role="status" className="adm-card adm-error" style={{ display: 'flex', gap: 10, alignItems: 'center', border: '2px solid #f3c7c7', fontSize: 14 }}>
+          <ShieldAlert size={18} aria-hidden /> This golfer&rsquo;s account is suspended.
         </div>
       )}
 
       {/* ── The golfer ── */}
-      <div style={card}>
-        <div style={h2}>Golfer</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
+      <section className="adm-card adm-stack">
+        <h2 className="adm-h3">Golfer</h2>
+        <dl className="adm-grid-2" style={{ margin: 0 }}>
           <Field name="Name">{bet.user.name || '—'}</Field>
           <Field name="Email">{bet.user.email || '—'}</Field>
-          <Field name="Age verified">{bet.user.ageVerifiedAt ? new Date(bet.user.ageVerifiedAt).toLocaleDateString('en-ZA') : <span style={{ color: '#c0392b' }}>No</span>}</Field>
+          <Field name="Age verified">{bet.user.ageVerifiedAt ? sastDate(bet.user.ageVerifiedAt) : <span className="adm-error">No</span>}</Field>
           <Field name="Total attempts">{bet.user.totalAttempts}</Field>
+        </dl>
+        <div>
+          <Link href={`/admin/users/${bet.user.id}`} className="adm-btn adm-btn--quiet">
+            Open golfer <ExternalLink size={13} aria-hidden />
+          </Link>
         </div>
-        <button
-          onClick={() => router.push(`/admin/users/${bet.user.id}`)}
-          style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer', color: '#333', fontSize: 13 }}
-        >
-          Open golfer <ExternalLink size={13} />
-        </button>
-      </div>
+      </section>
 
       {/* ── The money ── */}
-      <div style={card}>
-        <div style={h2}>Payment</div>
+      <section className="adm-card adm-stack">
+        <h2 className="adm-h3">Payment</h2>
         {bet.payment ? (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16 }}>
+            <dl className="adm-grid-2" style={{ margin: 0 }}>
               <Field name="Amount">{formatZAR(bet.payment.amountCents)}</Field>
               <Field name="Status"><StatusBadge status={bet.payment.status} small variant={bet.payment.status === 'complete' ? 'success' : 'danger'} /></Field>
               <Field name="Paid with">{bet.payment.source === 'saved_card' ? 'Saved card' : 'Checkout'}</Field>
-              <Field name="Taken">{timeAgo(bet.payment.createdAt)}</Field>
-            </div>
-            <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
-              <div><div style={label}>Our reference</div><div style={mono}>{bet.payment.mPaymentId}</div></div>
-              <div><div style={label}>PayFast reference</div><div style={mono}>{bet.payment.pfPaymentId || '—'}</div></div>
-            </div>
+              <Field name="Taken"><When at={bet.payment.createdAt} /></Field>
+              <Field name="Our reference"><span className="adm-mono">{bet.payment.mPaymentId}</span></Field>
+              <Field name="PayFast reference"><span className="adm-mono">{bet.payment.pfPaymentId || '—'}</span></Field>
+            </dl>
             {unmatchedPayment && (
-              <div style={{ marginTop: 14, padding: 12, borderRadius: 8, background: '#fff8e1', color: '#a07820', fontSize: 13, display: 'flex', gap: 8 }}>
-                <AlertTriangle size={16} />
-                This bet exists but its payment is not complete. Check PayFast before treating it as paid.
-              </div>
+              <p className="adm-warn" style={{ margin: 0 }}>
+                <AlertTriangle size={14} aria-hidden /> This bet exists but its payment is not complete. Check PayFast before treating it as paid.
+              </p>
             )}
           </>
         ) : (
-          <div style={{ fontSize: 13, color: '#a07820', display: 'flex', gap: 8, alignItems: 'center' }}>
-            <AlertTriangle size={16} />
-            No payment on record for this bet. Reference: <span style={mono}>{bet.paymentIntentId || 'none'}</span>
-          </div>
+          <p className="adm-warn" style={{ margin: 0 }}>
+            <AlertTriangle size={14} aria-hidden /> No payment on record for this bet. Reference: <span className="adm-mono">{bet.paymentIntentId || 'none'}</span>
+          </p>
         )}
-      </div>
+      </section>
 
       {/* ── The shot ── */}
-      <div style={card}>
-        <div style={h2}>The shot</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 16, marginBottom: 14 }}>
+      <section className="adm-card adm-stack">
+        <h2 className="adm-h3">The shot</h2>
+        <dl className="adm-grid-2" style={{ margin: 0 }}>
           <Field name="Declared">{bet.declaredResult ? <StatusBadge status={bet.declaredResult === 'win' ? 'claimed' : 'miss'} small /> : 'Not yet'}</Field>
-          <Field name="Declared at">{bet.declaredAt ? timeAgo(bet.declaredAt) : '—'}</Field>
-          <Field name="Play window ends">{bet.expiresAt ? new Date(bet.expiresAt).toLocaleString('en-ZA') : '—'}</Field>
-          <Field name="Footage">{bet.videoUploadedAt ? timeAgo(bet.videoUploadedAt) : 'None'}</Field>
-        </div>
+          <Field name="Declared at">{bet.declaredAt ? <When at={bet.declaredAt} /> : '—'}</Field>
+          <Field name="Play window ends">{bet.expiresAt ? sastDateTime(bet.expiresAt) : '—'}</Field>
+          <Field name="Footage">{bet.videoUploadedAt ? <When at={bet.videoUploadedAt} /> : 'None'}</Field>
+        </dl>
         {bet.videoSignedUrl ? (
           <video src={bet.videoSignedUrl} controls preload="metadata" style={{ width: '100%', maxWidth: 420, borderRadius: 10, background: '#000' }} />
         ) : (
-          <div style={{ fontSize: 13, color: '#999' }}>No footage uploaded.</div>
+          <p className="adm-muted" style={{ margin: 0 }}>No footage uploaded.</p>
         )}
         {bet.videoSha256 && (
-          <div style={{ marginTop: 10 }}>
-            <div style={label}>Footage fingerprint (SHA-256)</div>
-            <div style={mono}>{bet.videoSha256}</div>
-          </div>
+          <dl style={{ margin: 0 }}>
+            <Field name="Footage fingerprint (SHA-256)"><span className="adm-mono">{bet.videoSha256}</span></Field>
+          </dl>
         )}
-      </div>
+      </section>
 
       {/* ── Risk ── */}
       {bet.riskFlags.length > 0 && (
-        <div style={card}>
-          <div style={h2}>Risk · score {bet.riskScore}</div>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {bet.riskFlags.map((flag, i) => (
-              <div key={`${flag.rule}-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                <StatusBadge status={flag.severity} small variant={flag.severity === 'high' ? 'danger' : flag.severity === 'medium' ? 'warning' : 'neutral'} />
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>{RULE_LABELS[flag.rule]?.label ?? flag.rule}</div>
-                  <div style={{ fontSize: 12, color: '#666' }}>{describeFlag(flag)}</div>
-                </div>
+        <section className="adm-card adm-stack">
+          <h2 className="adm-h3">Risk · score {bet.riskScore}</h2>
+          {bet.riskFlags.map((flag, i) => (
+            <div key={`${flag.rule}-${i}`} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <StatusBadge status={flag.severity} small variant={flag.severity === 'high' ? 'danger' : flag.severity === 'medium' ? 'warning' : 'neutral'} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700 }}>{RULE_LABELS[flag.rule]?.label ?? flag.rule}</div>
+                <div className="adm-small">{describeFlag(flag)}</div>
               </div>
-            ))}
-          </div>
-        </div>
+            </div>
+          ))}
+        </section>
       )}
 
       {/* ── The claim ── */}
       {bet.verificationId && (
-        <div style={card}>
-          <div style={h2}>Claim</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <section className="adm-card adm-stack">
+          <h2 className="adm-h3">Claim</h2>
+          <div className="adm-row" style={{ alignItems: 'center' }}>
             <StatusBadge status={bet.verificationStatus ?? 'pending'} />
-            <button
-              onClick={() => router.push(`/admin/verification-queue/${bet.verificationId}`)}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 6, border: '1px solid #e5e5e5', background: '#fff', cursor: 'pointer', color: '#333', fontSize: 13 }}
-            >
-              Open the review <ExternalLink size={13} />
-            </button>
+            <Link href={`/admin/verification-queue/${bet.verificationId}`} className="adm-btn adm-btn--quiet">
+              Open the review <ExternalLink size={13} aria-hidden />
+            </Link>
           </div>
-        </div>
+        </section>
       )}
 
       {/* ── Payout ── */}
       {(bet.status === 'verified' || paidOut) && (
-        <div style={card}>
-          <div style={h2}>Payout</div>
+        <section className="adm-card adm-stack">
+          <h2 className="adm-h3">Payout</h2>
           {paidOut ? (
-            <Field name="Reference"><span style={mono}>{bet.payoutReference || '—'}</span></Field>
+            <dl className="adm-grid-2" style={{ margin: 0 }}>
+              <Field name="Prize">{formatZAR(bet.potentialWinCents)}</Field>
+              <Field name="Reference"><span className="adm-mono">{bet.payoutReference || '—'}</span></Field>
+            </dl>
           ) : (
             <>
-              <p style={{ fontSize: 13, color: '#666', marginBottom: 12 }}>
-                This claim is verified. Record the payout once the money has left the account; the reference is kept with the bet.
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
+                The claim is verified: <strong>{formatZAR(bet.potentialWinCents)}</strong> is owed to <strong>{payee}</strong>.
+                Record the payout once the money has left the account; the reference is kept with the bet.
               </p>
-              <button
-                onClick={() => setPayoutModal(true)}
-                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: 'none', background: '#335231', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-              >
-                <CreditCard size={14} /> Confirm payout
-              </button>
+              <div>
+                <button type="button" onClick={() => setPayoutOpen(true)} className="adm-btn">
+                  <CreditCard size={17} aria-hidden /> Confirm payout
+                </button>
+              </div>
             </>
           )}
-        </div>
+        </section>
       )}
 
       {/* ── Audit trail ── */}
-      <div style={card}>
-        <div style={h2}>History</div>
+      <section className="adm-card adm-stack">
+        <h2 className="adm-h3">History</h2>
         {bet.events.length === 0 ? (
-          <div style={{ fontSize: 13, color: '#999' }}>Nothing recorded yet.</div>
+          <p className="adm-muted" style={{ margin: 0 }}>Nothing recorded yet.</p>
         ) : (
-          <div style={{ display: 'grid', gap: 10 }}>
-            {bet.events.map(event => (
-              <div key={event.id} style={{ display: 'flex', gap: 12, fontSize: 13 }}>
-                <div style={{ color: '#999', minWidth: 110 }}>{new Date(event.created_at).toLocaleString('en-ZA')}</div>
-                <div style={{ color: '#666', minWidth: 70 }}>{event.actor_role}</div>
-                <div style={{ color: '#111' }}>
-                  {event.changed
-                    ? Object.entries(event.changed).map(([field, change]) => (
-                        <div key={field}>
-                          {field}: {String(change.from ?? '—')} → <strong>{String(change.to ?? '—')}</strong>
-                        </div>
-                      ))
-                    : `${event.table_name} ${event.action}`}
-                </div>
-              </div>
-            ))}
+          <div className="adm-table-wrap">
+            <table className="adm-table">
+              <thead>
+                <tr><th>When (SA time)</th><th>By</th><th>Change</th></tr>
+              </thead>
+              <tbody>
+                {bet.events.map(event => (
+                  <tr key={event.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{sastDateTime(event.created_at)}</td>
+                    <td className="adm-muted">{event.actor_role}</td>
+                    <td>
+                      {event.changed
+                        ? Object.entries(event.changed).map(([field, change]) => (
+                            <div key={field}>
+                              {field}: {String(change.from ?? '—')} → <strong>{String(change.to ?? '—')}</strong>
+                            </div>
+                          ))
+                        : `${event.table_name} ${event.action}`}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </div>
+      </section>
 
       <ConfirmModal
-        open={payoutModal}
-        title="Confirm payout"
-        message="Record this claim as paid. Enter the bank or PayFast reference for the transfer."
-        confirmLabel={saving ? 'Saving…' : 'Mark as paid'}
+        open={payoutOpen}
+        title="Confirm the prize was paid"
+        message={`Only confirm once ${formatZAR(bet.potentialWinCents)} has left the account for ${payee}. This marks the bet as paid, puts it on the winners list, and records your admin id in its history.`}
+        confirmLabel="Yes, the prize was paid"
+        variant="success"
+        busy={saving}
+        confirmDisabled={reference.length < MIN_REFERENCE}
+        error={payoutError}
         onConfirm={confirmPayout}
-        onCancel={() => { setPayoutModal(false); setError('') }}
+        onCancel={closePayout}
       >
-        <input
-          value={payoutReference}
-          onChange={e => setPayoutReference(e.target.value)}
-          placeholder="Payment reference"
-          style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid #e5e5e5', fontSize: 14, color: '#111' }}
-        />
-        {error && <div style={{ marginTop: 10, fontSize: 13, color: '#c0392b' }}>{error}</div>}
+        <div className="adm-stack">
+          <dl className="adm-grid-2" style={{ margin: 0 }}>
+            <Field name="Prize">{formatZAR(bet.potentialWinCents)}</Field>
+            <Field name="Paid to">
+              {bet.user.name || '—'}
+              <div className="adm-small" style={{ fontWeight: 400 }}>{bet.user.email || 'No email on record'}</div>
+            </Field>
+          </dl>
+          <label className="adm-field">
+            Bank or PayFast reference
+            <input
+              value={payoutReference}
+              onChange={e => setPayoutReference(e.target.value)}
+              placeholder="e.g. FNB-2026-09-15-0042"
+              maxLength={120}
+              autoComplete="off"
+              disabled={saving}
+              className="adm-input"
+            />
+            <span className="adm-hint">At least {MIN_REFERENCE} characters, as it appears on the transfer.</span>
+          </label>
+        </div>
       </ConfirmModal>
     </div>
   )
