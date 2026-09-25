@@ -25,7 +25,7 @@ const formFrom = (c: CourseRow): CourseForm => ({
 })
 
 /** A change that needs a yes first: it takes something away that golfers or claims rely on. */
-interface Pending { title: string; message: string; confirmLabel: string; request: () => Promise<Response> }
+interface Pending { title: string; message: string; confirmLabel: string; section: 'contacts' | 'holes'; request: () => Promise<Response> }
 
 const STALE = 'Saved, but the list could not be refreshed. Reload the page to see it.'
 
@@ -192,6 +192,7 @@ export default function AdminEditCoursePage() {
         title: `Take hole ${hole.hole_number} off sale?`,
         message: 'Golfers can no longer choose it. Bets already made on it, and any claims, carry on as normal.',
         confirmLabel: 'Take off sale',
+        section: 'holes',
         request: () => send(`/api/admin/courses/${courseId}/holes/${hole.id}`, 'PATCH', { is_active: false }),
       })
       return
@@ -223,8 +224,9 @@ export default function AdminEditCoursePage() {
       const res = await pending.request()
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { setPendingError(json.error ?? 'That did not work. Please try again.'); return }
+      const { section } = pending
       setPending(null)
-      if (!(await refreshLists())) setHoleError(STALE)
+      if (!(await refreshLists())) (section === 'contacts' ? setContactError : setHoleError)(STALE)
     } catch {
       setPendingError(OFFLINE)
     } finally {
@@ -341,12 +343,14 @@ export default function AdminEditCoursePage() {
                             title: 'Remove the last club official?',
                             message: `${c.name} is the only club official at ${course.name}. Until you add another, a hole-in-one claim here has nobody to confirm the certificate${course.is_partner ? ', and golfers can still pay to play here' : ''}.`,
                             confirmLabel: 'Remove anyway',
+                            section: 'contacts',
                             request: () => send(`/api/admin/courses/${courseId}/contacts?id=${c.id}`, 'DELETE'),
                           }
                           : {
                             title: `Remove ${c.name}?`,
                             message: `${c.email} stops getting claim confirmations for ${course.name}. Requests already sent for open claims still count.`,
                             confirmLabel: 'Remove',
+                            section: 'contacts',
                             request: () => send(`/api/admin/courses/${courseId}/contacts?id=${c.id}`, 'DELETE'),
                           })}
                       >
@@ -455,6 +459,7 @@ export default function AdminEditCoursePage() {
                                   title: `Delete hole ${hole.hole_number}?`,
                                   message: 'A hole with bets cannot be deleted; take it off sale instead.',
                                   confirmLabel: 'Delete hole',
+                                  section: 'holes',
                                   request: () => send(`/api/admin/courses/${courseId}/holes/${hole.id}`, 'DELETE'),
                                 })}
                                 className="adm-icon-btn adm-icon-btn--warn"
