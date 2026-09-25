@@ -17,11 +17,14 @@ export const SAFE_NEXT_PATHS = [
  */
 const GOLF_DAY_PATH = /^\/golf-day\/[a-z0-9-]{2,40}$/
 
+/** An admin page, /admin/<section>[/<id>[/<sub>]]: an admin signed out mid-task comes back to it. */
+const ADMIN_PATH = /^\/admin(?:\/[a-z0-9-]{1,40}){1,3}$/
+
 export function isGolfDayPath(path: string): boolean {
   return GOLF_DAY_PATH.test(path)
 }
 
 export function safeNext(raw: string | null | undefined): string {
   if (!raw) return '/welcome'
-  return SAFE_NEXT_PATHS.includes(raw) || GOLF_DAY_PATH.test(raw) ? raw : '/welcome'
+  return SAFE_NEXT_PATHS.includes(raw) || GOLF_DAY_PATH.test(raw) || ADMIN_PATH.test(raw) ? raw : '/welcome'
 }

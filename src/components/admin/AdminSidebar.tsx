@@ -33,9 +33,26 @@ const NAV_ITEMS = [
   { href: '/admin/beta', label: 'Beta testers', icon: KeyRound },
 ]
 
-export default function AdminSidebar({ pendingClaims = 0 }: { pendingClaims?: number }) {
+/** Where the desktop sidebar was left, collapsed or not; kept across visits. */
+const COLLAPSED_KEY = 'gl_admin_sidebar_collapsed'
+
+export default function AdminSidebar({ pendingClaims = 0, open = false, onClose }: {
+  pendingClaims?: number
+  /** Open as a drawer (below 900 px wide); on a wide screen the sidebar is always there. */
+  open?: boolean
+  onClose?: () => void
+}) {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = useState(false)
+  // The admin renders only in the browser (after its access check), so storage can be read here.
+  const [collapsedPref, setCollapsedPref] = useState(() => {
+    try { return localStorage.getItem(COLLAPSED_KEY) === '1' } catch { return false }
+  })
+  // The drawer always shows its labels.
+  const collapsed = collapsedPref && !open
+  function setCollapsed(next: boolean) {
+    setCollapsedPref(next)
+    try { localStorage.setItem(COLLAPSED_KEY, next ? '1' : '0') } catch { /* private window */ }
+  }
 
   const isActive = (href: string) => {
     if (href === '/admin') return pathname === '/admin'
@@ -43,48 +60,14 @@ export default function AdminSidebar({ pendingClaims = 0 }: { pendingClaims?: nu
   }
 
   return (
-    <aside
-      style={{
-        width: collapsed ? 72 : 250,
-        minHeight: '100vh',
-        background: '#335231',
-        borderRight: '1px solid rgba(255,255,255,0.08)',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'width 0.2s ease',
-        position: 'relative',
-        flexShrink: 0,
-      }}
-    >
-      {/* Logo */}
-      <div
-        style={{
-          padding: collapsed ? '20px 12px' : '20px 20px',
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          minHeight: 64,
-        }}
-      >
-        <span style={{ fontSize: 24 }}>⛳</span>
-        {!collapsed && (
-          <span
-            style={{
-              fontFamily: "'Poster Gothic', Georgia, sans-serif",
-              fontWeight: 700,
-              fontSize: 16,
-              color: '#fff',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            Get Lucky Admin
-          </span>
-        )}
-      </div>
+    <aside className={`adm-side${collapsed ? ' adm-side--collapsed' : ''}${open ? ' is-open' : ''}`}>
+      <Link href="/admin" className="adm-side-logo" aria-label="Get Lucky admin: dashboard" onClick={onClose}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/logo-corner.svg" alt="Get Lucky" />
+        {!collapsed && <span className="adm-side-word">Admin</span>}
+      </Link>
 
-      {/* Nav items */}
-      <nav style={{ flex: 1, padding: '12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <nav className="adm-nav" aria-label="Admin">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon
           const active = isActive(item.href)
@@ -92,69 +75,26 @@ export default function AdminSidebar({ pendingClaims = 0 }: { pendingClaims?: nu
             <Link
               key={item.href}
               href={item.href}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                padding: collapsed ? '10px 14px' : '10px 14px',
-                borderRadius: 8,
-                background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
-                color: active ? '#fff' : 'rgba(255,255,255,0.65)',
-                textDecoration: 'none',
-                fontSize: 14,
-                fontWeight: active ? 600 : 400,
-                transition: 'all 0.15s ease',
-                position: 'relative',
-              }}
+              className={active ? 'is-active' : undefined}
+              aria-current={active ? 'page' : undefined}
               title={collapsed ? item.label : undefined}
+              onClick={onClose}
             >
-              <Icon size={20} />
-              {!collapsed && <span style={{ whiteSpace: 'nowrap' }}>{item.label}</span>}
+              <Icon size={19} aria-hidden />
+              {!collapsed && <span>{item.label}</span>}
               {item.badge && pendingClaims > 0 && (
-                <span
-                  style={{
-                    position: collapsed ? 'absolute' : 'relative',
-                    top: collapsed ? 4 : undefined,
-                    right: collapsed ? 4 : undefined,
-                    marginLeft: collapsed ? 0 : 'auto',
-                    background: '#c0392b',
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    borderRadius: 10,
-                    padding: '1px 7px',
-                    minWidth: 20,
-                    textAlign: 'center',
-                    lineHeight: '18px',
-                  }}
-                >
-                  {pendingClaims}
-                </span>
+                <span className="adm-count" aria-label={`${pendingClaims} waiting`}>{pendingClaims}</span>
               )}
             </Link>
           )
         })}
       </nav>
 
-      {/* Collapse toggle */}
       <button
+        type="button"
+        className="adm-side-toggle"
         onClick={() => setCollapsed(!collapsed)}
-        style={{
-          position: 'absolute',
-          top: 72,
-          right: -14,
-          width: 28,
-          height: 28,
-          borderRadius: '50%',
-          background: '#1e3120',
-          border: '2px solid rgba(255,255,255,0.15)',
-          color: '#fff',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 10,
-        }}
+        aria-label={collapsed ? 'Expand the menu' : 'Collapse the menu'}
       >
         {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
       </button>

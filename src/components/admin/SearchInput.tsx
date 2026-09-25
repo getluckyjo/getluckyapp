@@ -29,28 +29,16 @@ export default function SearchInput({ placeholder = 'Search...', value, onChange
   }
 
   return (
-    <div style={{ position: 'relative', width: '100%', maxWidth: 320 }}>
-      <Search
-        size={16}
-        color="#999"
-        style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)' }}
-      />
+    <div style={{ position: 'relative', width: '100%', maxWidth: 340 }}>
+      <Search size={16} aria-hidden style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', color: 'var(--green)', opacity: 0.55 }} />
       <input
-        type="text"
+        type="search"
         value={local}
         onChange={(e) => handleChange(e.target.value)}
         placeholder={placeholder}
-        style={{
-          width: '100%',
-          padding: '8px 12px 8px 36px',
-          borderRadius: 8,
-          border: '1px solid #e5e5e5',
-          fontSize: 14,
-          color: '#111',
-          background: '#fff',
-          outline: 'none',
-          fontFamily: "'Inter', system-ui, sans-serif",
-        }}
+        aria-label={placeholder}
+        className="adm-input"
+        style={{ width: '100%', paddingLeft: 38 }}
       />
     </div>
   )

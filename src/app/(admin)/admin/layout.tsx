@@ -1,11 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import AdminSidebar from '@/components/admin/AdminSidebar'
 import AdminTopBar from '@/components/admin/AdminTopBar'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
+import './admin.css'
 
 /**
  * The admin shell, and the gate in front of it.
@@ -34,12 +35,15 @@ type Access = 'checking' | 'allowed' | 'signed-out' | 'not-admin' | 'unavailable
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth()
   const router = useRouter()
+  const pathname = usePathname()
   const [access, setAccess] = useState<Access>('checking')
   const [pendingClaims, setPendingClaims] = useState(0)
   const [adminInfo, setAdminInfo] = useState({ name: '', email: '' })
+  // The sidebar as a drawer on a phone or narrow window (admin.css hides it below 900 px).
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const check = useCallback(async (): Promise<Access> => {
-    const ask = () => fetch('/api/admin/stats', { credentials: 'same-origin', cache: 'no-store' })
+    const ask = () => fetch('/api/admin/me', { credentials: 'same-origin', cache: 'no-store' })
 
     let res = await ask()
 
@@ -60,10 +64,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!res.ok) return 'unavailable'
 
     const data = await res.json().catch(() => ({}))
-    if (data.pendingClaims !== undefined) setPendingClaims(data.pendingClaims)
-    if (data.adminName) setAdminInfo({ name: data.adminName, email: data.adminEmail || '' })
+    if (typeof data.claimsToReview === 'number') setPendingClaims(data.claimsToReview)
+    if (data.name) setAdminInfo({ name: data.name, email: data.email || '' })
     return 'allowed'
   }, [])
+
+  // The badge follows the queue: asked again on every page change and when the window comes back.
+  useEffect(() => {
+    if (access !== 'allowed') return
+    let cancelled = false
+    const refresh = () => {
+      fetch('/api/admin/me', { cache: 'no-store' })
+        .then(r => (r.ok ? r.json() : null))
+        .then(d => { if (!cancelled && d && typeof d.claimsToReview === 'number') setPendingClaims(d.claimsToReview) })
+        .catch(() => {})
+    }
+    refresh()
+    window.addEventListener('focus', refresh)
+    return () => { cancelled = true; window.removeEventListener('focus', refresh) }
+  }, [access, pathname])
 
   useEffect(() => {
     // Wait for the session to be attached before asking, so a cold load does
@@ -84,8 +103,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => {
     // Sign in, then come straight back here.
-    if (access === 'signed-out') router.replace('/auth?next=/admin')
-  }, [access, router])
+    // Back to the page they were on once signed in (safeNext allows /admin/…).
+    if (access === 'signed-out') router.replace(`/auth?next=${encodeURIComponent(pathname || '/admin')}`)
+  }, [access, router, pathname])
 
   if (loading || access === 'checking') return <Centred><Spinner /></Centred>
 
@@ -95,8 +115,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (access === 'not-admin') {
     return (
       <Centred>
-        <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>This account cannot open the admin</div>
-        <div style={{ fontSize: 13, color: '#666' }}>
+        <div className="adm-h2">This account cannot open the admin</div>
+        <div className="adm-muted" style={{ fontSize: 14, maxWidth: 420 }}>
           {user?.email ? `Signed in as ${user.email}.` : 'Signed in.'} Ask for the admin flag on this account, or sign in with another.
         </div>
         <Button onClick={() => router.replace('/home')}>Back to the app</Button>
@@ -107,8 +127,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   if (access === 'unavailable') {
     return (
       <Centred>
-        <div style={{ fontSize: 15, fontWeight: 600, color: '#111' }}>The admin could not be reached</div>
-        <div style={{ fontSize: 13, color: '#666' }}>Check your connection and try again.</div>
+        <div className="adm-h2">The admin could not be reached</div>
+        <div className="adm-muted" style={{ fontSize: 14 }}>Check your connection and try again.</div>
         <Button onClick={() => { setAccess('checking'); check().then(setAccess).catch(() => setAccess('unavailable')) }}>
           Try again
         </Button>
@@ -117,18 +137,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   }
 
   return (
-    <div
-      style={{
-        display: 'flex',
-        minHeight: '100vh',
-        background: '#f7f7f8',
-        fontFamily: "'Inter', system-ui, sans-serif",
-      }}
-    >
-      <AdminSidebar pendingClaims={pendingClaims} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <AdminTopBar adminName={adminInfo.name} adminEmail={adminInfo.email} />
-        <main style={{ flex: 1, padding: 24, overflowY: 'auto' }}>
+    <div className="adm">
+      <AdminSidebar pendingClaims={pendingClaims} open={menuOpen} onClose={() => setMenuOpen(false)} />
+      {menuOpen && <div className="adm-scrim" onClick={() => setMenuOpen(false)} aria-hidden />}
+      <div className="adm-body">
+        <AdminTopBar adminName={adminInfo.name} adminEmail={adminInfo.email} onMenu={() => setMenuOpen(true)} />
+        <main className="adm-main">
           {children}
         </main>
       </div>
@@ -138,35 +152,19 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
 function Centred({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: 'center',
-      minHeight: '100vh', background: '#f7f7f8', fontFamily: "'Inter', system-ui, sans-serif",
-      padding: 24, textAlign: 'center',
-    }}>
+    <div className="adm-centred">
       {children}
     </div>
   )
 }
 
 function Spinner() {
-  return (
-    <>
-      <div style={{
-        width: 40, height: 40, border: '3px solid #e5e7eb',
-        borderTopColor: '#335231', borderRadius: '50%',
-        animation: 'spin 0.8s linear infinite',
-      }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-    </>
-  )
+  return <div className="adm-spinner" role="status" aria-label="Loading" />
 }
 
 function Button({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return (
-    <button
-      onClick={onClick}
-      style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#335231', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-    >
+    <button type="button" onClick={onClick} className="adm-btn">
       {children}
     </button>
   )

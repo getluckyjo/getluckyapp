@@ -1,6 +1,7 @@
 'use client'
 
-import { AlertTriangle } from 'lucide-react'
+import { useEffect } from 'react'
+import { AlertTriangle, CheckCircle2 } from 'lucide-react'
 
 interface ConfirmModalProps {
   open: boolean
@@ -11,8 +12,15 @@ interface ConfirmModalProps {
   onConfirm: () => void
   onCancel: () => void
   children?: React.ReactNode
+  /** The request is on its way: both buttons wait, and Escape or a click outside does nothing. */
+  busy?: boolean
+  /** The confirm button is greyed out (say why in `children`, e.g. an unticked checklist). */
+  confirmDisabled?: boolean
+  /** Why the last attempt failed, shown inside the modal rather than behind it. */
+  error?: string | null
 }
 
+/** A yes-or-no before something that can't be undone. Escape or a click outside cancels, unless it is busy. */
 export default function ConfirmModal({
   open,
   title,
@@ -22,88 +30,49 @@ export default function ConfirmModal({
   onConfirm,
   onCancel,
   children,
+  busy = false,
+  confirmDisabled = false,
+  error = null,
 }: ConfirmModalProps) {
-  if (!open) return null
+  useEffect(() => {
+    if (!open || busy) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onCancel() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, busy, onCancel])
 
-  const btnColor = variant === 'danger' ? '#c0392b' : '#1a7f37'
+  if (!open) return null
+  const danger = variant === 'danger'
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(0,0,0,0.5)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
-      }}
-      onClick={onCancel}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: '#fff',
-          borderRadius: 12,
-          padding: 28,
-          maxWidth: 440,
-          width: '90%',
-          boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 10,
-              background: variant === 'danger' ? '#fde8e8' : '#e6f4ea',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <AlertTriangle size={20} color={btnColor} />
-          </div>
+    <div className="adm-modal-back" onClick={() => { if (!busy) onCancel() }}>
+      <div className="adm-modal" role="dialog" aria-modal="true" aria-labelledby="adm-confirm-title" onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
+          <span className={`adm-icon-btn${danger ? ' adm-icon-btn--warn' : ' adm-icon-btn--ok'}`} style={{ cursor: 'default', background: danger ? '#fde8e8' : undefined, color: danger ? 'var(--red)' : undefined }} aria-hidden>
+            {danger ? <AlertTriangle size={19} /> : <CheckCircle2 size={19} />}
+          </span>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#111', marginBottom: 6 }}>{title}</div>
-            <div style={{ fontSize: 14, color: '#666', lineHeight: 1.5 }}>{message}</div>
+            <h2 id="adm-confirm-title" className="adm-h2" style={{ marginBottom: 6 }}>{title}</h2>
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, opacity: 0.85 }}>{message}</p>
           </div>
         </div>
 
-        {children && <div style={{ marginBottom: 16 }}>{children}</div>}
+        {children && <div style={{ marginBottom: 18 }}>{children}</div>}
 
-        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        {error && <p role="alert" className="adm-error" style={{ margin: '0 0 14px' }}>{error}</p>}
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}>
+          <button type="button" onClick={onCancel} disabled={busy} className="adm-btn adm-btn--quiet">Cancel</button>
+          {/* Not autofocused: Enter must never confirm by accident. */}
           <button
-            onClick={onCancel}
-            style={{
-              padding: '8px 20px',
-              borderRadius: 8,
-              border: '1px solid #e5e5e5',
-              background: '#fff',
-              fontSize: 14,
-              fontWeight: 500,
-              cursor: 'pointer',
-              color: '#333',
-            }}
-          >
-            Cancel
-          </button>
-          <button
+            type="button"
             onClick={onConfirm}
-            style={{
-              padding: '8px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: btnColor,
-              color: '#fff',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            disabled={busy || confirmDisabled}
+            aria-busy={busy}
+            className="adm-btn"
+            style={danger ? { background: 'var(--red)', color: 'var(--white)', boxShadow: '3px 4px 0 var(--green-dark)' } : undefined}
           >
-            {confirmLabel}
+            {busy ? 'Working…' : confirmLabel}
           </button>
         </div>
       </div>

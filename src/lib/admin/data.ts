@@ -126,10 +126,9 @@ export function toQueueItem(v: VerificationRowLike, bet: BetRowLike | undefined,
 export async function betsForVerifications(admin: SupabaseClient, rows: Pick<VerificationRowLike, 'bet_id'>[]): Promise<Map<string, BetRowLike>> {
   const ids = unique(rows.map(r => r.bet_id))
   if (!ids.length) return new Map()
-  const { data } = await admin
-    .from('bets')
-    .select('id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, status, declared_result, declared_at, video_url, payment_intent_id, created_at')
-    .in('id', ids)
+  // BET_SELECT, so the queue's Flags column and risk sorts have risk_score and risk_flags.
+  const { data, error } = await admin.from('bets').select(BET_SELECT).in('id', ids)
+  if (error) throw error
   return new Map(((data ?? []) as BetRowLike[]).map(b => [b.id, b]))
 }
 
@@ -137,10 +136,12 @@ export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, p
 
 /**
  * A search term safe to embed in a PostgREST `.or()` filter string: the
- * grammar uses `,` `(` `)` and `.` as delimiters and `*` as the wildcard.
+ * grammar uses `,` `(` `)` as delimiters and `*` as the wildcard. A `.`
+ * inside the value is fine (PostgREST splits `column.op.value` on the first
+ * two dots only), and must stay, or `jo.smith@gmail.com` finds nobody.
  */
 export function orSearchTerm(raw: string): string {
-  return raw.replace(/[,().*%\\"']/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 100)
+  return raw.replace(/[,()*%\\"']/g, ' ').trim().replace(/\s+/g, ' ').slice(0, 100)
 }
 
 export interface AdminTotals {
