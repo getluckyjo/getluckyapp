@@ -7,7 +7,7 @@ import { EditableFields, adminGolfDays, setHoles } from '@/lib/golf-days/admin'
 import { holesProblem } from '@/lib/golf-days/load'
 
 /**
- * Change a golf day: its name, tab label, date, prize, places or holes, or
+ * Change a golf day: its name, tab label, date, prize, places, holes or look, or
  * switch it off (its tab and its swing stop at once) and on again. The link
  * never changes, because it has been sent out. A swing already taken keeps
  * the prize it was taken for.
@@ -21,6 +21,7 @@ const Patch = z.object({
   maxPlayers: EditableFields.maxPlayers.optional(),
   holeIds: EditableFields.holeIds.optional(),
   note: EditableFields.note.optional(),
+  look: EditableFields.look.optional(),
   disabled: z.boolean().optional(),
 }).refine(v => Object.keys(v).length > 0, { message: 'Nothing to update' })
 
@@ -48,6 +49,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
     if (b.prizeRand !== undefined) patch.prize_pence = b.prizeRand * 100
     if (b.maxPlayers !== undefined) patch.max_players = b.maxPlayers
     if (b.note !== undefined) patch.note = b.note || null
+    if (b.look !== undefined) patch.look = b.look
     if (b.disabled !== undefined) patch.disabled_at = b.disabled ? new Date().toISOString() : null
 
     const { data, error } = await auth.adminClient.from('golf_days').update(patch).eq('id', golfDayId).select('id').maybeSingle()

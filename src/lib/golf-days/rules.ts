@@ -13,6 +13,7 @@
  *
  * Nothing here imports server code, so the screens share it.
  */
+import type { GolfDayLook } from './look'
 
 /** A golf day's link is /golf-day/<slug>. Mirrors the table's check. */
 export const GOLF_DAY_SLUG_PATTERN = /^[a-z0-9-]{2,40}$/
@@ -126,6 +127,8 @@ export interface PublicGolfDay {
   closed: boolean
   full: boolean
   holes: GolfDayHole[]
+  /** The look set in the admin; null when it has none (the code theme or the Get Lucky look applies). */
+  look: GolfDayLook | null
 }
 
 export interface GolfDaySwing {
@@ -158,6 +161,9 @@ export interface AdminGolfDay {
   claimed: number
   holes: GolfDayHole[]
   createdAt: string
+  look: GolfDayLook | null
+  /** Courses among its holes with no club official to confirm a claim (Admin → Courses → Contacts). */
+  missingOfficials: string[]
 }
 
 /** The club all the holes belong to ("Royal Johannesburg & Kensington"), or the course names. */

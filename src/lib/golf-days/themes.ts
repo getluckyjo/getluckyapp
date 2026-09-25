@@ -1,10 +1,14 @@
 /**
  * How a golf day's screen looks. The facts (date, holes, prize, places)
- * live in the golf_days table and are edited in the admin; the look lives
- * here, with its artwork in public/golf-days/<slug>/, because a host's
- * branding is artwork, not data. A golf day with no entry here gets the
- * Get Lucky look.
+ * live in the golf_days table; so, since migration 031, does the look,
+ * set in /admin/golf-days (golf_days.look, src/lib/golf-days/look.ts).
+ *
+ * What a golf day's saved look leaves out comes from its entry here, then
+ * the Get Lucky look. The entries here are the looks the first golf days
+ * shipped with (their pictures are in public/golf-days/<slug>/), kept so
+ * their screens are right whether or not 031 has run.
  */
+import type { GolfDayLook } from './look'
 
 /** The picture at the top of a golf day's screen, from /public. */
 export interface GolfDayHero {
@@ -84,6 +88,19 @@ const THEMES: Record<string, GolfDayTheme> = {
   },
 }
 
-export function themeFor(slug: string): GolfDayTheme {
-  return THEMES[slug] ?? DEFAULT_THEME
+/** A golf day's look: its saved look over its entry here, over the Get Lucky look. */
+export function themeFor(slug: string, look?: GolfDayLook | null): GolfDayTheme {
+  const base = THEMES[slug] ?? DEFAULT_THEME
+  if (!look) return base
+  return {
+    hero: look.hero === undefined ? base.hero : look.hero,
+    host: look.host ?? base.host,
+    venue: look.venue === undefined ? base.venue : look.venue,
+    tagline: look.tagline ?? base.tagline,
+    ink: look.ink ?? base.ink,
+    accent: look.accent ?? base.accent,
+    paper: look.paper ?? base.paper,
+    page: look.page ?? base.page,
+    footnote: look.footnote === undefined ? base.footnote : look.footnote,
+  }
 }

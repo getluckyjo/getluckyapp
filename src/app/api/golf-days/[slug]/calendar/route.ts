@@ -13,6 +13,7 @@ import { apiError } from '@/lib/api/http'
 import { siteUrl } from '@/lib/email/layout'
 import { golfDayEvent, toIcs } from '@/lib/golf-days/calendar'
 import { golfDayBySlug, holesFor } from '@/lib/golf-days/load'
+import { parseLook } from '@/lib/golf-days/look'
 import { GOLF_DAY_REFUSALS, GOLF_DAY_SLUG_PATTERN } from '@/lib/golf-days/rules'
 import { themeFor } from '@/lib/golf-days/themes'
 
@@ -41,7 +42,7 @@ export async function GET(_request: Request, { params }: Ctx) {
       playsOn: day.plays_on,
       prizeZAR: Math.round(day.prize_pence / 100),
       holes,
-    }, { site: siteUrl(), venue: themeFor(day.slug).venue })
+    }, { site: siteUrl(), venue: themeFor(day.slug, parseLook(day.look)).venue })
 
     return new Response(toIcs(event, new Date()), {
       headers: {

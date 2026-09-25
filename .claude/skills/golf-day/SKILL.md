@@ -12,10 +12,12 @@ through the link get the golf day's tab in place of Icons and one free swing
 prize. Everyone else keeps Icons. Read `docs/golf-days.md` for how it works,
 and `supabase/migrations/029_golf_days.sql` for the rules.
 
-The facts (date, holes, prize, places) are data, set at `/admin/golf-days`
-with no deploy. The look (a host's photo and colours) is code, in
-`src/lib/golf-days/themes.ts` plus `public/golf-days/<slug>/`. A golf day
-with no theme gets the Get Lucky look, and needs no code at all.
+Everything is data, set at `/admin/golf-days` with no deploy: the facts
+(date, holes, prize, places), the look (an uploaded logo or photo, colours,
+host, tagline, small print; `golf_days.look`, migration 031) and the
+WhatsApp message to send. Only a drawn tab icon is code. Claude's part is
+the research (holes, the host's colours, the right words) and handing
+Johannes the values; he types them into the admin.
 
 ## 1. Get the details
 
@@ -62,17 +64,23 @@ Ask for anything missing. Do not guess the date, prize or venue.
 
 ## 3. Create it
 
-**Usually: the admin.** `/admin/golf-days` → New golf day: link, name, tab
-label, date, prize, players, then pick each hole (course, then hole). It
-answers with the link to copy.
+**The admin does it all** (docs/golf-days.md, "Adding a golf day"):
+`/admin/golf-days` → New golf day. Link, name, tab label, date, prize,
+players, holes (course, then hole), then the look (step 4), then save. The
+row answers with the link, and warns about a course with no club official
+or a tab label over 7 characters. Claude has no access to production, so
+hand Johannes the exact values to type, the hole choice with its reasons,
+and anything to upload.
 
-**When a branded look ships in the same pull request,** seed the golf day in
-a migration too, so it exists the moment the code does. Follow 029's pattern,
-idempotent:
+**A seed migration** only when a golf day must exist the moment a pull
+request merges (Bomb Squad and SaSwazi were seeded because their looks
+were code then). Follow 030's pattern, idempotent, with the look as JSON
+in `look` (src/lib/golf-days/look.ts says what it may hold):
 
 ```sql
-insert into public.golf_days (slug, name, tab_label, plays_on, prize_pence, max_players, note)
-values ('<slug>', '<Name>', '<Tab label>', date 'YYYY-MM-DD', <rand * 100>, <players>, '<venue; who covers the prize>')
+insert into public.golf_days (slug, name, tab_label, plays_on, prize_pence, max_players, note, look)
+values ('<slug>', '<Name>', '<Tab label>', date 'YYYY-MM-DD', <rand * 100>, <players>, '<venue; who covers the prize>',
+        '{"host": "<Host>", "venue": "<Venue>", "ink": "#rrggbb", "accent": "#rrggbb", "paper": "#rrggbb", "page": "#rrggbb"}'::jsonb)
 on conflict (slug) do nothing;
 
 insert into public.golf_day_holes (golf_day_id, hole_id)
@@ -87,48 +95,50 @@ on conflict do nothing;
 Repeat the second insert for each course. End with a verify `select` that
 lists the golf day's holes with par, distance, `is_active` and `is_partner`.
 Use the next free migration number. Add a row to
-`supabase/check-migrations.sql`.
+`supabase/check-migrations.sql`. Test it on a local Postgres (apply
+001 onwards, then run it twice).
 
 ## 4. Brand it (optional)
 
-1. The picture at the top is the theme's `hero`: `{ src, alt, width,
-   height, kind }`, with `width` and `height` the file's own.
-   - **A photo** (`kind: 'photo'`, Bomb Squad's): fills a rounded frame and
-     the label overlaps its foot. Put it in `public/golf-days/<slug>/hero.jpg`,
-     about 1000 px wide.
-   - **A logo** (`kind: 'logo'`, SaSwazi's sticker): shown whole, with its
-     transparent background, above the label. A crop would lose its edges
-     and banner. Save it as `public/golf-days/<slug>/logo.webp`, about
-     900 px wide, keeping the alpha. Don't repeat the logo's own slogan in
-     the `tagline`.
+The look is set in the admin too, beside a preview that is the player's
+screen's own card:
 
-   Brighten a photo if asked. Lift the shadows more than the highlights so
-   the sky does not blow out:
+1. **Picture.** Upload the host's logo or a photo. The admin resizes it to
+   a WebP of at most 1 000 px in the public `golf-day-art` bucket
+   (migration 031). A picture with a see-through background is a **logo**,
+   shown whole above the label (SaSwazi's sticker); otherwise a **photo**,
+   filling the top with the label over its foot (Bomb Squad's cans). The
+   choice can be switched. Brighten a dark photo before uploading it,
+   lifting the shadows more than the highlights so the sky does not blow
+   out, and look at a before and after side by side:
 
    ```bash
-   node -e "require('sharp')('<source>').resize({ width: 1000 }).modulate({ brightness: 1.18, saturation: 1.06 }).gamma(2.2, 1.9).jpeg({ quality: 82, mozjpeg: true }).toFile('public/golf-days/<slug>/hero.jpg')"
+   node -e "require('sharp')('<source>').resize({ width: 1000 }).modulate({ brightness: 1.18, saturation: 1.06 }).gamma(2.2, 1.9).jpeg({ quality: 82, mozjpeg: true }).toFile('<out>.jpg')"
    ```
-
-   Look at a before and after side by side before keeping it.
-2. Add a theme to `THEMES` in `src/lib/golf-days/themes.ts`, keyed by slug.
-   Take `ink`, `accent`, `paper` and `page` from the host's artwork. Use the
-   `accent` for rules and shadows only, never for text (gold on white is too
-   faint). Write a one-line `tagline`. Set `venue` when players know the
-   club by a shorter name than the courses table's ("Royal Johannesburg",
-   not "Royal Johannesburg & Kensington").
-3. An alcohol brand needs a `footnote` such as "<Brand>. Not for sale to
-   persons under the age of 18. Enjoy responsibly."
-4. Tab icon (optional, when the host has a simple mark): draw it as line
-   work in `src/components/icons/index.tsx`, like `BombSquadIcon` (stroke
-   2.6 in a 40-wide viewBox, `currentColor`), and key it by slug in
-   `GOLF_DAY_ICONS` in `src/components/layout/BottomTabBar.tsx`. Without
-   one the tab shows a pin flag, which is right for a logo that is a whole
-   scene (SaSwazi's). Compare it with the artwork at full size
-   and at tab size (about 27 px) before keeping it.
-5. Check it in a browser at 320 px and 390 px wide, and on a computer (the
+2. **Colours** are suggested from the picture: ink (type, lines, buttons),
+   accent (rules and the button's shadow, never text: gold on white is too
+   faint), card and page. The admin warns when ink on the card reads
+   under 7:1. Check the suggestion against the host's artwork; a photo's
+   accent comes out grey, so take it from the brand instead.
+3. **Words.** Host ("Host × Get Lucky"), the venue as players know it
+   ("Royal Johannesburg", not "Royal Johannesburg & Kensington"), the line
+   under the prize (not the logo's own slogan again), and for an alcohol
+   brand the 18+ line (one click).
+4. **Tab icon** (optional, code): when the host has a simple mark, draw it
+   as line work in `src/components/icons/index.tsx`, like `BombSquadIcon`
+   (stroke 2.6 in a 40-wide viewBox, `currentColor`), and key it by slug
+   in `GOLF_DAY_ICONS` in `src/components/layout/BottomTabBar.tsx`.
+   Without one the tab shows a pin flag, which is right for a logo that
+   is a whole scene (SaSwazi's). Compare it with the artwork at full size
+   and at tab size (about 27 px).
+5. **Check it** on a phone at 320 px and 390 px and on a computer (the
    app sits in a 375 px phone frame there), signed out and on the day. See
    "Checking the screen" below. Nothing on the label may run past its
    border.
+
+`src/lib/golf-days/themes.ts` still holds the looks Bomb Squad and SaSwazi
+shipped with, as the fallback under a saved look. A new golf day needs
+nothing there.
 
 ## 5. Before the link goes out
 
@@ -153,26 +163,26 @@ Give the person:
 - the go-live checklist from step 5, with anything still open.
 
 One link is enough: joining leads straight into adding the app to the home
-screen (docs/golf-days.md, "Home screen"), and joined players get an Add to
-calendar button with the link in the event. Neither needs setting up. For WhatsApp, give it in a plain
-block so the asterisks (WhatsApp's bold) survive:
+screen, and joined players get an Add to calendar button with the link in
+the event. The message comes from the admin's message button
+(src/lib/golf-days/message.ts holds its words; a test pins them); give it
+in a plain block so the asterisks (WhatsApp's bold) survive. Johannes
+likes it short and fun:
 
 ```
-*<Golf day> × Get Lucky* ⛳
+⛳ *<Golf day> × Get Lucky* 🍀
 
-Every player gets ONE free swing for *R<prize>* on <day and date>. Hole it and it's yours.
+One free swing. One hole. *R<prize>* if it drops on *<Friday 2 October>*. 💰
 
-*Before <day> (takes 2 minutes):*
-Tap the link, sign in and tap *Join*. Then add Get Lucky to your home screen when it asks.
+📲 *Before <Friday>:* tap the link, sign in, hit *Join*, then add it to your home screen and calendar.
 <link>
 
-*On the day:*
-At *<course> <n>* or *<course> <n>*, open the *<Tab label>* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
+🏌️ *On the day:* at *<course> <n>* or *<course> <n>*, open the *<Tab label>* tab, tap your hole and get a mate to film it.
 
-18+ only. One swing each.
-
-See you on the tee. Time to get lucky! 🍀
+18+. One swing each. Swing like the rent's due. 🍀
 ```
+
+On one course: "at <Venue>'s *16th*, … tap the hole …".
 
 ## Checking the screen
 

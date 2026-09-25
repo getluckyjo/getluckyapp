@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { z } from 'zod'
 import { uuid } from '@/lib/api/http'
 import { GOLF_DAY_SELECT, holesFor, type GolfDayRow } from './load'
+import { LookSchema, parseLook } from './look'
 import { golfDayPhase, type AdminGolfDay } from './rules'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,6 +23,8 @@ export const EditableFields = {
   maxPlayers: z.coerce.number().int().min(1).max(5000),
   holeIds: z.array(uuid).min(1, 'Pick at least one hole').max(6),
   note: z.string().trim().max(200).nullable(),
+  /** The look (src/lib/golf-days/look.ts); null goes back to the code theme or the Get Lucky look. */
+  look: LookSchema.nullable(),
 }
 
 interface Usage { players: number; swings: number; claimed: number }
@@ -40,6 +43,7 @@ export async function adminGolfDays(admin: Client, ids?: string[]): Promise<Admi
       .map(u => [u.golf_day_id, { players: Number(u.players ?? 0), swings: Number(u.swings ?? 0), claimed: Number(u.claimed ?? 0) }]),
   )
   const holes = await holesFor(admin, rows.map(r => r.id))
+  const officials = await coursesWithOfficials(admin, [...holes.values()].flat().map(h => h.course.id))
 
   return rows.map(r => {
     const u = byDay.get(r.id)
@@ -59,8 +63,21 @@ export async function adminGolfDays(admin: Client, ids?: string[]): Promise<Admi
       claimed: u?.claimed ?? 0,
       holes: holes.get(r.id) ?? [],
       createdAt: r.created_at,
+      look: parseLook(r.look),
+      missingOfficials: [...new Map((holes.get(r.id) ?? []).map(h => [h.course.id, h.course.name])).entries()]
+        .filter(([id]) => !officials.has(id)).map(([, name]) => name),
     }
   })
+}
+
+/** Which of these courses have a club official to confirm a claim by email (src/lib/claims/confirmation.ts). */
+async function coursesWithOfficials(admin: Client, courseIds: string[]): Promise<Set<string>> {
+  const ids = [...new Set(courseIds)]
+  if (!ids.length) return new Set()
+  // Every contact of a course is asked to confirm, as confirmation.ts does.
+  const { data, error } = await admin.from('course_contacts').select('course_id').in('course_id', ids)
+  if (error) throw error
+  return new Set((data ?? []).map((c: { course_id: string }) => c.course_id))
 }
 
 /** Point a golf day at exactly these holes. */

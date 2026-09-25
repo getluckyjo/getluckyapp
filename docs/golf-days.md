@@ -11,8 +11,34 @@ Nobody else sees any of it. Anyone who has not joined, signed out included,
 keeps the Icons tab. The golf day screen is not linked from anywhere else
 in the app.
 
-Set one up with the `golf-day` skill (`.claude/skills/golf-day/SKILL.md`),
-or by hand at `/admin/golf-days`.
+Set one up at `/admin/golf-days` (see "Adding a golf day" below), or ask
+Claude with the `golf-day` skill (`.claude/skills/golf-day/SKILL.md`),
+which also researches the holes.
+
+## Adding a golf day
+
+Everything is in `/admin/golf-days` → **New golf day**. No code, no deploy:
+
+1. **The facts:** the link (it can't change once sent), name, tab label
+   (7 characters fits best), date, prize, places, and the holes (course,
+   then hole; only par 3s of 140 m or more are offered).
+2. **The look:** upload the host's logo or a photo. It is resized and
+   stored, shown whole if it has a see-through background (a logo) or
+   filling the top if not (a photo), and colours are suggested from it.
+   Set the host ("Host × Get Lucky"), the venue as players know it, the
+   line under the prize, and for an alcohol brand the 18+ line (one
+   click). The preview beside the form is the player's screen itself, and
+   warns when the ink is hard to read on the card.
+3. **Save.** The row shows the link to copy, and warns about anything
+   still to do: a course with no club official to confirm a claim, a tab
+   label too long for small phones.
+4. **The message:** the speech-bubble button gives the WhatsApp message
+   for players, ready to copy, with the link, date, holes and tab filled
+   in. Change anything before copying it.
+
+Only a drawn tab icon, like Bomb Squad's bomb, needs code
+(`GOLF_DAY_ICONS` in `src/components/layout/BottomTabBar.tsx`); any
+other golf day's tab shows a flag.
 
 ## The Bomb Squad Golf Day
 
@@ -50,25 +76,19 @@ club's 2024 card (yellow tees). They were out of date from migration 019.
 
 ### Message to send with the link
 
-One link does it: joining leads straight into putting the app on the home
-screen (see "Home screen" below). For WhatsApp, paste as is; the asterisks
-are WhatsApp's bold.
+The admin's message button gives this (asterisks are WhatsApp's bold):
 
 ```
-*Bomb Squad Golf Day × Get Lucky* ⛳
+⛳ *Bomb Squad Golf Day × Get Lucky* 🍀
 
-Every player gets ONE free swing for *R100 000* on Friday 2 October. Hole it and it's yours.
+One free swing. One hole. *R100 000* if it drops on *Friday 2 October*. 💰
 
-*Before Friday (takes 2 minutes):*
-Tap the link, sign in and tap *Join*. Add Get Lucky to your home screen when it asks, and tap *Add to calendar* so the link is there on the day.
+📲 *Before Friday:* tap the link, sign in, hit *Join*, then add it to your home screen and calendar.
 https://www.getluckyholeinone.com/golf-day/bombsquad
 
-*On the day:*
-At *East 16* or *West 17*, open the *BS* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
+🏌️ *On the day:* at *East 16* or *West 17*, open the *BS* tab, tap your hole and get a mate to film it.
 
-18+ only. One swing each.
-
-See you on the tee. Time to get lucky! 🍀
+18+. One swing each. Swing like the rent's due. 🍀
 ```
 
 ## The SaSwazi Golf Trek
@@ -93,23 +113,19 @@ so it plays shorter than its length. The 7th was the alternative nearest
 (Black 170 and 202 yd, Red 148 and 195 yd for 7 and 16); its totals match
 SA Top 100's White 5 592 m and Blue 4 989 m.
 
-Migration 030 seeds it, and checks the hole.
+Migration 030 seeds it, and checks the hole. The admin's message:
 
 ```
-*SaSwazi Golf Trek × Get Lucky* ⛳
+⛳ *SaSwazi Golf Trek × Get Lucky* 🍀
 
-Every player gets ONE free swing for *R100 000* on Friday 2 October. Hole it and it's yours.
+One free swing. One hole. *R100 000* if it drops on *Friday 2 October*. 💰
 
-*Before Friday (takes 2 minutes):*
-Tap the link, sign in and tap *Join*. Add Get Lucky to your home screen when it asks, and tap *Add to calendar* so the link is there on the day.
+📲 *Before Friday:* tap the link, sign in, hit *Join*, then add it to your home screen and calendar.
 https://www.getluckyholeinone.com/golf-day/saswazi
 
-*On the day:*
-At Umdoni Park's *16th*, open the *SaSwazi* tab and tap the hole. Hand your phone to a playing partner to film your tee shot. That's it.
+🏌️ *On the day:* at Umdoni Park's *16th*, open the *SaSwazi* tab, tap the hole and get a mate to film it.
 
-18+ only. One swing each.
-
-It's going to be wild on the Wild Coast, boys. Time to get lucky! 🍀
+18+. One swing each. Swing like the rent's due. 🍀
 ```
 
 ## Every golf day
@@ -163,7 +179,10 @@ issuer account.
    list the Bomb Squad day with East 16 (152 m) and West 17 (185 m): both
    par 3, active and at partner courses. Then `030_saswazi_golf_trek.sql`:
    its select should list SaSwazi with Umdoni Park 16 (185 m), and Bomb
-   Squad with the tab label BS.
+   Squad with the tab label BS. Then `031_golf_day_looks.sql`, before the
+   admin can save a look: it adds `golf_days.look`, the public
+   `golf-day-art` bucket, and copies Bomb Squad's and SaSwazi's looks
+   onto their rows.
 2. **Deploy.** Merge the pull request.
 3. **Sign-ups.** Raise Supabase's email rate limit before the link goes
    out (Authentication → Rate Limits). The default of 30 an hour will stall
@@ -220,7 +239,12 @@ routes, the tab, the admin and both races, staged through the test fake.
 `__tests__/money/auth-flow.test.ts` covers the way back from sign-in. The
 calendar event is pinned in `golf-day.test.ts` too (dates, escaping, line
 folding, the reminder, the Google link and the route), and the Bomb Squad
-file was read back with Python's `icalendar` parser.
+file was read back with Python's `icalendar` parser. So are the looks
+(saved checked, shown to players, used by the calendar), the picture
+upload (a logo and a photo through sharp into the art bucket), and the
+missing-official warning. `__tests__/golf-day-look.test.ts` pins the look
+rules, the theme merge, the colours suggested from a picture, and the
+WhatsApp message word for word.
 
 Migrations 001–029 were applied to a local Postgres 16. Every trigger rule
 was exercised there: full, over, not joined, wrong hole, wrong prize, not

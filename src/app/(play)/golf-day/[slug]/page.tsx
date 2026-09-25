@@ -1,7 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
-import Image from 'next/image'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
@@ -18,11 +17,12 @@ import { promptInstall } from '@/lib/pwa/install'
 import { formatRand } from '@/lib/format'
 import { GOLF_DAY_TIER } from '@/lib/tiers'
 import { themeFor } from '@/lib/golf-days/themes'
+import { GolfDayHeroArt, GolfDayLabel, themeVars } from '@/components/golf-days/GolfDayCard'
 import { golfDayEvent, googleCalendarUrl } from '@/lib/golf-days/calendar'
 import { siteUrl } from '@/lib/email/layout'
 import { CalendarIcon } from '@/components/icons'
 import {
-  formatGolfDayDate, golfDayPath, golfDayVenue, oneCourse, shortCourseName,
+  formatGolfDayDate, golfDayPath, oneCourse, shortCourseName,
   type GolfDayHole, type GolfDayMe, type PublicGolfDay,
 } from '@/lib/golf-days/rules'
 
@@ -46,12 +46,6 @@ function takeJoinFlag(slug: string): boolean {
 function CourseName({ name, venue }: { name: string; venue: string | null }) {
   const dash = name.lastIndexOf(' – ')
   return <>{venue && dash !== -1 ? `${venue} – ${name.slice(dash + 3)}` : name}</>
-}
-
-/** "Bomb Squad Golf Day" sets as the host, then GOLF DAY on a line of its own; a Golf Trek or Golf Tour too. */
-function nameLines(name: string): [string, string | null] {
-  const m = /^(.*\S)\s+(golf (?:day|trek|tour))$/i.exec(name.trim())
-  return m ? [m[1], m[2]] : [name, null]
 }
 
 /** "East · Hole 16" over two courses; "Hole 16" when there is only the one (its club is on the label). */
@@ -86,7 +80,6 @@ export default function GolfDayPage() {
   const { user, loading: authLoading } = useAuth()
   const { selectCourse, selectTier, setPrizeZAR, setBetId, resetSession } = useBet()
   const refreshTick = useRefreshSignal()
-  const theme = themeFor(slug)
 
   const [data, setData] = useState<Loaded | null>(null)
   const [missing, setMissing] = useState(false)
@@ -205,27 +198,20 @@ export default function GolfDayPage() {
     }
   }
 
-  const vars = {
-    '--gd-ink': theme.ink, '--gd-accent': theme.accent, '--gd-paper': theme.paper, '--gd-page': theme.page,
-  } as CSSProperties
-
   const golfDay = data?.golfDay
-  const [nameTop, nameBottom] = golfDay ? nameLines(golfDay.name) : ['', null]
+  // The code theme for this link at once, then the look set in the admin once the golf day has loaded.
+  const theme = themeFor(slug, golfDay?.look)
   const me = data?.me ?? null
   const swingHole = me?.swing ? golfDay?.holes.find(h => h.holeId === me.swing!.holeId) ?? null : null
 
   return (
     <PhoneFrame statusTheme="dark">
-      <div className={`v2-screen gd-screen${theme.hero ? ' gd-branded' : ''}`} style={vars}>
+      <div className={`v2-screen gd-screen${theme.hero ? ' gd-branded' : ''}`} style={themeVars(theme)}>
         <PullToRefresh />
         <AppHeader tone="light" />
 
         <div className="vf-scroll gd-scroll">
-          {theme.hero && (
-            <div className={`gd-hero gd-hero--${theme.hero.kind}`}>
-              <Image src={theme.hero.src} alt={theme.hero.alt} width={theme.hero.width} height={theme.hero.height} sizes="480px" priority />
-            </div>
-          )}
+          {theme.hero && <GolfDayHeroArt hero={theme.hero} />}
 
           {missing ? (
             <section className="gd-label">
@@ -243,14 +229,7 @@ export default function GolfDayPage() {
             </section>
           ) : (
             <>
-              <section className="gd-label">
-                <p className="gd-kicker">{theme.host} <span aria-hidden>×</span> Get Lucky</p>
-                <h1 className="gd-name">{nameTop}{nameBottom && <><br />{nameBottom}</>}</h1>
-                <p className="gd-prize">{formatRand(golfDay.prizeZAR)}</p>
-                <p className="gd-band"><span>Free swing</span></p>
-                <p className="gd-meta">{theme.venue ?? golfDayVenue(golfDay.holes)}<br />{formatGolfDayDate(golfDay.playsOn)}</p>
-                <p className="gd-tagline">{theme.tagline}</p>
-              </section>
+              <GolfDayLabel theme={theme} name={golfDay.name} prizeZAR={golfDay.prizeZAR} playsOn={golfDay.playsOn} holes={golfDay.holes} />
 
               <section className="gd-action" aria-live="polite">
                 {error && <div className="auth-error" role="alert">{error}</div>}
