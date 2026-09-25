@@ -21,7 +21,7 @@ or by hand at `/admin/golf-days`.
 | Link | `https://www.getluckyholeinone.com/golf-day/bombsquad` |
 | Date | Friday 2 October 2026 (the swing works 00:00–23:59, South African time) |
 | Venue | Royal Johannesburg & Kensington, East and West courses |
-| Holes | East 16, 152 m from the club tees; West 17, 185 m from the yellow tees (161 m from the white) |
+| Holes | East 16, 152 m from the club tees; West 17, 161 m from the white tees (where golf days play it) |
 | Prize | R100 000, covered by Get Lucky (not insured by Indwe) |
 | Places | 200 |
 | Tab | "Bomb Squad" |
@@ -38,8 +38,12 @@ scorecards:
   away on the right, and is 185 m from the yellow tees or 161 m from the
   white.
 
-The app shows West 17 at 185 m. If the golf day plays it off the whites,
-set it to 161 m in Admin → Courses so the screen matches the tee.
+Golf days at Royal normally play the white tees, so production has West
+17 at 161 m (set by hand on 25 September 2026). Migration 029 on its own
+leaves it at 185 m from the yellow tees. The East's scorecard names its
+tees Championship, Club, Executive and Classic, and East 16 is shown from
+the Club tee (152 m). From the Executive tee it is 127 m, under the app's
+140 m minimum.
 
 Migration 029 also corrects the West course's par 3 distances to the
 club's 2024 card (yellow tees). They were out of date from migration 019.
@@ -66,12 +70,13 @@ club's 2024 card (yellow tees). They were out of date from migration 019.
    200 players signing up in one evening. Ask players to sign up before
    the day, not at registration: 200 people on one clubhouse Wi-Fi at once
    is the busiest moment the app could have.
-4. **Claims.** A claim asks the club to confirm by email. Check that Royal
-   Johannesburg East and West have a club official at Admin → Courses →
-   Contacts.
-5. **Terms.** `/terms` says every prize is insured by Indwe. That is not
-   true of a golf day prize. The golf day screen says the prize is paid by
-   Get Lucky, but the terms page needs a line for golf days too.
+4. **Claims.** A claim asks the club to confirm by email. Johannes is the
+   club official for Royal Johannesburg East and West (Admin → Courses →
+   Contacts, 25 September 2026). Every claim at either course, golf day or
+   paid, emails him.
+5. **Terms.** `/terms` says every prize is insured by Indwe. The golf day
+   screen says the prize is paid by Get Lucky. Johannes chose to leave the
+   terms as they are (25 September 2026).
 6. **Dry run.** At `/admin/golf-days`, make a test golf day with today's
    date and one hole. Open its link on two phones, join, take a swing, film
    it and declare a miss. Then switch it off.
