@@ -48,6 +48,14 @@ describe('safeNext', () => {
   // admin to sign in and back. Landing there grants nothing: the gate asks
   // the server again on arrival, and a non-admin is told so on the screen.
   // The match is exact, so nothing deeper in the admin is a landing place.
+  it('allows a golf day\'s link, and nothing that only looks like one', () => {
+    expect(safeNext('/golf-day/bombsquad')).toBe('/golf-day/bombsquad')
+    expect(safeNext('/golf-day/club-day-2027')).toBe('/golf-day/club-day-2027')
+    for (const bad of ['/golf-day/', '/golf-day/x', '/golf-day/Bomb', '/golf-day/bombsquad/extra', '/golf-day/bombsquad?x=1', '//golf-day/bombsquad', '/golf-day/../admin']) {
+      expect(safeNext(bad), String(bad)).toBe('/welcome')
+    }
+  })
+
   it('allows /admin itself but nothing built from it', () => {
     expect(safeNext('/admin')).toBe('/admin')
     for (const bad of ['/admin/payments', '/admin?x=1', '/adminx', '/admin/']) {
@@ -101,6 +109,19 @@ describe('finishSignIn', () => {
     expect(location(res)).toBe(`${ORIGIN}/age-check`)
     expect(sendSpy).not.toHaveBeenCalled()
     expect(db.rows('outbox')).toHaveLength(0)
+  })
+
+  // A golf day's player signs in from its link and must come back to it to
+  // join, so the link rides through the 18+ check. Nothing else does.
+  it('a first-timer from a golf day link goes through the age gate and back to the link', async () => {
+    const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/golf-day/bombsquad')
+    expect(location(res)).toBe(`${ORIGIN}/age-check?next=%2Fgolf-day%2Fbombsquad`)
+  })
+
+  it('an age-verified player from a golf day link lands on it', async () => {
+    db.seed('profiles', { id: USER_A.id, onboarding_done: true, age_verified_at: '2026-01-01T00:00:00Z' })
+    const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/golf-day/bombsquad')
+    expect(location(res)).toBe(`${ORIGIN}/golf-day/bombsquad`)
   })
 
   it('age-verified returning user lands on the requested safe path', async () => {

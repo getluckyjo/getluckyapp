@@ -18,6 +18,7 @@ PayFast · Resend · Sentry · Vercel.
 | What each remediation batch changed and how to test it | `docs/batch-*.md` |
 | Going live with PayFast | [`docs/payfast-go-live.md`](./docs/payfast-go-live.md) |
 | Promo codes (an extra free swing per code) | [`docs/promo-codes.md`](./docs/promo-codes.md) |
+| Golf days (a free swing for every player at a sponsored golf day, via its own link) | [`docs/golf-days.md`](./docs/golf-days.md), and the `golf-day` skill in `.claude/skills/` |
 | Sign-in and the branded auth email | [`docs/auth-email-setup.md`](./docs/auth-email-setup.md) |
 | Design tokens and screen comps | [`design/`](./design/) |
 

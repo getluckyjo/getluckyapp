@@ -30,6 +30,8 @@ interface BetSession {
   selectedCourse: Course | null
   selectedHole: Hole | null
   selectedTier: BetTier | null
+  /** The prize when it is not the tier's: a golf day swing's, set per golf day. */
+  prizeZAR: number | null
   paymentIntentId: string | null
   betId: string | null
   videoBlob: Blob | null
@@ -41,6 +43,7 @@ interface BetSession {
 interface BetContextType extends BetSession {
   selectCourse: (course: Course, hole: Hole) => void
   selectTier: (tier: BetTier) => void
+  setPrizeZAR: (prize: number) => void
   confirmPayment: (intentId: string) => void
   setBetId: (id: string) => void
   setVideoBlob: (blob: Blob) => void
@@ -53,6 +56,7 @@ const defaultSession: BetSession = {
   selectedCourse: null,
   selectedHole: null,
   selectedTier: null,
+  prizeZAR: null,
   paymentIntentId: null,
   betId: null,
   videoBlob: null,
@@ -69,8 +73,12 @@ export function BetProvider({ children }: { children: ReactNode }) {
   function selectCourse(course: Course, hole: Hole) {
     setSession(s => ({ ...s, selectedCourse: course, selectedHole: hole }))
   }
+  // A new tier clears any golf day prize; the golf day screen sets its own after.
   function selectTier(tier: BetTier) {
-    setSession(s => ({ ...s, selectedTier: tier }))
+    setSession(s => ({ ...s, selectedTier: tier, prizeZAR: null }))
+  }
+  function setPrizeZAR(prize: number) {
+    setSession(s => ({ ...s, prizeZAR: prize }))
   }
   function confirmPayment(intentId: string) {
     setSession(s => ({ ...s, paymentIntentId: intentId }))
@@ -145,6 +153,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
         ...session,
         selectCourse,
         selectTier,
+        setPrizeZAR,
         confirmPayment,
         setBetId,
         setVideoBlob,

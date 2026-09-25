@@ -26,7 +26,7 @@ export type Json =
 export type WitnessRole = 'witness' | 'club_official'
 export type WitnessSource = 'claimant' | 'course'
 export type WitnessResponse = 'confirmed' | 'denied'
-export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6' | 'tier_free' | 'tier_promo'
+export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6' | 'tier_free' | 'tier_promo' | 'tier_golf_day'
 export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
 export type LeadLane = 'partner' | 'investor'
@@ -204,6 +204,7 @@ export interface Database {
           risk_evaluated_at: string | null
           payout_reference: string | null
           promo_code_id: string | null
+          golf_day_id: string | null
           declared_result: 'miss' | 'win' | null
           declared_at: string | null
           expires_at: string
@@ -243,6 +244,7 @@ export interface Database {
           risk_evaluated_at?: string | null
           payout_reference?: string | null
           promo_code_id?: string | null
+          golf_day_id?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -593,6 +595,57 @@ export interface Database {
         Update: { note?: string | null }
         Relationships: []
       }
+      golf_days: {
+        Row: {
+          id: string
+          slug: string
+          name: string
+          tab_label: string
+          plays_on: string
+          prize_pence: number
+          max_players: number
+          note: string | null
+          disabled_at: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          slug: string
+          name: string
+          tab_label: string
+          plays_on: string
+          prize_pence: number
+          max_players: number
+          note?: string | null
+          disabled_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          name?: string
+          tab_label?: string
+          plays_on?: string
+          prize_pence?: number
+          max_players?: number
+          note?: string | null
+          disabled_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      golf_day_holes: {
+        Row: { golf_day_id: string; hole_id: string }
+        Insert: { golf_day_id: string; hole_id: string }
+        Update: never
+        Relationships: []
+      }
+      golf_day_players: {
+        Row: { golf_day_id: string; user_id: string; joined_at: string }
+        Insert: { golf_day_id: string; user_id: string }
+        Update: never
+        Relationships: []
+      }
       promo_codes: {
         Row: {
           id: string
@@ -726,6 +779,10 @@ export interface Database {
       admin_revenue_by_course: {
         Args: Record<string, never>
         Returns: { course_id: string; course_name: string; bet_count: number; revenue_cents: number }[]
+      }
+      admin_golf_day_usage: {
+        Args: Record<string, never>
+        Returns: { golf_day_id: string; players: number; swings: number; claimed: number }[]
       }
       admin_promo_code_usage: {
         Args: Record<string, never>

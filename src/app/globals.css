@@ -534,6 +534,10 @@ body {
   transition: opacity 0.15s;
 }
 .tabbar-tab.is-active .tabbar-label { opacity: 1; font-size: 14px; letter-spacing: 0.02em; }
+/* A golf day's tab name (up to 12 characters) in place of Icons: smaller, and
+   never wider than its column, so it cannot run into Account. */
+.tabbar-tab--long .tabbar-label,
+.tabbar-tab--long.is-active .tabbar-label { font-size: 10.5px; letter-spacing: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── SCREEN HEADER (burger + corner sticker) ── */
 .app-header {
@@ -2187,3 +2191,79 @@ button, [role="button"], [role="tab"] {
 .inst-share { margin: 4px 0 18px; }
 .inst-foot { font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.55; color: var(--green); opacity: 0.7; text-align: center; margin: 8px 0 0; }
 .inst-foot a { color: var(--green); font-weight: 700; text-decoration: none; }
+
+/* ── GOLF DAY (src/app/(play)/golf-day/[slug]) ──
+   A sponsored golf day's screen. Colours come from the host's theme
+   (src/lib/golf-days/themes.ts) as --gd-* on the screen. The label card
+   borrows the Bomb Squad can: white stock, a double rule in the ink colour,
+   spaced capitals, a framed band. The accent is decoration only (rules and
+   the button's shadow): gold on white is too faint for text. */
+.gd-screen { background: var(--gd-page); color: var(--gd-ink); }
+.gd-scroll { padding-top: 6px; }
+.gd-hero { border-radius: 16px; overflow: hidden; aspect-ratio: 5 / 4; background: #dfe3e0; }
+.gd-hero img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 42%; display: block; }
+.gd-label {
+  position: relative; z-index: 1;
+  margin: 0 6px 16px; padding: 22px 18px 18px;
+  background: var(--gd-paper); color: var(--gd-ink); text-align: center;
+  border: 2px solid var(--gd-ink); border-radius: 14px;
+  outline: 1px solid var(--gd-ink); outline-offset: -7px;
+  box-shadow: 0 10px 30px rgba(20, 38, 28, 0.14);
+  animation: fadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.gd-hero + .gd-label { margin-top: -46px; }
+.gd-kicker {
+  margin: 0 auto 10px; padding-bottom: 8px; width: max-content; max-width: 100%;
+  border-bottom: 2px solid var(--gd-accent);
+  font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;
+}
+.gd-name { margin: 0; font-family: var(--font-heading); font-size: clamp(22px, 6.4vw, 27px); line-height: 1.05; letter-spacing: 0.04em; text-transform: uppercase; }
+.gd-prize { margin: 8px 0 10px; font-family: var(--font-heading); font-weight: 800; font-size: clamp(46px, 14vw, 58px); line-height: 1; letter-spacing: 0.01em; }
+.gd-band { margin: 0; }
+.gd-band span {
+  display: inline-block; padding: 6px 14px;
+  border: 2px solid var(--gd-ink); outline: 1px solid var(--gd-ink); outline-offset: 2px;
+  font-family: var(--font-heading); font-size: 14px; font-weight: 800; letter-spacing: 0.26em; text-transform: uppercase;
+}
+.gd-meta { margin: 14px 0 0; font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 0.12em; line-height: 1.6; text-transform: uppercase; }
+.gd-tagline { margin: 10px 0 0; font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.45; opacity: 0.85; }
+.gd-copy { margin: 0 0 12px; font-family: 'Inter', sans-serif; font-size: var(--text-md); line-height: 1.45; }
+.gd-action { display: flex; flex-direction: column; gap: 10px; margin: 0 0 16px; }
+.gd-action .auth-error { margin: 0; }
+.gd-status {
+  margin: 0; padding: 12px 14px; border-radius: 10px;
+  background: var(--gd-paper); border-left: 4px solid var(--gd-accent);
+  font-family: 'Inter', sans-serif; font-size: var(--text-body); line-height: 1.45;
+}
+.gd-pick { display: grid; gap: 10px; }
+.gd-hole {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  width: 100%; padding: 14px 16px; border: none; border-radius: 12px; cursor: pointer; text-align: left;
+  background: var(--gd-ink); color: #fff; box-shadow: inset 5px 0 0 var(--gd-accent);
+}
+.gd-hole:active { transform: scale(0.99); }
+.gd-hole:disabled { opacity: 0.6; cursor: default; }
+.gd-hole-name { font-family: var(--font-heading); font-size: 21px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; line-height: 1.1; }
+.gd-hole-meta { font-family: 'Inter', sans-serif; font-size: var(--text-sm); opacity: 0.8; }
+.gd-card { margin: 0 0 12px; padding: 16px; border-radius: 12px; background: var(--gd-paper); }
+.gd-h2 { margin: 0 0 10px; font-family: var(--font-heading); font-size: 17px; letter-spacing: 0.08em; text-transform: uppercase; }
+.gd-holes { list-style: none; margin: 0; padding: 0; }
+.gd-holes li {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 9px 0;
+  border-bottom: 1px dashed rgba(31, 58, 47, 0.22);
+  font-family: 'Inter', sans-serif; font-size: var(--text-body);
+}
+.gd-holes li:last-child { border-bottom: none; }
+.gd-holes span { opacity: 0.75; white-space: nowrap; }
+.gd-steps { margin: 0; padding-left: 20px; list-style: decimal outside; font-family: 'Inter', sans-serif; font-size: var(--text-body); line-height: 1.45; }
+.gd-steps li { margin-bottom: 8px; padding-left: 2px; }
+.gd-steps li::marker { font-weight: 800; }
+.gd-small { margin: 8px 0 0; font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.5; opacity: 0.75; }
+.gd-rules, .gd-footnote { margin: 4px 8px 10px; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.5; opacity: 0.75; text-align: center; }
+.gd-rules a { color: inherit; font-weight: 700; }
+.gd-footnote { font-weight: 700; letter-spacing: 0.02em; }
+/* A branded golf day buttons in the host's ink, with the accent as the offset. */
+.gd-branded .btn-lime { background: var(--gd-ink); color: #fff; box-shadow: 4px 5px 0 var(--gd-accent); }
+.gd-branded .btn-lime:hover { background: var(--gd-ink); filter: brightness(1.12); }
+.gd-branded .btn-lime:active { box-shadow: 2px 2px 0 var(--gd-accent); }
+.gd-branded .stake-sheet-title, .gd-branded .stake-rows dt, .gd-branded .stake-rows dd, .gd-branded .stake-free-note { color: var(--gd-ink); }

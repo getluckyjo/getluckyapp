@@ -21,8 +21,10 @@
  * Two constraints from the schema are modelled because the handlers branch on
  * them: the partial unique index on `bets.payment_intent_id` (error 23505) and
  * the unique `payfast_payments.m_payment_id` that `upsert(onConflict)` targets.
- * So is one trigger: migration 027's promo code check on inserting a bet
- * (error P0001), which runs before the unique check as a BEFORE trigger does.
+ * So are the triggers the routes branch on: migration 027's promo code check
+ * and migration 029's golf day checks, on inserting a bet or a golf day
+ * player (error P0001), which run before the unique check as a BEFORE
+ * trigger does. A unique key can span columns (golf_day_players).
  * `db.beforeInsert` lets a test slip a row in just ahead of an insert, which
  * is how a race between a route's check and its write is staged.
  */
@@ -50,30 +52,65 @@ interface Result<T = unknown> {
   count?: number | null
 }
 
-const UNIQUE: Record<string, string[]> = {
-  bets: ['payment_intent_id'],
+const UNIQUE: Record<string, (string | string[])[]> = {
+  bets: ['payment_intent_id', ['golf_day_id', 'user_id']],
   payfast_payments: ['m_payment_id'],
   verifications: ['bet_id'],
   beta_access: ['value'],
   promo_codes: ['code'],
+  golf_days: ['slug'],
+  golf_day_holes: [['golf_day_id', 'hole_id']],
+  golf_day_players: [['golf_day_id', 'user_id']],
 }
+
+/** Midnight at the start of a golf day in South Africa (+02:00), as migration 029 reads plays_on. */
+const golfDayOpens = (playsOn: unknown) => Date.parse(`${String(playsOn)}T00:00:00+02:00`)
+const DAY_MS = 24 * 3_600_000
 
 type Trigger = (db: FakeDb, row: Row) => PostgrestError | null
 
+const refuse = (message: string): PostgrestError => ({ code: 'P0001', message })
+
 /** BEFORE INSERT triggers, per table. */
 const BEFORE_INSERT: Record<string, Trigger> = {
-  // Mirrors enforce_promo_code() in migration 027.
-  bets: (db, row) => {
-    if (row.promo_code_id == null) return null
-    const refuse = (message: string): PostgrestError => ({ code: 'P0001', message })
-    const code = db.find('promo_codes', c => c.id === row.promo_code_id)
-    if (!code) return refuse('PROMO_CODE_INVALID')
-    if (code.disabled_at) return refuse('PROMO_CODE_DISABLED')
-    if (Date.parse(String(code.expires_at)) <= Date.now()) return refuse('PROMO_CODE_EXPIRED')
-    const used = db.rows('bets').filter(b => b.promo_code_id === row.promo_code_id).length
-    if (used >= Number(code.max_uses)) return refuse('PROMO_CODE_EXHAUSTED')
+  bets: (db, row) => golfDaySwingTrigger(db, row) ?? promoCodeTrigger(db, row),
+  // Mirrors enforce_golf_day_join() in migration 029.
+  golf_day_players: (db, row) => {
+    const day = db.find('golf_days', d => d.id === row.golf_day_id)
+    if (!day) return refuse('GOLF_DAY_NOT_FOUND')
+    if (day.disabled_at) return refuse('GOLF_DAY_CLOSED')
+    if (Date.now() >= golfDayOpens(day.plays_on) + DAY_MS) return refuse('GOLF_DAY_OVER')
+    const players = db.rows('golf_day_players').filter(p => p.golf_day_id === row.golf_day_id).length
+    if (players >= Number(day.max_players)) return refuse('GOLF_DAY_FULL')
     return null
   },
+}
+
+// Mirrors enforce_golf_day_swing() in migration 029.
+function golfDaySwingTrigger(db: FakeDb, row: Row): PostgrestError | null {
+  if (row.golf_day_id == null) return null
+  const day = db.find('golf_days', d => d.id === row.golf_day_id)
+  if (!day) return refuse('GOLF_DAY_NOT_FOUND')
+  if (day.disabled_at) return refuse('GOLF_DAY_CLOSED')
+  const now = Date.now()
+  if (now < golfDayOpens(day.plays_on)) return refuse('GOLF_DAY_NOT_YET')
+  if (now >= golfDayOpens(day.plays_on) + DAY_MS) return refuse('GOLF_DAY_OVER')
+  if (!db.find('golf_day_players', p => p.golf_day_id === row.golf_day_id && p.user_id === row.user_id)) return refuse('GOLF_DAY_NOT_JOINED')
+  if (!db.find('golf_day_holes', h => h.golf_day_id === row.golf_day_id && h.hole_id === row.hole_id)) return refuse('GOLF_DAY_WRONG_HOLE')
+  if (Number(row.stake_pence) !== 0 || Number(row.potential_win_pence) !== Number(day.prize_pence)) return refuse('GOLF_DAY_WRONG_PRIZE')
+  return null
+}
+
+// Mirrors enforce_promo_code() in migration 027.
+function promoCodeTrigger(db: FakeDb, row: Row): PostgrestError | null {
+  if (row.promo_code_id == null) return null
+  const code = db.find('promo_codes', c => c.id === row.promo_code_id)
+  if (!code) return refuse('PROMO_CODE_INVALID')
+  if (code.disabled_at) return refuse('PROMO_CODE_DISABLED')
+  if (Date.parse(String(code.expires_at)) <= Date.now()) return refuse('PROMO_CODE_EXPIRED')
+  const used = db.rows('bets').filter(b => b.promo_code_id === row.promo_code_id).length
+  if (used >= Number(code.max_uses)) return refuse('PROMO_CODE_EXHAUSTED')
+  return null
 }
 
 export class FakeDb {
@@ -230,14 +267,15 @@ export class Builder implements PromiseLike<Result> {
   }
 
   private uniqueViolation(row: Row, ignoreId?: unknown): PostgrestError | null {
-    for (const col of UNIQUE[this.table] ?? []) {
-      if (row[col] == null) continue
-      const clash = this.db.rows(this.table).find(r => r[col] === row[col] && r.id !== ignoreId)
+    for (const key of UNIQUE[this.table] ?? []) {
+      const cols = Array.isArray(key) ? key : [key]
+      if (cols.some(c => row[c] == null)) continue
+      const clash = this.db.rows(this.table).find(r => cols.every(c => r[c] === row[c]) && r !== row && r.id !== ignoreId)
       if (clash) {
         return {
           code: '23505',
-          message: `duplicate key value violates unique constraint "${this.table}_${col}_key"`,
-          details: `Key (${col})=(${String(row[col])}) already exists.`,
+          message: `duplicate key value violates unique constraint "${this.table}_${cols.join('_')}_key"`,
+          details: `Key (${cols.join(', ')})=(${cols.map(c => String(row[c])).join(', ')}) already exists.`,
         }
       }
     }
@@ -455,6 +493,18 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           byCode.set(id, u)
         }
         return { data: [...byCode.values()], error: null }
+      }
+      // Mirrors migration 029: per golf day, players joined, swings, swings claimed.
+      if (fn === 'admin_golf_day_usage') {
+        return { data: db.rows('golf_days').map(d => {
+          const swings = db.rows('bets').filter(b => b.golf_day_id === d.id)
+          return {
+            golf_day_id: d.id,
+            players: db.rows('golf_day_players').filter(p => p.golf_day_id === d.id).length,
+            swings: swings.length,
+            claimed: swings.filter(b => ['claimed', 'verified', 'paid'].includes(String(b.status))).length,
+          }
+        }), error: null }
       }
       if (fn === 'beta_check') {
         const { p_email, p_code } = args as { p_email: string | null; p_code: string | null }

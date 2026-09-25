@@ -65,7 +65,7 @@ function AuthForm() {
 
   async function sendLink(trimmed: string) {
     setBusy('email')
-    const { error: linkError } = await signInWithMagicLink(trimmed)
+    const { error: linkError } = await signInWithMagicLink(trimmed, next ? landing : undefined)
     setBusy(null)
     if (linkError) {
       setError(/rate|too many|seconds/i.test(linkError)

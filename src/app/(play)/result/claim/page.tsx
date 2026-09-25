@@ -38,7 +38,7 @@ interface UploadStep {
  */
 export default function ClaimPage() {
   const router = useRouter()
-  const { betId, resetSession, videoBlob, selectedTier, selectedCourse, selectedHole } = useBet()
+  const { betId, resetSession, videoBlob, selectedTier, prizeZAR, selectedCourse, selectedHole } = useBet()
   const { user } = useAuth()
   // tierByKey, not BET_TIERS: a free swing is a real bet with a real prize.
   const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
@@ -226,7 +226,7 @@ export default function ClaimPage() {
           <div className="vf-prize cl-prize">
             <div>
               <div className="vf-prize-label">Pending prize</div>
-              <div className="vf-prize-amount">R{tierData.winZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}</div>
+              <div className="vf-prize-amount">R{(prizeZAR ?? tierData.winZAR).toLocaleString('en-ZA').replace(/,/g, ' ')}</div>
             </div>
             {selectedCourse && selectedHole && (
               <div className="vf-prize-meta">{selectedCourse.name} · Hole {selectedHole.holeNumber} · {selectedHole.distanceMetres}m</div>

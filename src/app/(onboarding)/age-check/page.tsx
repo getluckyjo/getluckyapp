@@ -6,6 +6,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
 import StepBar from '@/components/layout/StepBar'
 import { useAuth } from '@/context/AuthContext'
+import { safeNext } from '@/lib/auth/next-path'
 
 // Whole years between a date of birth and today.
 function ageFromDob(dob: string): number {
@@ -89,7 +90,9 @@ export default function AgeCheckPage() {
     }
 
     setLoading(false)
-    router.push('/welcome')
+    // Back to where sign-in started (a golf day's link), else All set. Read
+    // at submit time, so the page needs no search-params boundary.
+    router.push(safeNext(new URLSearchParams(window.location.search).get('next')))
   }
 
   if (blocked) {

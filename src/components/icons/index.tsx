@@ -49,6 +49,16 @@ export function ClubIcon({ size = 24, ...rest }: IconProps) {
   )
 }
 
+/** Tab bar — a golf day (pin flag outline), in the Icons tab's place for its players. */
+export function FlagIcon({ size = 24, ...rest }: IconProps) {
+  return (
+    <svg {...base(size, '0 0 40 44', 40 / 44)} {...rest}>
+      <path d="M6.5,2.5a1.5,1.5,0,0,1,3,0V39h5.5a1.5,1.5,0,0,1,0,3H1a1.5,1.5,0,0,1,0-3H6.5Z" />
+      <path fillRule="evenodd" d="M10.2,3.2,37.1,12.6a1,1,0,0,1,0,1.9L10.2,23.9ZM13.2,7.4V19.7l17.6-6.15Z" />
+    </svg>
+  )
+}
+
 /** Tab bar — Account (person outline). */
 export function AccountIcon({ size = 24, ...rest }: IconProps) {
   return (
