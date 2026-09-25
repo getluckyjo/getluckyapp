@@ -17,6 +17,7 @@ import { promptInstall } from '@/lib/pwa/install'
 import { formatRand } from '@/lib/format'
 import { GOLF_DAY_TIER } from '@/lib/tiers'
 import { themeFor } from '@/lib/golf-days/themes'
+import { golfDayEvent, googleCalendarUrl, venueOf } from '@/lib/golf-days/calendar'
 import {
   formatGolfDayDate, golfDayPath, shortCourseName,
   type GolfDayHole, type GolfDayMe, type PublicGolfDay,
@@ -36,13 +37,6 @@ function takeJoinFlag(slug: string): boolean {
   } catch {
     return false // storage blocked: they tap Join instead
   }
-}
-
-/** The club all the holes belong to ("Royal Johannesburg & Kensington"), or the course names. */
-function venueOf(holes: GolfDayHole[]): string {
-  const names = [...new Set(holes.map(h => h.course.name))]
-  const clubs = [...new Set(names.map(n => (n.includes(' – ') ? n.slice(0, n.lastIndexOf(' – ')) : n)))]
-  return clubs.length === 1 ? clubs[0] : names.join(' · ')
 }
 
 /** A course as the golf day names its venue: "Royal Johannesburg – West". */
@@ -163,6 +157,25 @@ export default function GolfDayPage() {
     router.push(`/auth?next=${encodeURIComponent(golfDayPath(slug))}`)
   }
 
+  /**
+   * The day, its holes and the link in the player's own calendar, so the
+   * link is never lost. Android: Google Calendar's add page, which opens the
+   * Calendar app. iPhone and computers: the .ics file, which Safari offers
+   * to add in one tap.
+   */
+  function addToCalendar() {
+    if (!data?.golfDay) return
+    track('golf_day_calendar', { golf_day: slug, platform: platform ?? 'unknown' })
+    if (platform === 'android') {
+      const day = data.golfDay
+      const event = golfDayEvent(day, theme.venue ?? venueOf(day.holes), window.location.origin)
+      window.open(googleCalendarUrl(event), '_blank', 'noopener')
+    } else {
+      // A file, not a page: a plain navigation, so Safari opens it as Add to Calendar.
+      window.open(`/api/golf-days/${encodeURIComponent(slug)}/calendar`, '_self')
+    }
+  }
+
   /** Put the bet on this session's context, exactly as the stake screen does, and go film it. */
   function goRecord(betId: string, hole: GolfDayHole, prizeZAR: number) {
     resetSession()
@@ -264,6 +277,7 @@ export default function GolfDayPage() {
                   onSignIn={signInToJoin}
                   onJoin={() => join(true)}
                   onInstall={offerInstall ? () => setInstallSheet('asked') : undefined}
+                  onCalendar={addToCalendar}
                   onPick={setPicked}
                   onResume={() => swingHole && me?.swing && goRecord(me.swing.betId, swingHole, golfDay.prizeZAR)}
                 />
@@ -337,7 +351,7 @@ export default function GolfDayPage() {
   )
 }
 
-function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPick, onResume, onInstall }: {
+function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPick, onResume, onInstall, onCalendar }: {
   golfDay: PublicGolfDay
   me: GolfDayMe | null
   signedIn: boolean
@@ -349,6 +363,7 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
   onResume: () => void
   /** Opens the home screen pop-up; absent when there is nothing to offer (installed, desktop). */
   onInstall?: () => void
+  onCalendar: () => void
 }) {
   const date = formatGolfDayDate(golfDay.playsOn)
   const joined = Boolean(me?.joined)
@@ -397,6 +412,7 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
     return (
       <>
         <p className="gd-status"><strong>You&rsquo;re in.</strong> Your swing opens on {date}. Come back to this tab when you reach one of the holes below.</p>
+        <button type="button" className="btn-tile btn-tile--block" onClick={onCalendar}>Add to my calendar</button>
         {onInstall && <button type="button" className="gd-link" onClick={onInstall}>Put Get Lucky on your home screen</button>}
       </>
     )

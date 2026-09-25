@@ -93,6 +93,16 @@ Safari's. The pop-up tells players to sign in once more with the code from
 their email. Their join is on their account, so the tab is there when they
 do.
 
+### Calendar
+
+Once joined, "Add to my calendar" sits under the player's status until the
+day. It puts an all-day event on the golf day in their own calendar, with
+the holes, the tab to open, the link, and a reminder at 07:00. That way the
+link can't get lost in WhatsApp. On iPhone and on a computer it opens
+`/api/golf-days/<slug>/calendar`, an .ics file that Safari adds in one tap.
+On Android it opens Google Calendar's add page, which opens the Calendar
+app. The event is built in `src/lib/golf-days/calendar.ts`.
+
 ## Going live
 
 1. **Database.** In the Supabase SQL editor, run `028_golf_day_tier.sql`
