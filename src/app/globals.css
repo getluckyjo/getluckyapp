@@ -2267,3 +2267,9 @@ button, [role="button"], [role="tab"] {
 .gd-branded .btn-lime:hover { background: var(--gd-ink); filter: brightness(1.12); }
 .gd-branded .btn-lime:active { box-shadow: 2px 2px 0 var(--gd-accent); }
 .gd-branded .stake-sheet-title, .gd-branded .stake-rows dt, .gd-branded .stake-rows dd, .gd-branded .stake-free-note { color: var(--gd-ink); }
+.gd-link {
+  align-self: center; min-height: 44px; padding: 0 12px; border: none; background: none; cursor: pointer;
+  font-family: 'Inter', sans-serif; font-size: var(--text-sm); font-weight: 700; color: var(--gd-ink);
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.gd-sheet-later { margin-top: 8px; }

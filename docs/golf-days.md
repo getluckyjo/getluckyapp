@@ -50,13 +50,48 @@ club's 2024 card (yellow tees). They were out of date from migration 019.
 
 ### Message to send with the link
 
-> **Bomb Squad Golf Day × Get Lucky: one free swing each for R100 000**
->
-> 1. **Before Friday:** open www.getluckyholeinone.com/golf-day/bombsquad on your phone. Sign in with Google or your email, confirm you're 18 or older, and tap **Join**. A **Bomb Squad** tab appears at the bottom of the app. Tip: add the page to your home screen.
-> 2. **On the day:** at East hole 16 or West hole 17, open the **Bomb Squad** tab and tap the hole you're on.
-> 3. **Film it:** hand your phone to a playing partner to film your tee shot in the app.
->
-> Hole it, and once the club and your playing partners confirm it, R100 000 is yours.
+One link does it: joining leads straight into putting the app on the home
+screen (see "Home screen" below). For WhatsApp, paste as is; the asterisks
+are WhatsApp's bold.
+
+```
+*Bomb Squad Golf Day × Get Lucky* ⛳
+
+Every player gets ONE free swing for *R100 000* on Friday 2 October. Hole it and it's yours.
+
+*Before Friday (takes 2 minutes):*
+Tap the link, sign in and tap *Join*. Then add Get Lucky to your home screen when it asks.
+https://www.getluckyholeinone.com/golf-day/bombsquad
+
+*On the day:*
+At *East 16* or *West 17*, open the *Bomb Squad* tab and tap your hole. Hand your phone to a playing partner to film your tee shot. That's it.
+
+18+ only. One swing each.
+
+See you on the tee. Time to get lucky! 🍀
+```
+
+### Home screen
+
+Joining is the moment to put the app on the phone, so it follows straight
+on:
+
+- **Android, Chrome:** tapping Join opens Chrome's own install dialog.
+  Chrome only allows it straight after a tap, and only once it has decided
+  the site can be installed. When it can't, the pop-up below opens instead.
+- **Everywhere else:** a "You're in. One more step" pop-up with the taps
+  for that phone. iPhone Safari gets Share → Add to Home Screen. An iPhone
+  in WhatsApp, Chrome or Instagram is told to open the page in Safari
+  first, with a Copy link button. Android without the dialog gets the
+  three-dot menu route, plus how to leave WhatsApp's browser.
+- **Joined on the way back from signing in:** no tap, so always the pop-up.
+- **Later:** "Put Get Lucky on your home screen" under their status reopens
+  it. Nothing is offered once the app is installed, or on a computer.
+
+On iPhone the home screen app keeps its own sign-in, separate from
+Safari's. The pop-up tells players to sign in once more with the code from
+their email. Their join is on their account, so the tab is there when they
+do.
 
 ## Going live
 

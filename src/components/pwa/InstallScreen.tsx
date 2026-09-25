@@ -9,48 +9,15 @@ import { useIsStandalone } from '@/hooks/useIsStandalone'
 import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
 import { pwaAsset } from '@/lib/pwa/assets'
-
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
-}
+import { detectPlatform, type BeforeInstallPromptEvent, type Platform } from '@/lib/pwa/install'
+import { MenuIcon, PlusIcon, ShareIcon, TickIcon } from './install-icons'
 
 const APP_URL = 'https://www.getluckyholeinone.com/install'
 const SHARE_TEXT = 'Get the Get Lucky app: back yourself to a hole-in-one on any par 3. Install it here (no app store needed):'
 
-type Platform = 'ios-safari' | 'ios-other' | 'android' | 'desktop'
-
 function detect(): Platform {
-  const ua = navigator.userAgent
-  const iOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-  if (iOS) {
-    const safari = /Safari/.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA|FBAN|FBAV|Instagram|Line\/|Twitter|WhatsApp/.test(ua)
-    return safari ? 'ios-safari' : 'ios-other'
-  }
-  if (/Android/.test(ua)) return 'android'
-  return 'desktop'
+  return detectPlatform(navigator.userAgent, navigator.platform, navigator.maxTouchPoints)
 }
-
-const ShareIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M12 3v12" /><path d="M8 7l4-4 4 4" /><path d="M5 11v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8" />
-  </svg>
-)
-const PlusIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <rect x="4" y="4" width="16" height="16" rx="4" /><path d="M12 8v8M8 12h8" />
-  </svg>
-)
-const TickIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-    <path d="M5 12l5 5L20 7" />
-  </svg>
-)
-const MenuIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-    <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
-  </svg>
-)
 
 /**
  * /install — the page you send someone who wants "the app".
