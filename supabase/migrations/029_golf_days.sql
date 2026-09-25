@@ -30,8 +30,9 @@
 --
 -- Also here:
 --   * The Bomb Squad Golf Day: Royal Johannesburg, Friday 2 October 2026,
---     R100 000, 200 players, on a signature par 3 of about 150 m on each
---     course: East 16 (152 m, over water) and West 7 (144 m, over water).
+--     R100 000, 200 players, on each course's signature par 3: East 16
+--     (152 m from the club tees, over water) and West 17 (185 m from the
+--     yellow tees, 161 m from the white).
 --   * The West course's par 3s, corrected to the yellow tees on the club's
 --     2024 card (4: 178 m, 7: 144 m, 14: 105 m, 17: 185 m). Only rows still
 --     carrying migration 019's numbers change; an edit made in the admin
@@ -235,13 +236,11 @@ select d.id, h.id
   join public.holes h on h.course_id = c.id
  where d.slug = 'bombsquad'
    and (   (lower(c.name) = lower('Royal Johannesburg & Kensington – East') and h.hole_number = 16)
-        or (lower(c.name) = lower('Royal Johannesburg & Kensington – West') and h.hole_number = 7))
+        or (lower(c.name) = lower('Royal Johannesburg & Kensington – West') and h.hole_number = 17))
 on conflict do nothing;
 
--- Verify: the golf day, and its two holes (expect East 16 at 152 m and West 7 at
--- 144 m, both par 3, active, at partner courses). West 7 reads 144 only once the
--- correction above has applied; at 139 m it would be under the 140 m minimum and
--- the swing there would be refused.
+-- Verify: the golf day, and its two holes (expect East 16 at 152 m and West 17 at
+-- 185 m, both par 3, active, at partner courses).
 select d.slug, d.name, d.plays_on, d.prize_pence / 100 as prize_rand, d.max_players,
        c.name as course, h.hole_number, h.par, h.distance_metres, h.is_active, c.is_partner
   from public.golf_days d
