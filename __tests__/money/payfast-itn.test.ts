@@ -319,8 +319,6 @@ describe('ledger writes', () => {
 })
 
 describe('membership renewals (GLG-…) that PayFast sends to this Notify URL', () => {
-  const MEMBERSHIP_ITN_URL = 'https://membership.getluckygolfclub.com/api/webhooks/payfast'
-
   /** A monthly renewal as the membership site's subscription carries it: custom_str1 is a club slug. */
   const renewal = (overrides: Record<string, string> = {}, opts: { passphrase?: string } = {}) => itn({
     m_payment_id: 'GLG-1784910590392-6327ba',
@@ -335,59 +333,23 @@ describe('membership renewals (GLG-…) that PayFast sends to this Notify URL', 
     ...overrides,
   }, opts)
 
-  function stubMembership(respond: () => Promise<Response>) {
-    const relayed: string[] = []
-    vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
-      if (url === MEMBERSHIP_ITN_URL) { relayed.push(String(init.body)); return respond() }
-      return new Response(validateResponse)
-    }))
-    return relayed
-  }
-
-  it('hands a genuine renewal on unchanged to the membership site and records nothing here', async () => {
+  it('acknowledges a genuine renewal, whatever its status, and records nothing', async () => {
     const { POST } = await loadRoute()
-    const relayed = stubMembership(async () => new Response('OK'))
-    const fields = renewal()
-    const res = await POST(post(fields) as never)
-    expect(res.status).toBe(200)
-    expect(relayed).toEqual([new URLSearchParams(fields).toString()])
+    for (const status of ['COMPLETE', 'CANCELLED']) {
+      const res = await POST(post(renewal({ payment_status: status })) as never)
+      expect(res.status, status).toBe(200)
+    }
     expect(db.rows('payfast_payments')).toHaveLength(0)
     expect(db.rows('payment_cards')).toHaveLength(0)
     expect(db.rows('bets')).toHaveLength(0)
+    // Only PayFast's validate endpoint was called: nothing is handed on.
+    expect(vi.mocked(fetch).mock.calls.every(([url]) => String(url).includes('payfast.co.za'))).toBe(true)
   })
 
-  it('hands on every status, so a cancelled membership is cancelled where it lives', async () => {
+  it('still rejects a renewal that has not proved itself genuine', async () => {
     const { POST } = await loadRoute()
-    const relayed = stubMembership(async () => new Response('OK'))
-    const res = await POST(post(renewal({ payment_status: 'CANCELLED' })) as never)
-    expect(res.status).toBe(200)
-    expect(relayed).toHaveLength(1)
-  })
-
-  it('answers 502 so PayFast retries when the membership site does not take it', async () => {
-    const { POST } = await loadRoute()
-    stubMembership(async () => new Response('Internal error', { status: 500 }))
-    expect((await POST(post(renewal()) as never)).status).toBe(502)
-
-    stubMembership(async () => { throw new Error('ECONNRESET') })
-    expect((await POST(post(renewal()) as never)).status).toBe(502)
-    expect(db.rows('payfast_payments')).toHaveLength(0)
-  })
-
-  it('hands on nothing that has not proved itself genuine', async () => {
-    const { POST } = await loadRoute()
-    const relayed = stubMembership(async () => new Response('OK'))
     expect((await POST(post(renewal({}, { passphrase: 'wrong' })) as never)).status).toBe(400)
     validateResponse = 'INVALID'
     expect((await POST(post(renewal()) as never)).status).toBe(400)
-    expect(relayed).toHaveLength(0)
-  })
-
-  it('never hands on this app\'s own payments', async () => {
-    const { POST } = await loadRoute()
-    const relayed = stubMembership(async () => new Response('OK'))
-    expect((await POST(post(itn()) as never)).status).toBe(200)
-    expect(relayed).toHaveLength(0)
-    expect(db.rows('payfast_payments')).toHaveLength(1)
   })
 })

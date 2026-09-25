@@ -73,10 +73,9 @@ logs on go-live day. This has bitten before: commit `bfbfb0d`.
    (The code also sends `notify_url` per-transaction, but setting it in the
    dashboard is good defense in depth.)
    The merchant account is shared with the membership site, and PayFast sends
-   every monthly membership renewal (`GLG-…`) to this URL too. The ITN hands
-   those on to `membership.getluckygolfclub.com/api/webhooks/payfast`
-   (`src/lib/payfast/membership.ts`); do not point this URL anywhere that
-   does not do the same.
+   every monthly membership renewal (`GLG-…`) to this URL too. Memberships
+   are being phased out, so the ITN acknowledges those and records nothing
+   (`src/lib/payfast/membership.ts`).
 
 ## Step 2 — Set production environment variables
 
