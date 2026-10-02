@@ -99,8 +99,8 @@ function AuthForm() {
   async function handleCode(e: React.FormEvent) {
     e.preventDefault()
     const digits = code.replace(/\D/g, '')
-    if (digits.length !== 6) {
-      setError('Enter the six-digit code from the email.')
+    if (digits.length < 6 || digits.length > 10) {
+      setError('Enter the code from the email.')
       return
     }
     setError(null)
@@ -135,7 +135,7 @@ function AuthForm() {
             </h1>
             <p className="v2-sub">
               {mode === 'sent'
-                ? `We sent a six-digit code to\n${email.trim()}`
+                ? `We sent a code to\n${email.trim()}`
                 : mode === 'email'
                   ? 'Enter your email and we’ll\nsend you a code.'
                   : next
@@ -178,7 +178,7 @@ function AuthForm() {
 
               {mode === 'sent' && (
                 <form className="signin-email" onSubmit={handleCode}>
-                  <label htmlFor="signin-code" className="signin-label">Six-digit code</label>
+                  <label htmlFor="signin-code" className="signin-label">Code from your email</label>
                   <input
                     id="signin-code"
                     className="signin-code"
@@ -186,11 +186,11 @@ function AuthForm() {
                     inputMode="numeric"
                     autoComplete="one-time-code"
                     pattern="[0-9]*"
-                    maxLength={6}
+                    maxLength={10}
                     autoFocus
                     placeholder="000000"
                     value={code}
-                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   />
                   <button type="submit" className="btn-lime btn-lime--block" disabled={busy === 'code'}>
                     {busy === 'code' ? 'Checking…' : 'Sign in'}
