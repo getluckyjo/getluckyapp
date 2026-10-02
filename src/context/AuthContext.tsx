@@ -122,6 +122,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 }
 
+/**
+ * An <AuthProvider> only where there is none above. The root layout wraps every
+ * page in one, but Next can render the not-found page without that layout: a
+ * server-action POST with a malformed Next-Router-State-Tree does it (a scanner,
+ * 29 Sep 2026, GET-LUCKY-GOLF-A), and the page's header and tab bar both ask
+ * for the signed-in user, so it answered 500.
+ */
+export function EnsureAuthProvider({ children }: { children: ReactNode }) {
+  if (useContext(AuthContext)) return <>{children}</>
+  return <AuthProvider>{children}</AuthProvider>
+}
+
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')
