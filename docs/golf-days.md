@@ -188,7 +188,7 @@ par 3s for these courses):
 | Sun 14 Feb | Metropolitan | 6 "Thermopylae" | White | 152 | Nearest 150 on the front nine, which the arrival nine plays | 18 "The Breakwater", 148 m, over the dam to the green under the clubhouse, if the nine played is the back routing |
 | Mon 15 Feb | Royal Cape | 15 | Yellow | 148 | "A finely judged shot over the water which encroaches right up to the edge of the green" | 13, 165 m yellow |
 | Mon 15 Feb | Steenberg | 7 | Yellow | 148 | The island green, "Steenberg's signature hole" (the club). The club lists 140 m from the white tees | 14, the club's featured hole: 166 m white |
-| Tue 16 Feb | Arabella | 5 | White | 147 | Ends the "Arabella Turn" of signature holes | 17 along the lagoon, 159 m white |
+| Tue 16 Feb | Arabella | 5 | Yellow | 153 | Ends the "Arabella Turn" of signature holes (147 m from the white) | 17 along the lagoon, 167 m yellow |
 | Wed 17 Feb | Stellenbosch | 9 | Yellow | 148 | Uphill, all carry | The famous downhill 7th is 139 m yellow, under the 140 m minimum |
 | Thu 18 Feb | Clovelly | 16 | White | 148 | Nearest 150; Clovelly's signature is a par 5 | 8, the longest, 156 m white |
 | Fri 19 Feb | Pearl Valley | 3 "Ace" | White | 145 | Water carry; the club says it has the most recorded holes-in-one (tell Indwe) | 13, the club's signature hole, 140 m white / 160 m yellow |

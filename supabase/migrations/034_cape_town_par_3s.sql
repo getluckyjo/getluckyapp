@@ -15,9 +15,11 @@
 --   * Stellenbosch: the wrong holes. Its par 3s are 7, 9, 13 and 15; 4 is
 --     a par 4 and 12 a par 5. Yellow tees, from the club's October 2025
 --     card.
---   * Arabella (white tees, club card dated 1 November 2024), Pearl Valley
---     (white, the club's course layout) and De Zalze (yellow, club card
---     and 18birdies): the right holes, out-of-date distances.
+--   * Arabella (yellow tees, club card dated 1 November 2024; yellow
+--     rather than white so its 14th, played for paid entries, stays over
+--     140 m: 170 yellow, 130 white), Pearl Valley (white, the club's
+--     course layout) and De Zalze (yellow, club card and 18birdies): the
+--     right holes, out-of-date distances.
 --
 -- Clovelly's numbers already match the club's white tees. Metropolitan
 -- Golf Club, where the trip starts, was not in the app: it is added with
@@ -44,10 +46,10 @@ update public.holes h
           ('Royal Cape Golf Club',   13, 166, 165),
           ('Royal Cape Golf Club',   15, 144, 148),
           ('Steenberg Golf Club',    14, 152, 184),
-          ('Arabella Golf Club',      5, 161, 147),
-          ('Arabella Golf Club',      7, 186, 170),
-          ('Arabella Golf Club',     14, 142, 130),
-          ('Arabella Golf Club',     17, 174, 159),
+          ('Arabella Golf Club',      5, 161, 153),
+          ('Arabella Golf Club',      7, 186, 181),
+          ('Arabella Golf Club',     14, 142, 170),
+          ('Arabella Golf Club',     17, 174, 167),
           ('Stellenbosch Golf Club',  7, 140, 139),
           ('Stellenbosch Golf Club', 15, 178, 185),
           ('Pearl Valley Golf Club',  3, 175, 145),
