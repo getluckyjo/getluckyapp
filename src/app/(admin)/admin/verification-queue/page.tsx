@@ -8,7 +8,7 @@ import StatusBadge from '@/components/admin/StatusBadge'
 import Pagination from '@/components/admin/Pagination'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
-import { formatZAR, timeAgo } from '@/lib/format'
+import { timeAgo, formatMoney } from '@/lib/format'
 import type { BatchActionResult, VerificationQueueItem, PaginatedResponse, VerificationStatus } from '@/types/admin'
 import { TIER_LABELS } from '@/lib/tiers'
 import { MIN_DECISION_NOTES } from '@/lib/claims/checklist'
@@ -317,7 +317,7 @@ export default function VerificationQueuePage() {
                       <td><Link href={href} className="adm-row-link">{name}</Link></td>
                       <td className="adm-muted">{item.courseName || '—'}, hole {item.holeNumber || '?'}</td>
                       <td>{TIER_LABELS[item.tier] || item.tier}</td>
-                      <td className="adm-num" style={{ fontWeight: 700 }}>{formatZAR(item.potentialWinCents)}</td>
+                      <td className="adm-num" style={{ fontWeight: 700 }}>{formatMoney(item.potentialWinCents, item.prizeCurrency)}</td>
                       <td>
                         {/* The bet's paid stamp lands on the verification, so an approved claim can say whether it is paid. */}
                         {item.status === 'approved' && item.payoutInitiatedAt

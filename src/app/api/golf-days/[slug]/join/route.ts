@@ -3,11 +3,12 @@
  * Returns: { joined: true, slug, tabLabel }
  *
  * A player joins through the golf day's link. From then on their Icons tab
- * is the golf day's, and on the day they get one free swing. Joining twice
- * is a no-op, so a second tap or a second device is harmless.
+ * is the golf day's, and on the day they get one free swing (on a trip, one
+ * every round). Joining twice is a no-op, so a second tap or a second
+ * device is harmless.
  *
- * The cap and the closing of joins once the day is over are the database's
- * (migration 029): a trigger locks the golf day while it counts, so two
+ * The cap and the closing of joins once the day (or a trip's last day) is
+ * over are the database's (migrations 029 and 033): a trigger locks the golf day while it counts, so two
  * players taking the last place at once cannot both get it.
  */
 import { NextResponse } from 'next/server'
@@ -53,7 +54,7 @@ export async function POST(request: Request, { params }: Ctx) {
 
     // The friendly answers; the insert below is where they hold.
     if (day.disabled_at) return refuse('GOLF_DAY_CLOSED')
-    if (golfDayPhase(day.plays_on) === 'over') return refuse('GOLF_DAY_OVER')
+    if (golfDayPhase(day.plays_on, Date.now(), day.ends_on ?? null) === 'over') return refuse('GOLF_DAY_OVER')
     if (await playerCount(admin, day.id) >= day.max_players) return refuse('GOLF_DAY_FULL')
 
     const { error } = await admin.from('golf_day_players').insert({ golf_day_id: day.id, user_id: user.id })

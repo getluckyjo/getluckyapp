@@ -25,6 +25,7 @@ export async function GET(request: Request) {
         tier,
         stake_pence,
         potential_win_pence,
+        prize_currency,
         status,
         declared_result,
         created_at,

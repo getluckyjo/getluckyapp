@@ -12,7 +12,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError } from '@/lib/api/http'
 import { siteUrl } from '@/lib/email/layout'
 import { golfDayEvent, toIcs } from '@/lib/golf-days/calendar'
-import { golfDayBySlug, holesFor } from '@/lib/golf-days/load'
+import { golfDayBySlug, golfDayFacts, holesFor } from '@/lib/golf-days/load'
 import { parseLook } from '@/lib/golf-days/look'
 import { GOLF_DAY_REFUSALS, GOLF_DAY_SLUG_PATTERN } from '@/lib/golf-days/rules'
 import { themeFor } from '@/lib/golf-days/themes'
@@ -39,8 +39,7 @@ export async function GET(_request: Request, { params }: Ctx) {
       slug: day.slug,
       name: day.name,
       tabLabel: day.tab_label,
-      playsOn: day.plays_on,
-      prizeZAR: Math.round(day.prize_pence / 100),
+      ...golfDayFacts(day),
       holes,
     }, { site: siteUrl(), venue: themeFor(day.slug, parseLook(day.look)).venue })
 

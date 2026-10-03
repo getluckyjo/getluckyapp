@@ -3,8 +3,9 @@
  * Returns: { golfDay: PublicGolfDay, me: GolfDayMe | null }
  *
  * What the golf day screen shows. Open to a signed-out visitor, because the
- * link is how players first meet it: they see the day, the prize and the
- * holes before they sign in. `me` is null until they do.
+ * link is how players first meet it: they see the day (or a trip's days),
+ * the prize and the holes before they sign in. `me` is null until they do;
+ * then it carries every swing they took (one a round on a trip).
  *
  * The number of players is not shown, only whether the day is full.
  */
@@ -12,7 +13,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError } from '@/lib/api/http'
-import { golfDayBySlug, holesFor, playerCount } from '@/lib/golf-days/load'
+import { golfDayBySlug, golfDayFacts, holesFor, playerCount } from '@/lib/golf-days/load'
 import { parseLook } from '@/lib/golf-days/look'
 import { GOLF_DAY_REFUSALS, GOLF_DAY_SLUG_PATTERN, golfDayPhase, type GolfDayMe, type PublicGolfDay } from '@/lib/golf-days/rules'
 
@@ -33,13 +34,13 @@ export async function GET(_request: Request, { params }: Ctx) {
     if (!day) return notFound()
 
     const [holes, players] = await Promise.all([holesFor(admin, [day.id]), playerCount(admin, day.id)])
+    const facts = golfDayFacts(day)
     const golfDay: PublicGolfDay = {
       slug: day.slug,
       name: day.name,
       tabLabel: day.tab_label,
-      playsOn: day.plays_on,
-      prizeZAR: Math.round(day.prize_pence / 100),
-      phase: golfDayPhase(day.plays_on),
+      ...facts,
+      phase: golfDayPhase(facts.playsOn, Date.now(), facts.endsOn),
       closed: Boolean(day.disabled_at),
       full: players >= day.max_players,
       holes: holes.get(day.id) ?? [],
@@ -50,21 +51,23 @@ export async function GET(_request: Request, { params }: Ctx) {
     const { data: { user } } = await supabase.auth.getUser()
     let me: GolfDayMe | null = null
     if (user) {
-      const [{ data: joined, error: joinedError }, { data: profile }, { data: swing }] = await Promise.all([
+      const [{ data: joined, error: joinedError }, { data: profile }, { data: swings }] = await Promise.all([
         admin.from('golf_day_players').select('user_id').eq('golf_day_id', day.id).eq('user_id', user.id).maybeSingle(),
         supabase.from('profiles').select('age_verified_at').eq('id', user.id).maybeSingle(),
-        supabase.from('bets').select('id, status, hole_id, expires_at').eq('user_id', user.id).eq('golf_day_id', day.id).limit(1).maybeSingle(),
+        supabase.from('bets').select('id, status, hole_id, expires_at').eq('user_id', user.id).eq('golf_day_id', day.id)
+          .order('created_at', { ascending: true }).limit(50),
       ])
       if (joinedError) throw joinedError
+      type Swing = { id: string; status: string; hole_id: string; expires_at: string | null }
       me = {
         joined: Boolean(joined),
         ageVerified: Boolean(profile?.age_verified_at),
-        swing: swing ? {
-          betId: swing.id,
-          status: swing.status,
-          holeId: swing.hole_id,
-          open: !swing.expires_at || Date.parse(swing.expires_at) > Date.now(),
-        } : null,
+        swings: ((swings ?? []) as Swing[]).map(s => ({
+          betId: s.id,
+          status: s.status,
+          holeId: s.hole_id,
+          open: !s.expires_at || Date.parse(s.expires_at) > Date.now(),
+        })),
       }
     }
 

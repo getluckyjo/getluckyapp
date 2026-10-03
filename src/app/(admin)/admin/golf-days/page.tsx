@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle, Trash2 } from 'lucide-react'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
-import type { AdminGolfDay, GolfDayHole, GolfDayPhase } from '@/lib/golf-days/rules'
-import { golfDayPath, todayInSouthAfrica } from '@/lib/golf-days/rules'
+import type { AdminGolfDay, GolfDayHole, GolfDayPhase, PrizeCurrency } from '@/lib/golf-days/rules'
+import { PRIZE_MAX, addDays, formatRoundDate, golfDayPath, plainCourseName, rounds, todayInSouthAfrica } from '@/lib/golf-days/rules'
 import { golfDayMessage } from '@/lib/golf-days/message'
-import { formatRand } from '@/lib/format'
+import { formatPrize } from '@/lib/format'
 import { themeFor } from '@/lib/golf-days/themes'
 import LookEditor, { BLANK_LOOK, lookFormFrom, lookFrom, type LookForm } from './LookEditor'
 
@@ -23,22 +23,37 @@ interface Player {
   name: string | null
   email: string | null
   joinedAt: string
-  swing: { betId: string; status: string; at: string; hole: string | null } | null
+  /** At most one on a golf day; one a round on a trip. */
+  swings: { betId: string; status: string; at: string; hole: string | null }[]
 }
+
+/** A hole in the form, and on a trip the date of its round ('' until one is picked). */
+interface FormHole { holeId: string; playsOn: string }
 
 interface Form {
   slug: string
   name: string
   tabLabel: string
   playsOn: string
-  prizeRand: string
+  /** A trip's last day; '' for a golf day of one day. */
+  endsOn: string
+  prize: string
+  currency: PrizeCurrency
   maxPlayers: string
-  holeIds: string[]
+  holes: FormHole[]
   note: string
   look: LookForm
 }
 
-const EMPTY: Form = { slug: '', name: '', tabLabel: '', playsOn: '', prizeRand: '100000', maxPlayers: '200', holeIds: [], note: '', look: BLANK_LOOK }
+const EMPTY: Form = { slug: '', name: '', tabLabel: '', playsOn: '', endsOn: '', prize: '100000', currency: 'ZAR', maxPlayers: '200', holes: [], note: '', look: BLANK_LOOK }
+
+/** Every date of a trip, first to last; none for a golf day of one day. */
+function tripDates(playsOn: string, endsOn: string): string[] {
+  if (!playsOn || !endsOn || endsOn <= playsOn) return []
+  const out: string[] = []
+  for (let d = playsOn; d <= endsOn && out.length <= 31; d = addDays(d, 1)) out.push(d)
+  return out
+}
 
 const PHASE: Record<GolfDayPhase, { label: string; pill: string }> = {
   upcoming: { label: 'Coming up', pill: 'adm-pill adm-pill--green' },
@@ -69,13 +84,29 @@ async function send<T>(url: string, method: string, body?: unknown): Promise<Sen
   }
 }
 
-const sameSet = (a: string[], b: string[]) => a.length === b.length && new Set([...a, ...b]).size === new Set(a).size
+/** The same holes on the same dates, in any order. */
+const sameHoles = (a: FormHole[], b: FormHole[]) =>
+  a.length === b.length && a.every(h => b.some(o => o.holeId === h.holeId && o.playsOn === h.playsOn))
 
 /** The list's order: the latest date first, as the server sends it. */
 const byDate = (a: AdminGolfDay, b: AdminGolfDay) => b.playsOn.localeCompare(a.playsOn)
 
 function showDate(playsOn: string): string {
   return new Date(`${playsOn}T12:00:00+02:00`).toLocaleDateString('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Johannesburg' })
+}
+
+/** A golf day's date, or a trip's first to last. */
+function showDates(r: AdminGolfDay): string {
+  return r.endsOn ? `${showDate(r.playsOn)} – ${showDate(r.endsOn)}` : showDate(r.playsOn)
+}
+
+/** A golf day's holes in a line; a trip's by round: "Sun 14 Feb: Metropolitan 6 · Mon 15 Feb: Royal Cape 15, Steenberg 7". */
+function showHoles(r: AdminGolfDay): string {
+  if (!r.holes.length) return 'No holes'
+  if (!r.endsOn) return r.holes.map(h => `${h.course.name}, hole ${h.holeNumber}`).join(' · ')
+  return rounds(r.holes)
+    .map(round => `${round.date ? formatRoundDate(round.date) : 'Any day'}: ${round.holes.map(h => `${plainCourseName(h.course.name)} ${h.holeNumber}`).join(', ')}`)
+    .join(' · ')
 }
 
 /**
@@ -165,7 +196,7 @@ export default function AdminGolfDaysPage() {
   const holeById = useMemo(() => {
     const map = new Map<string, GolfDayHole>()
     for (const c of courses) for (const h of c.holes) {
-      map.set(h.id, { holeId: h.id, holeNumber: h.hole_number, par: h.par, distanceMetres: h.distance_metres, course: { id: c.id, name: c.name, location: '', region: '' } })
+      map.set(h.id, { holeId: h.id, holeNumber: h.hole_number, par: h.par, distanceMetres: h.distance_metres, course: { id: c.id, name: c.name, location: '', region: '' }, playsOn: null })
     }
     for (const r of rows ?? []) for (const h of r.holes) map.set(h.holeId, h)
     return map
@@ -193,8 +224,9 @@ export default function AdminGolfDaysPage() {
     if (next.to === 'create') { open(null, { ...EMPTY, playsOn: todayInSouthAfrica() }); return }
     const r = next.row
     open(r.id, {
-      slug: r.slug, name: r.name, tabLabel: r.tabLabel, playsOn: r.playsOn,
-      prizeRand: String(r.prizeZAR), maxPlayers: String(r.maxPlayers), holeIds: r.holes.map(h => h.holeId), note: r.note ?? '',
+      slug: r.slug, name: r.name, tabLabel: r.tabLabel, playsOn: r.playsOn, endsOn: r.endsOn ?? '',
+      prize: String(r.prize), currency: r.currency, maxPlayers: String(r.maxPlayers),
+      holes: r.holes.map(h => ({ holeId: h.holeId, playsOn: h.playsOn ?? '' })), note: r.note ?? '',
       look: lookFormFrom(themeFor(r.slug, r.look)),
     })
   }
@@ -213,13 +245,15 @@ export default function AdminGolfDaysPage() {
     if (!editing) return
     const f = editing.form
     const fields: Record<string, unknown> = {
-      name: f.name.trim(), tabLabel: f.tabLabel.trim(), playsOn: f.playsOn,
-      prizeRand: Number(f.prizeRand), maxPlayers: Number(f.maxPlayers), note: f.note.trim() || null,
+      name: f.name.trim(), tabLabel: f.tabLabel.trim(), playsOn: f.playsOn, endsOn: f.endsOn || null,
+      prize: Number(f.prize), currency: f.currency, maxPlayers: Number(f.maxPlayers), note: f.note.trim() || null,
       look: lookFrom(f.look, f.name.trim()),
     }
-    // The holes only when they changed: the server then leaves them alone, and
-    // does not re-check a hole the day already has.
-    if (!editing.id || !sameSet(f.holeIds, editing.saved.holeIds)) fields.holeIds = f.holeIds
+    // The holes only when they or their dates changed: the server then leaves
+    // them alone, and does not re-check a hole the day already has.
+    if (!editing.id || !sameHoles(f.holes, editing.saved.holes)) {
+      fields.holes = f.holes.map(h => ({ holeId: h.holeId, playsOn: f.endsOn ? h.playsOn || null : null }))
+    }
     setFormError(null)
     setBusy(true)
     const sent = editing.id
@@ -287,6 +321,7 @@ export default function AdminGolfDaysPage() {
   }
 
   const pickable = courses.find(c => c.id === pickCourse)?.holes.filter(h => h.playable) ?? []
+  const dates = editing ? tripDates(editing.form.playsOn, editing.form.endsOn) : []
 
   return (
     <div>
@@ -296,7 +331,8 @@ export default function AdminGolfDaysPage() {
           <h1 className="adm-title">Golf days</h1>
           <p className="adm-lead">
             Each golf day has its own link. Players who join through it see the golf day&rsquo;s tab in place of Icons and get one free swing,
-            on the day (South African time), on its holes, for its prize. Nobody else sees any of it.
+            on the day (South African time), on its holes, for its prize. Nobody else sees any of it. A trip has a last day too, and a swing
+            every round: give each hole the date of its round.
           </p>
         </div>
         {!editing && (
@@ -334,12 +370,22 @@ export default function AdminGolfDaysPage() {
           </div>
           <div className="adm-row">
             <label className="adm-field">
-              Played on
+              {editing.form.endsOn ? 'First day' : 'Played on'}
               <input type="date" required value={editing.form.playsOn} onChange={e => setField('playsOn', e.target.value)} className="adm-input" />
             </label>
             <label className="adm-field">
-              Prize (R)
-              <input type="number" required min={1} max={1000000} value={editing.form.prizeRand} onChange={e => setField('prizeRand', e.target.value)} className="adm-input" style={{ width: 140 }} />
+              Last day <span className="adm-hint">A trip only</span>
+              <input type="date" value={editing.form.endsOn} min={editing.form.playsOn ? addDays(editing.form.playsOn, 1) : undefined} onChange={e => setField('endsOn', e.target.value)} className="adm-input" />
+            </label>
+            <label className="adm-field">
+              Prize
+              <span style={{ display: 'flex', gap: 6 }}>
+                <select value={editing.form.currency} onChange={e => setField('currency', e.target.value as PrizeCurrency)} className="adm-input" aria-label="Currency">
+                  <option value="ZAR">R</option>
+                  <option value="USD">$</option>
+                </select>
+                <input type="number" required min={1} max={PRIZE_MAX[editing.form.currency]} value={editing.form.prize} onChange={e => setField('prize', e.target.value)} className="adm-input" style={{ width: 130 }} aria-label="Prize" />
+              </span>
             </label>
             <label className="adm-field">
               Players
@@ -351,22 +397,34 @@ export default function AdminGolfDaysPage() {
             </label>
           </div>
           <div className="adm-field">
-            Holes <span className="adm-hint">Par 3s of 140 m or more; one per course the day is played on</span>
+            Holes <span className="adm-hint">{dates.length
+              ? 'Par 3s of 140 m or more; one per course, each on the date of its round'
+              : 'Par 3s of 140 m or more; one per course the day is played on'}</span>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {editing.form.holeIds.map(id => (
-                <span key={id} className="adm-chip">
-                  {holeLabel.get(id) ?? id}
-                  <button type="button" onClick={() => setField('holeIds', editing.form.holeIds.filter(h => h !== id))} aria-label="Remove hole">×</button>
+              {editing.form.holes.map(h => (
+                <span key={h.holeId} className="adm-chip">
+                  {dates.length > 0 && (
+                    <select
+                      value={dates.includes(h.playsOn) ? h.playsOn : ''}
+                      onChange={e => setField('holes', editing.form.holes.map(o => (o.holeId === h.holeId ? { ...o, playsOn: e.target.value } : o)))}
+                      className="adm-input" style={{ padding: '2px 6px', minHeight: 0 }} aria-label="Date of its round"
+                    >
+                      <option value="">Date…</option>
+                      {dates.map(d => <option key={d} value={d}>{formatRoundDate(d)}</option>)}
+                    </select>
+                  )}
+                  {holeLabel.get(h.holeId) ?? h.holeId}
+                  <button type="button" onClick={() => setField('holes', editing.form.holes.filter(o => o.holeId !== h.holeId))} aria-label="Remove hole">×</button>
                 </span>
               ))}
-              {editing.form.holeIds.length === 0 && <span className="adm-hint">None yet</span>}
+              {editing.form.holes.length === 0 && <span className="adm-hint">None yet</span>}
             </div>
             <div className="adm-row">
               <select value={pickCourse} onChange={e => setPickCourse(e.target.value)} disabled={coursesLoading || coursesFailed} className="adm-input" style={{ minWidth: 280 }} aria-label="Course">
                 <option value="">{coursesLoading ? 'Loading courses…' : 'Course…'}</option>
                 {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <select value="" onChange={e => { if (e.target.value && !editing.form.holeIds.includes(e.target.value)) setField('holeIds', [...editing.form.holeIds, e.target.value]) }} disabled={!pickCourse} className="adm-input" aria-label="Add a hole">
+              <select value="" onChange={e => { if (e.target.value && !editing.form.holes.some(h => h.holeId === e.target.value)) setField('holes', [...editing.form.holes, { holeId: e.target.value, playsOn: '' }]) }} disabled={!pickCourse} className="adm-input" aria-label="Add a hole">
                 <option value="">Add a hole…</option>
                 {pickable.map(h => <option key={h.id} value={h.id}>Hole {h.hole_number} · par {h.par} · {h.distance_metres} m</option>)}
               </select>
@@ -384,14 +442,16 @@ export default function AdminGolfDaysPage() {
               form={editing.form.look}
               onChange={look => setField('look', look)}
               name={editing.form.name.trim()}
-              prizeZAR={Number(editing.form.prizeRand)}
+              prize={Number(editing.form.prize)}
+              currency={editing.form.currency}
               playsOn={editing.form.playsOn || todayInSouthAfrica()}
-              holes={editing.form.holeIds.map(id => holeById.get(id)).filter((h): h is GolfDayHole => Boolean(h))}
+              endsOn={dates.length ? editing.form.endsOn : null}
+              holes={editing.form.holes.map(h => holeById.get(h.holeId)).filter((h): h is GolfDayHole => Boolean(h))}
             />
           </fieldset>
           {formError && <p role="alert" className="adm-error" style={{ margin: 0 }}>{formError}</p>}
           <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-            <button type="submit" disabled={busy || editing.form.holeIds.length === 0} className="adm-btn">
+            <button type="submit" disabled={busy || editing.form.holes.length === 0} className="adm-btn">
               {busy ? 'Saving…' : editing.id ? 'Save changes' : 'Create golf day'}
             </button>
             <button type="button" onClick={() => leave({ to: 'close' })} disabled={busy} className="adm-btn adm-btn--quiet">Cancel</button>
@@ -423,9 +483,9 @@ export default function AdminGolfDaysPage() {
                   <span className={phase.pill}>{phase.label}</span>
                 </div>
                 <p style={{ fontSize: 14, margin: '8px 0 0' }}>
-                  <strong>{showDate(r.playsOn)}</strong> · {formatRand(r.prizeZAR)} · tab &ldquo;{r.tabLabel}&rdquo;
+                  <strong>{showDates(r)}</strong> · {formatPrize(r.prize, r.currency)}{r.endsOn ? ' · a swing every round' : ''} · tab &ldquo;{r.tabLabel}&rdquo;
                 </p>
-                <p className="adm-muted" style={{ fontSize: 13, margin: '4px 0 0' }}>{r.holes.map(h => `${h.course.name}, hole ${h.holeNumber}`).join(' · ') || 'No holes'}</p>
+                <p className="adm-muted" style={{ fontSize: 13, margin: '4px 0 0' }}>{showHoles(r)}</p>
                 <p className="adm-mono" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 0', fontWeight: 600, wordBreak: 'break-all' }}>
                   {origin}{golfDayPath(r.slug)}
                   <button type="button" onClick={() => copy(r.id, `${origin}${golfDayPath(r.slug)}`)} title="Copy the link" aria-label="Copy the link" className="adm-icon-btn" style={{ width: 30, height: 30 }}>
@@ -484,7 +544,7 @@ export default function AdminGolfDaysPage() {
                 ) : (
                   <table className="adm-table">
                     <thead>
-                      <tr><th>Player</th><th>Email</th><th>Joined</th><th>Swing</th></tr>
+                      <tr><th>Player</th><th>Email</th><th>Joined</th><th>{r.endsOn ? 'Swings' : 'Swing'}</th></tr>
                     </thead>
                     <tbody>
                       {players.list.map(p => (
@@ -493,8 +553,10 @@ export default function AdminGolfDaysPage() {
                           <td className="adm-muted">{p.email ?? '—'}</td>
                           <td className="adm-muted">{new Date(p.joinedAt).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
                           <td>
-                            {p.swing
-                              ? <span className={p.swing.status === 'claimed' ? 'adm-pill adm-pill--red' : 'adm-pill'}>{SWING[p.swing.status] ?? p.swing.status}{p.swing.hole ? ` · ${p.swing.hole}` : ''}</span>
+                            {p.swings.length
+                              ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{p.swings.map(sw => (
+                                  <span key={sw.betId} className={sw.status === 'claimed' ? 'adm-pill adm-pill--red' : 'adm-pill'}>{SWING[sw.status] ?? sw.status}{sw.hole ? ` · ${sw.hole}` : ''}</span>
+                                ))}</span>
                               : <span className="adm-muted">Not taken</span>}
                           </td>
                         </tr>

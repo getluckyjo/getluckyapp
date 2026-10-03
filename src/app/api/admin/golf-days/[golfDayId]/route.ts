@@ -3,23 +3,30 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { log } from '@/lib/observability/log'
-import { EditableFields, adminGolfDays, currentHoleIds, setHoles } from '@/lib/golf-days/admin'
-import { holesProblem, playerCount } from '@/lib/golf-days/load'
+import {
+  EditableFields, adminGolfDays, currentHoles, forSchedule, prizeProblem, scheduleProblem, setHoles, type ScheduledHole,
+} from '@/lib/golf-days/admin'
+import { GOLF_DAY_SELECT, golfDayFacts, holesProblem, playerCount, type GolfDayRow } from '@/lib/golf-days/load'
 
 /**
- * Change a golf day: its name, tab label, date, prize, places, holes or look, or
+ * Change a golf day: its name, tab label, dates, prize, places, holes or look, or
  * switch it off (its tab and its swing stop at once) and on again. The link
  * never changes, because it has been sent out. A swing already taken keeps
  * the prize it was taken for. A golf day nobody has joined can be deleted.
+ *
+ * Once a swing has been taken, a golf day cannot become a trip or a trip a
+ * golf day: the one-swing rule counts them differently (migration 033).
  */
 
 const Patch = z.object({
   name: EditableFields.name.optional(),
   tabLabel: EditableFields.tabLabel.optional(),
   playsOn: EditableFields.playsOn.optional(),
-  prizeRand: EditableFields.prizeRand.optional(),
+  endsOn: EditableFields.endsOn.optional(),
+  prize: EditableFields.prize.optional(),
+  currency: EditableFields.currency.optional(),
   maxPlayers: EditableFields.maxPlayers.optional(),
-  holeIds: EditableFields.holeIds.optional(),
+  holes: EditableFields.holes.optional(),
   note: EditableFields.note.optional(),
   look: EditableFields.look.optional(),
   disabled: z.boolean().optional(),
@@ -39,13 +46,43 @@ export async function PATCH(request: Request, { params }: Ctx) {
   const b = body.data
 
   try {
-    const current = b.holeIds ? await currentHoleIds(auth.adminClient, golfDayId) : []
-    if (b.holeIds) {
+    const admin = auth.adminClient
+    const { data: row, error: rowError } = await admin.from('golf_days').select(GOLF_DAY_SELECT).eq('id', golfDayId).maybeSingle()
+    if (rowError) throw rowError
+    if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const was = golfDayFacts(row as GolfDayRow)
+
+    // The prize as it will be, checked against its currency's limit.
+    const invalidPrize = prizeProblem(b.prize ?? was.prize, b.currency ?? was.currency)
+    if (invalidPrize) return NextResponse.json({ error: invalidPrize, code: 'INVALID_INPUT' }, { status: 400 })
+
+    // The schedule as it will be: dates and holes together, whichever of them changed.
+    const scheduleChanged = b.playsOn !== undefined || b.endsOn !== undefined || b.holes !== undefined
+    const current = scheduleChanged ? await currentHoles(admin, golfDayId) : []
+    const playsOn = b.playsOn ?? was.playsOn
+    const endsOn = b.endsOn !== undefined ? b.endsOn : was.endsOn
+    let holes: ScheduledHole[] = []
+    if (scheduleChanged) {
+      holes = forSchedule(endsOn, b.holes ?? current)
+      const invalid = scheduleProblem(playsOn, endsOn, holes)
+      if (invalid) return NextResponse.json({ error: invalid, code: 'INVALID_INPUT' }, { status: 400 })
+
+      if ((endsOn === null) !== (was.endsOn === null)) {
+        const { count, error: swingsError } = await admin.from('bets').select('id', { count: 'exact', head: true }).eq('golf_day_id', golfDayId)
+        if (swingsError) throw swingsError
+        if ((count ?? 0) > 0) {
+          return NextResponse.json(
+            { error: `Swings have been taken, so it stays ${was.endsOn ? 'a trip' : 'a golf day of one day'}.`, code: 'GOLF_DAY_IN_USE' },
+            { status: 409 },
+          )
+        }
+      }
+
       // Only the holes being added are checked. One the day already has stays
       // even if its course has since stopped being a partner: the swing route
       // refuses it on the day, and the admin can take it off when they choose.
-      const added = b.holeIds.filter(id => !current.includes(id))
-      const problem = added.length ? await holesProblem(auth.adminClient, added) : null
+      const added = holes.filter(h => !current.some(c => c.holeId === h.holeId)).map(h => h.holeId)
+      const problem = added.length ? await holesProblem(admin, added) : null
       if (problem) return NextResponse.json({ error: problem, code: 'HOLE_NOT_ELIGIBLE' }, { status: 400 })
     }
 
@@ -53,20 +90,22 @@ export async function PATCH(request: Request, { params }: Ctx) {
     if (b.name !== undefined) patch.name = b.name
     if (b.tabLabel !== undefined) patch.tab_label = b.tabLabel
     if (b.playsOn !== undefined) patch.plays_on = b.playsOn
-    if (b.prizeRand !== undefined) patch.prize_pence = b.prizeRand * 100
+    if (b.endsOn !== undefined && b.endsOn !== was.endsOn) patch.ends_on = b.endsOn
+    if (b.prize !== undefined) patch.prize_pence = b.prize * 100
+    if (b.currency !== undefined && b.currency !== was.currency) patch.prize_currency = b.currency
     if (b.maxPlayers !== undefined) patch.max_players = b.maxPlayers
     if (b.note !== undefined) patch.note = b.note || null
     if (b.look !== undefined) patch.look = b.look
     if (b.disabled !== undefined) patch.disabled_at = b.disabled ? new Date().toISOString() : null
 
-    const { data, error } = await auth.adminClient.from('golf_days').update(patch).eq('id', golfDayId).select('id').maybeSingle()
+    const { data, error } = await admin.from('golf_days').update(patch).eq('id', golfDayId).select('id').maybeSingle()
     if (error) throw error
     if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-    if (b.holeIds) await setHoles(auth.adminClient, golfDayId, b.holeIds, current)
+    if (scheduleChanged) await setHoles(admin, golfDayId, holes, current)
 
-    log.info('admin.golf_days.updated', { id: golfDayId, by: auth.user.id, fields: [...Object.keys(patch), ...(b.holeIds ? ['holes'] : [])] })
-    const [updated] = await adminGolfDays(auth.adminClient, [golfDayId])
+    log.info('admin.golf_days.updated', { id: golfDayId, by: auth.user.id, fields: [...Object.keys(patch), ...(scheduleChanged ? ['holes'] : [])] })
+    const [updated] = await adminGolfDays(admin, [golfDayId])
     return NextResponse.json({ data: updated })
   } catch (err) {
     return apiError('admin.golf_days.update_failed', err, { path: 'admin_review' })

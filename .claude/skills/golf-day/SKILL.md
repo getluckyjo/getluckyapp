@@ -1,6 +1,6 @@
 ---
 name: golf-day
-description: Set up a sponsored golf day in the Get Lucky app with its own unique link, so every player who joins through it gets one free swing at a prize on the day, on chosen par 3s, with the golf day's tab in place of Icons. Use when someone wants to add, sponsor, brand or prepare a golf day, a corporate day, a club day or an event swing ("give every player at X a free shot at R100K"), change one, or get its link and player instructions.
+description: Set up a sponsored golf day in the Get Lucky app with its own unique link, so every player who joins through it gets one free swing at a prize on the day, on chosen par 3s, with the golf day's tab in place of Icons. Also a golf trip or tour over several days, with a free swing every round and a prize in rand or dollars. Use when someone wants to add, sponsor, brand or prepare a golf day, a corporate day, a club day, a golf trip or tour, or an event swing ("give every player at X a free shot at R100K", "everyone on the tour can win their trip back"), change one, or get its link and player instructions.
 ---
 
 # Add a golf day
@@ -11,6 +11,12 @@ through the link get the golf day's tab in place of Icons and one free swing
 (`tier_golf_day`) on the day (South African time), on its holes, for its
 prize. Everyone else keeps Icons. Read `docs/golf-days.md` for how it works,
 and `supabase/migrations/029_golf_days.sql` for the rules.
+
+A **golf trip** (migration 033) is the same row with an end date
+(`ends_on`): a swing for every player in every round, each hole carrying
+the date of its round (`golf_day_holes.plays_on`), and a prize in rand or
+dollars (`prize_currency`). Random Golf Club's South Africa trip is the
+first; `docs/golf-days.md` has it, holes and all.
 
 Everything is data, set at `/admin/golf-days` with no deploy: the facts
 (date, holes, prize, places), the look (an uploaded logo or photo, colours,
@@ -28,9 +34,9 @@ Ask for anything missing. Do not guess the date, prize or venue.
 | Name | As players know it: "Bomb Squad Golf Day" |
 | Link slug | 2–40 lower-case letters, digits or dashes. It cannot change once sent, so agree it first |
 | Tab label | Shown in the tab bar, beside Home, Play and Account. Up to 7 characters sits like the other tabs. Longer (12 at most) is set smaller and cut short on a narrow phone: "Bomb Squad" showed as "BOMB SQ…", so Bomb Squad went with "BS". Suggest the host's initials or short name |
-| Date | One day. The swing works 00:00–23:59 South African time |
+| Date | One day. The swing works 00:00–23:59 South African time. A trip: its first and last day (30 at most), and the date of each round |
 | Venue and courses | One hole per course the day is played on (e.g. East and West) |
-| Prize | Rand, up to R1 000 000 |
+| Prize | Rand, up to R1 000 000; or dollars for a trip sold in dollars, up to $50 000. One prize for every player |
 | Players | The cap on joins. Add a few spare for late entries |
 | Who covers the prize | If Get Lucky covers it itself (not Indwe), no golf day screen may say it is insured. The golf day screens already say "paid by Get Lucky"; keep it that way |
 | Branding | Optional: a photo and the host's artwork (a can, a logo) for colours |
@@ -56,6 +62,8 @@ Ask for anything missing. Do not guess the date, prize or venue.
   Example: Royal West 17 is 185 m from yellow and 161 m from white.
 - The app stores one distance per hole. If the day plays another tee,
   change that hole's distance in Admin → Courses to match.
+- A trip has one hole per course, each on the date of its round. A day on
+  two courses (Royal Cape, then Steenberg) is two holes on one date.
 - A day on one course can have a single hole (SaSwazi: Umdoni Park 16).
   The screen then says "Hole 16", and the copy speaks of "the hole".
 - When the published cards disagree, count the par 3s: a par 72 with four

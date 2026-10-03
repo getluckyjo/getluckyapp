@@ -22,9 +22,10 @@
  * them: the partial unique index on `bets.payment_intent_id` (error 23505) and
  * the unique `payfast_payments.m_payment_id` that `upsert(onConflict)` targets.
  * So are the triggers the routes branch on: migration 027's promo code check
- * and migration 029's golf day checks, on inserting a bet or a golf day
- * player (error P0001), which run before the unique check as a BEFORE
- * trigger does. A unique key can span columns (golf_day_players).
+ * and migration 029's golf day checks as 033 extends them to trips, on
+ * inserting a bet or a golf day player (error P0001), which run before the
+ * unique check as a BEFORE trigger does, and can set a column as one does
+ * (bets.golf_day_slot). A unique key can span columns (golf_day_players).
  * `db.beforeInsert` lets a test slip a row in just ahead of an insert, which
  * is how a race between a route's check and its write is staged.
  *
@@ -57,7 +58,7 @@ interface Result<T = unknown> {
 }
 
 const UNIQUE: Record<string, (string | string[])[]> = {
-  bets: ['payment_intent_id', ['golf_day_id', 'user_id']],
+  bets: ['payment_intent_id', ['golf_day_id', 'user_id', 'golf_day_slot']],
   payfast_payments: ['m_payment_id'],
   verifications: ['bet_id'],
   beta_access: ['value'],
@@ -70,6 +71,10 @@ const UNIQUE: Record<string, (string | string[])[]> = {
 /** Midnight at the start of a golf day in South Africa (+02:00), as migration 029 reads plays_on. */
 const golfDayOpens = (playsOn: unknown) => Date.parse(`${String(playsOn)}T00:00:00+02:00`)
 const DAY_MS = 24 * 3_600_000
+/** A trip's last day, or the golf day's one (migration 033). */
+const golfDayLast = (day: Row) => day.ends_on ?? day.plays_on
+/** Today's date in South Africa. */
+const southAfricanToday = () => new Date(Date.now() + 2 * 3_600_000).toISOString().slice(0, 10)
 
 type Trigger = (db: FakeDb, row: Row) => PostgrestError | null
 
@@ -78,19 +83,19 @@ const refuse = (message: string): PostgrestError => ({ code: 'P0001', message })
 /** BEFORE INSERT triggers, per table. */
 const BEFORE_INSERT: Record<string, Trigger> = {
   bets: (db, row) => golfDaySwingTrigger(db, row) ?? promoCodeTrigger(db, row),
-  // Mirrors enforce_golf_day_join() in migration 029.
+  // Mirrors enforce_golf_day_join() in migration 033.
   golf_day_players: (db, row) => {
     const day = db.find('golf_days', d => d.id === row.golf_day_id)
     if (!day) return refuse('GOLF_DAY_NOT_FOUND')
     if (day.disabled_at) return refuse('GOLF_DAY_CLOSED')
-    if (Date.now() >= golfDayOpens(day.plays_on) + DAY_MS) return refuse('GOLF_DAY_OVER')
+    if (Date.now() >= golfDayOpens(golfDayLast(day)) + DAY_MS) return refuse('GOLF_DAY_OVER')
     const players = db.rows('golf_day_players').filter(p => p.golf_day_id === row.golf_day_id).length
     if (players >= Number(day.max_players)) return refuse('GOLF_DAY_FULL')
     return null
   },
 }
 
-// Mirrors enforce_golf_day_swing() in migration 029.
+// Mirrors enforce_golf_day_swing() in migration 033 (029's, over a trip's days).
 function golfDaySwingTrigger(db: FakeDb, row: Row): PostgrestError | null {
   if (row.golf_day_id == null) return null
   const day = db.find('golf_days', d => d.id === row.golf_day_id)
@@ -98,10 +103,14 @@ function golfDaySwingTrigger(db: FakeDb, row: Row): PostgrestError | null {
   if (day.disabled_at) return refuse('GOLF_DAY_CLOSED')
   const now = Date.now()
   if (now < golfDayOpens(day.plays_on)) return refuse('GOLF_DAY_NOT_YET')
-  if (now >= golfDayOpens(day.plays_on) + DAY_MS) return refuse('GOLF_DAY_OVER')
+  if (now >= golfDayOpens(golfDayLast(day)) + DAY_MS) return refuse('GOLF_DAY_OVER')
   if (!db.find('golf_day_players', p => p.golf_day_id === row.golf_day_id && p.user_id === row.user_id)) return refuse('GOLF_DAY_NOT_JOINED')
-  if (!db.find('golf_day_holes', h => h.golf_day_id === row.golf_day_id && h.hole_id === row.hole_id)) return refuse('GOLF_DAY_WRONG_HOLE')
-  if (Number(row.stake_pence) !== 0 || Number(row.potential_win_pence) !== Number(day.prize_pence)) return refuse('GOLF_DAY_WRONG_PRIZE')
+  const hole = db.find('golf_day_holes', h => h.golf_day_id === row.golf_day_id && h.hole_id === row.hole_id)
+  if (!hole) return refuse('GOLF_DAY_WRONG_HOLE')
+  if (hole.plays_on != null && hole.plays_on !== southAfricanToday()) return refuse('GOLF_DAY_WRONG_DAY')
+  if (Number(row.stake_pence) !== 0 || Number(row.potential_win_pence) !== Number(day.prize_pence)
+      || (row.prize_currency ?? 'ZAR') !== (day.prize_currency ?? 'ZAR')) return refuse('GOLF_DAY_WRONG_PRIZE')
+  row.golf_day_slot = day.ends_on == null ? 'day' : row.hole_id
   return null
 }
 

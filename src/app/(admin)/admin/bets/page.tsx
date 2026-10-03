@@ -8,7 +8,7 @@ import StatusBadge from '@/components/admin/StatusBadge'
 import SearchInput from '@/components/admin/SearchInput'
 import Pagination from '@/components/admin/Pagination'
 import LoadError from '@/components/admin/LoadError'
-import { formatZAR, timeAgo } from '@/lib/format'
+import { formatZAR, timeAgo, formatMoney } from '@/lib/format'
 import { ALL_TIERS, TIER_LABELS } from '@/lib/tiers'
 import type { AdminBetRecord, PaginatedResponse } from '@/types/admin'
 import { downloadExport, getJson, sastDateTime } from './client-helpers'
@@ -175,7 +175,7 @@ export default function AdminBetsPage() {
                       <td className="adm-muted">{bet.courseName}, H{bet.holeNumber}</td>
                       <td style={{ fontWeight: 700 }}>{TIER_LABELS[bet.tier]}</td>
                       <td style={{ textAlign: 'right' }}>{formatZAR(bet.stakeCents)}</td>
-                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatZAR(bet.potentialWinCents)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</td>
                       <td style={{ textAlign: 'center' }}><StatusBadge status={bet.status} small /></td>
                       <td style={{ textAlign: 'center' }}>
                         {bet.declaredResult ? <StatusBadge status={bet.declaredResult === 'win' ? 'claimed' : 'miss'} small /> : <span className="adm-muted">—</span>}

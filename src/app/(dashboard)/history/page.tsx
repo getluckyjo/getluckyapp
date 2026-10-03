@@ -8,13 +8,15 @@ import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import AppHeader from '@/components/layout/AppHeader'
 import { GolfBallIcon } from '@/components/icons'
-import { formatRandFromCents as formatRand } from '@/lib/format'
+import { formatPrize, formatRandFromCents as formatRand } from '@/lib/format'
 
 interface BetRecord {
   id: string
   tier: string
   stake_pence: number
   potential_win_pence: number
+  /** 'USD' for a golf trip priced in dollars (migration 033); rand otherwise. */
+  prize_currency?: 'ZAR' | 'USD'
   status: string
   declared_result: string | null
   created_at: string
@@ -87,7 +89,12 @@ export default function HistoryPage() {
   }, [])
 
   const totalStaked = allBets.reduce((s, b) => s + b.stake_pence, 0)
-  const totalWon = allBets.filter(b => getOutcome(b) === 'won').reduce((s, b) => s + b.potential_win_pence, 0)
+  // Rand and dollars kept apart: a golf trip's dollar prize is never added to rand.
+  const wins = allBets.filter(b => getOutcome(b) === 'won')
+  const wonRand = wins.filter(b => b.prize_currency !== 'USD').reduce((s, b) => s + b.potential_win_pence, 0)
+  const wonDollars = wins.filter(b => b.prize_currency === 'USD').reduce((s, b) => s + b.potential_win_pence, 0)
+  const totalWon = wonRand + wonDollars
+  const wonText = [wonRand && formatRand(wonRand), wonDollars && formatPrize(wonDollars / 100, 'USD')].filter(Boolean).join(' + ')
   const claimCount = allBets.filter(b => getOutcome(b) !== 'miss').length
 
   return (
@@ -125,7 +132,7 @@ export default function HistoryPage() {
                 </div>
                 <div className="hist-stat">
                   <div className="hist-stat-val">
-                    {totalWon > 0 ? formatRand(totalWon) : claimCount > 0 ? claimCount : 'R0'}
+                    {totalWon > 0 ? wonText : claimCount > 0 ? claimCount : 'R0'}
                   </div>
                   <div className="hist-stat-label">{totalWon > 0 ? 'Won' : claimCount > 0 ? 'Claims' : 'Won'}</div>
                 </div>
@@ -201,7 +208,7 @@ export default function HistoryPage() {
                     <div className="hist-card-foot">
                       <span className="hist-card-stake">Staked {formatRand(bet.stake_pence)}</span>
                       <span className="hist-card-win">
-                        {outcome === 'won' ? 'Won' : 'Prize'}<strong>{formatRand(bet.potential_win_pence)}</strong>
+                        {outcome === 'won' ? 'Won' : 'Prize'}<strong>{formatPrize(bet.potential_win_pence / 100, bet.prize_currency ?? 'ZAR')}</strong>
                       </span>
                     </div>
                   </div>

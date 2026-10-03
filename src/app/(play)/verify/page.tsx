@@ -7,6 +7,7 @@ import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS } from '@/context/BetContext'
 import { isGolfDayTier, tierByKey } from '@/lib/tiers'
+import { formatPrize, formatRand } from '@/lib/format'
 
 type StepStatus = 'completed' | 'active' | 'pending' | 'failed'
 
@@ -55,7 +56,7 @@ function applyRejection(steps: VerifyStep[]): VerifyStep[] {
  */
 export default function VerifyPage() {
   const router = useRouter()
-  const { selectedTier, prizeZAR, betId, selectedCourse, selectedHole, resetSession } = useBet()
+  const { selectedTier, prize, prizeCurrency, betId, selectedCourse, selectedHole, resetSession } = useBet()
   const [steps, setSteps] = useState<VerifyStep[]>(INITIAL_STEPS)
   const [rejected, setRejected] = useState(false)
   const pollRef = useRef<NodeJS.Timeout | null>(null)
@@ -73,7 +74,7 @@ export default function VerifyPage() {
   const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
   // A golf day's prize is set per golf day, and Get Lucky covers it itself:
   // there is no insurer on that claim, so the screen must not name one.
-  const winZAR = prizeZAR ?? tierData.winZAR
+  const winning = prize !== null ? formatPrize(prize, prizeCurrency) : formatRand(tierData.winZAR)
   const selfCovered = isGolfDayTier(selectedTier)
   const shownSteps = selfCovered
     ? steps.map(s => s.id !== 'verified' ? s : {
@@ -159,7 +160,7 @@ export default function VerifyPage() {
           ) : (
             <div className="vf-prize">
               <div className="vf-prize-label">Pending prize</div>
-              <div className="vf-prize-amount">R{winZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}</div>
+              <div className="vf-prize-amount">{winning}</div>
               {selectedCourse && selectedHole && (
                 <div className="vf-prize-meta">{selectedCourse.name} · Hole {selectedHole.holeNumber}</div>
               )}

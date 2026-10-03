@@ -21,6 +21,12 @@
  *    shown to players, used by the calendar; a picture is uploaded, resized
  *    and stored in the art bucket, as a logo or a photo, with colours
  *    suggested; the admin says which courses have no club official
+ *  - a golf trip (migration 033) runs from its first day to the end of its
+ *    last: one swing a player per hole, each hole only on its round's date
+ *    (two courses in a day are two swings), for its prize in its currency
+ *    (dollars for Random Golf Club); joining and the tab follow its last
+ *    day; the admin sets its dates and each hole's, and a golf day with
+ *    swings never turns into a trip or back
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Builder, FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, type FakeUser } from '../helpers/fake-supabase'
@@ -35,9 +41,12 @@ import { GET as dayCalendar } from '@/app/api/golf-days/[slug]/calendar/route'
 import { POST as uploadArt } from '@/app/api/admin/golf-days/art/route'
 import sharp from 'sharp'
 import { golfDayEvent, googleCalendarUrl, toIcs, type CalendarDay } from '@/lib/golf-days/calendar'
+import { golfDayMessage } from '@/lib/golf-days/message'
+import { formatMoney, formatPrize } from '@/lib/format'
 import { siteUrl } from '@/lib/email/layout'
 import {
-  closesAt, formatGolfDayDate, golfDayPhase, golfDaySwingReference, opensAt, refusalFromDbError, shortCourseName, tabVisible, todayInSouthAfrica,
+  closesAt, formatGolfDayDate, formatGolfDayDates, golfDayPhase, golfDaySwingReference, lastDay, opensAt, refusalFromDbError, shortCourseName,
+  tabVisible, todayInSouthAfrica,
 } from '@/lib/golf-days/rules'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
@@ -61,6 +70,8 @@ let db: FakeDb
 
 const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T12:00:00Z`) + n * DAY).toISOString().slice(0, 10)
 const today = () => todayInSouthAfrica()
+/** Holes as the admin sends them, with no round dates (a golf day of one day). */
+const at = (...holeIds: string[]) => holeIds.map(holeId => ({ holeId, playsOn: null }))
 
 function asUser(user: FakeUser | null = USER_A) {
   serverClient.createClient.mockResolvedValue(createFakeClient(db, { user }))
@@ -170,8 +181,8 @@ describe('GET /api/golf-days/[slug]', () => {
     const body = await res.json()
     expect(body.me).toBeNull()
     expect(body.golfDay).toMatchObject({
-      slug: 'bombsquad', name: 'Bomb Squad Golf Day', tabLabel: 'Bomb Squad', playsOn: today(),
-      prizeZAR: 100000, phase: 'today', closed: false, full: false,
+      slug: 'bombsquad', name: 'Bomb Squad Golf Day', tabLabel: 'Bomb Squad', playsOn: today(), endsOn: null,
+      prize: 100000, currency: 'ZAR', phase: 'today', closed: false, full: false,
     })
     expect(body.golfDay.holes.map((h: { course: { name: string }; holeNumber: number; distanceMetres: number }) => [h.course.name.slice(-4), h.holeNumber, h.distanceMetres]))
       .toEqual([['East', 2, 211], ['West', 17, 185]])
@@ -181,11 +192,11 @@ describe('GET /api/golf-days/[slug]', () => {
 
   it('tells a signed-in player whether they joined and where their swing stands', async () => {
     player(); const day = seedDay()
-    expect((await (await read()).json()).me).toMatchObject({ joined: false, ageVerified: true, swing: null })
+    expect((await (await read()).json()).me).toMatchObject({ joined: false, ageVerified: true, swings: [] })
     joined(day)
-    expect((await (await read()).json()).me).toMatchObject({ joined: true, swing: null })
+    expect((await (await read()).json()).me).toMatchObject({ joined: true, swings: [] })
     await swing()
-    expect((await (await read()).json()).me.swing).toMatchObject({ status: 'active', holeId: EAST_2, open: true })
+    expect((await (await read()).json()).me.swings[0]).toMatchObject({ status: 'active', holeId: EAST_2, open: true })
   })
 
   it('says full once every place is taken', async () => {
@@ -285,11 +296,12 @@ describe('POST swing', () => {
   it('grants an active bet for the day\'s prize, with no stake and no ledger row', async () => {
     player(); const day = seedDay(); joined(day)
     const before = Date.now()
-    const res = await swing(WEST_17, { potential_win_pence: 1, prizeZAR: 1_000_000, stake_pence: 500 })
+    const res = await swing(WEST_17, { potential_win_pence: 1, prize: 1_000_000, currency: 'USD', stake_pence: 500 })
     expect(res.status).toBe(200)
     const body = await res.json()
     expect(body).toMatchObject({
-      prizeZAR: 100000,
+      prize: 100000,
+      currency: 'ZAR',
       course: { id: WEST, name: 'Royal Johannesburg & Kensington – West' },
       hole: { id: WEST_17, courseId: WEST, holeNumber: 17, par: 3, distanceMetres: 185 },
     })
@@ -385,7 +397,7 @@ describe('admin', () => {
   const patch = (id: string, body: Record<string, unknown>) => patchDay(jsonRequest('http://x', body, { method: 'PATCH' }), idParams(id))
   const valid = (over: Record<string, unknown> = {}) => ({
     slug: 'clubday', name: 'Club Day', tabLabel: 'Club Day', playsOn: addDays(today(), 10),
-    prizeRand: 50000, maxPlayers: 120, holeIds: [EAST_12], ...over,
+    prize: 50000, maxPlayers: 120, holes: at(EAST_12), ...over,
   })
 
   it('non-admins never reach the handlers', async () => {
@@ -399,10 +411,10 @@ describe('admin', () => {
 
   it('creates a golf day with its holes and answers with its row', async () => {
     asAdmin()
-    const res = await create(valid({ slug: ' ClubDay ', holeIds: [EAST_12, WEST_17] }))
+    const res = await create(valid({ slug: ' ClubDay ', holes: at(EAST_12, WEST_17) }))
     expect(res.status).toBe(201)
     const { data } = await res.json()
-    expect(data).toMatchObject({ slug: 'clubday', name: 'Club Day', tabLabel: 'Club Day', prizeZAR: 50000, maxPlayers: 120, players: 0, swings: 0, phase: 'upcoming' })
+    expect(data).toMatchObject({ slug: 'clubday', name: 'Club Day', tabLabel: 'Club Day', prize: 50000, currency: 'ZAR', endsOn: null, maxPlayers: 120, players: 0, swings: 0, phase: 'upcoming' })
     expect(data.holes.map((h: { holeNumber: number }) => h.holeNumber)).toEqual([12, 17])
     expect(db.find('golf_days', d => d.slug === 'clubday')).toMatchObject({ prize_pence: 5_000_000, created_by: ADMIN.id })
   })
@@ -411,12 +423,12 @@ describe('admin', () => {
     asAdmin()
     for (const over of [
       { slug: 'x' }, { slug: 'has space' }, { tabLabel: 'Much Too Long Label' }, { playsOn: addDays(today(), -1) },
-      { playsOn: '2 October' }, { holeIds: [] }, { prizeRand: 0 }, { maxPlayers: 0 },
+      { playsOn: '2 October' }, { holes: [] }, { prize: 0 }, { maxPlayers: 0 },
     ]) {
       expect((await create(valid(over))).status, JSON.stringify(over)).toBe(400)
     }
     for (const [holeIds, why] of [[[EAST_1], /par 3/], [[EAST_5], /140/], [[ELSEWHERE_3], /not open/], [['f0000000-0000-4000-8000-0000000000ff'], /does not exist/]] as const) {
-      const res = await create(valid({ holeIds }))
+      const res = await create(valid({ holes: at(...holeIds) }))
       expect(res.status).toBe(400)
       expect((await res.json()).error).toMatch(why)
     }
@@ -434,7 +446,7 @@ describe('admin', () => {
     asAdmin()
     const { data } = await (await listDays()).json()
     expect(data).toHaveLength(1)
-    expect(data[0]).toMatchObject({ slug: 'bombsquad', players: 2, swings: 1, claimed: 1, maxPlayers: 200, prizeZAR: 100000 })
+    expect(data[0]).toMatchObject({ slug: 'bombsquad', players: 2, swings: 1, claimed: 1, maxPlayers: 200, prize: 100000, currency: 'ZAR' })
   })
 
   it('switching a day off hides its tab and stops its swing; on again, both come back', async () => {
@@ -452,10 +464,10 @@ describe('admin', () => {
 
   it('changes the holes, prize and places; a bad hole or unknown day is refused', async () => {
     const day = seedDay(); asAdmin()
-    const res = await patch(String(day.id), { holeIds: [EAST_12], prizeRand: 75000, maxPlayers: 180 })
-    expect((await res.json()).data).toMatchObject({ prizeZAR: 75000, maxPlayers: 180, holes: [{ holeNumber: 12 }] })
+    const res = await patch(String(day.id), { holes: at(EAST_12), prize: 75000, maxPlayers: 180 })
+    expect((await res.json()).data).toMatchObject({ prize: 75000, maxPlayers: 180, holes: [{ holeNumber: 12 }] })
     expect(db.rows('golf_day_holes').map(h => h.hole_id)).toEqual([EAST_12])
-    expect((await patch(String(day.id), { holeIds: [EAST_1] })).status).toBe(400)
+    expect((await patch(String(day.id), { holes: at(EAST_1) })).status).toBe(400)
     expect((await patch(String(day.id), {})).status).toBe(400)
     expect((await patch('nope', { maxPlayers: 5 })).status).toBe(400)
     expect((await patch(USER_C.id, { maxPlayers: 5 })).status).toBe(404)
@@ -471,18 +483,18 @@ describe('admin', () => {
     expect(db.rows('golf_day_holes').map(h => h.id)).toEqual(kept)
 
     // Adding East 12 alongside the two it has: East 12 is checked, West 17 is not.
-    const more = await patch(String(day.id), { holeIds: [EAST_2, WEST_17, EAST_12] })
+    const more = await patch(String(day.id), { holes: at(EAST_2, WEST_17, EAST_12) })
     expect(more.status).toBe(200)
     expect(db.rows('golf_day_holes').map(h => h.hole_id).sort()).toEqual([EAST_12, EAST_2, WEST_17].sort())
     expect(db.rows('golf_day_holes').filter(h => kept.includes(h.id))).toHaveLength(2)
     // A hole at a course that is not a partner cannot be added, though.
-    expect((await patch(String(day.id), { holeIds: [EAST_2, ELSEWHERE_3] })).status).toBe(400)
+    expect((await patch(String(day.id), { holes: at(EAST_2, ELSEWHERE_3) })).status).toBe(400)
   })
 
   it('changing the holes adds the new ones before it removes the old: a failure leaves the day its holes', async () => {
     const day = seedDay(); asAdmin()
     db.beforeInsert = table => { if (table === 'golf_day_holes') throw new Error('connection reset') }
-    const res = await patch(String(day.id), { holeIds: [EAST_12] })
+    const res = await patch(String(day.id), { holes: at(EAST_12) })
     expect(res.status).toBe(500)
     expect(db.rows('golf_day_holes').map(h => h.hole_id).sort()).toEqual([EAST_2, WEST_17].sort())
   })
@@ -515,7 +527,7 @@ describe('admin', () => {
     db.seed('bets', { user_id: USER_B.id, tier: 'tier_golf_day', golf_day_id: day.id, status: 'miss', hole_id: WEST_17 })
     asAdmin()
     const { data } = await (await listPlayers(new Request('http://x'), idParams(String(day.id)))).json()
-    expect(data.map((p: { name: string; swing: { status: string; hole: string } | null }) => [p.name, p.swing?.status ?? null, p.swing?.hole ?? null])).toEqual([
+    expect(data.map((p: { name: string; swings: { status: string; hole: string }[] }) => [p.name, p.swings[0]?.status ?? null, p.swings[0]?.hole ?? null])).toEqual([
       ['Alice', null, null],
       ['Bob', 'miss', 'Royal Johannesburg & Kensington – West, hole 17'],
     ])
@@ -546,9 +558,10 @@ describe('Add to calendar', () => {
   const hole = (course: string, holeNumber: number, distanceMetres: number) => ({
     holeId: `${course}-${holeNumber}`, holeNumber, par: 3, distanceMetres,
     course: { id: course, name: `Royal Johannesburg & Kensington – ${course}`, location: 'Linksfield, Gauteng', region: 'Gauteng' },
+    playsOn: null,
   })
   const DAY_OF: CalendarDay = {
-    slug: 'bombsquad', name: 'Bomb Squad Golf Day', tabLabel: 'BS', playsOn: '2026-10-02', prizeZAR: 100000,
+    slug: 'bombsquad', name: 'Bomb Squad Golf Day', tabLabel: 'BS', playsOn: '2026-10-02', endsOn: null, prize: 100000, currency: 'ZAR',
     holes: [hole('East', 16, 152), hole('West', 17, 161)],
   }
   const SITE = 'https://www.getluckyholeinone.com'
@@ -580,6 +593,7 @@ describe('Add to calendar', () => {
     const umdoni = {
       holeId: 'u16', holeNumber: 16, par: 3, distanceMetres: 185,
       course: { id: 'umdoni', name: 'Umdoni Park Golf Club', location: 'Pennington, KwaZulu-Natal', region: 'KwaZulu-Natal' },
+      playsOn: null,
     }
     const event = golfDayEvent({ ...DAY_OF, slug: 'saswazi', name: 'SaSwazi Golf Trek', tabLabel: 'SaSwazi', holes: [umdoni] }, { site: SITE, venue: 'Umdoni Park' })
     expect(event.details).toContain('Play it at hole 16 (185 m).')
@@ -663,7 +677,7 @@ describe('the look, set in the admin', () => {
 
   it('is saved with a new golf day, checked, lower-cased, and shown to players', async () => {
     asAdmin()
-    const res = await create({ slug: 'acme', name: 'Acme Golf Day', tabLabel: 'Acme', playsOn: addDays(today(), 5), prizeRand: 50000, maxPlayers: 40, holeIds: [EAST_12], look: LOOK })
+    const res = await create({ slug: 'acme', name: 'Acme Golf Day', tabLabel: 'Acme', playsOn: addDays(today(), 5), prize: 50000, maxPlayers: 40, holes: at(EAST_12), look: LOOK })
     expect(res.status).toBe(201)
     expect((await res.json()).data.look).toMatchObject({ host: 'Acme Brewing', accent: '#e0115f', hero: { kind: 'logo' } })
     expect(db.find('golf_days', d => d.slug === 'acme')!.look).toMatchObject({ ink: '#102030' })
@@ -675,7 +689,7 @@ describe('the look, set in the admin', () => {
 
   it('refuses a picture from anywhere but its own bucket, and a colour that is not #rrggbb', async () => {
     asAdmin()
-    const base = { slug: 'acme', name: 'Acme Golf Day', tabLabel: 'Acme', playsOn: addDays(today(), 5), prizeRand: 50000, maxPlayers: 40, holeIds: [EAST_12] }
+    const base = { slug: 'acme', name: 'Acme Golf Day', tabLabel: 'Acme', playsOn: addDays(today(), 5), prize: 50000, maxPlayers: 40, holes: at(EAST_12) }
     for (const look of [
       { ...LOOK, hero: { ...LOOK.hero, src: 'https://evil.example/logo.webp' } },
       { ...LOOK, hero: { ...LOOK.hero, src: `${SUPABASE}/storage/v1/object/public/verification-docs/x.webp` } },
@@ -746,5 +760,254 @@ describe('the look, set in the admin', () => {
       expect((await upload(new Blob([new Uint8Array(await png(true))], { type: 'image/png' }))).status).toBe(403)
       expect(db.bucket('golf-day-art').size).toBe(0)
     })
+  })
+})
+
+describe('a golf trip (migration 033): a swing every round, in dollars', () => {
+  /** Yesterday to five days on, $5 000: East 2 and West 17 today (two courses in a day), East 12 tomorrow. */
+  function seedTrip(over: Record<string, unknown> = {}) {
+    const trip = db.seed('golf_days', {
+      slug: 'rgc-sa', name: 'Random Golf Club South Africa', tab_label: 'RGC',
+      plays_on: addDays(today(), -1), ends_on: addDays(today(), 5),
+      prize_pence: 500_000, prize_currency: 'USD', max_players: 24, note: null, disabled_at: null, ...over,
+    })[0]
+    db.seed('golf_day_holes',
+      { golf_day_id: trip.id, hole_id: EAST_2, plays_on: today() },
+      { golf_day_id: trip.id, hole_id: WEST_17, plays_on: today() },
+      { golf_day_id: trip.id, hole_id: EAST_12, plays_on: addDays(today(), 1) },
+    )
+    return trip
+  }
+  const tripSwing = (holeId: string) => swing(holeId, {}, 'rgc-sa')
+
+  it('runs from the first day to the end of the last; the tab a week after; dates as a range; dollars as Americans write them', () => {
+    expect(golfDayPhase('2027-02-14', Date.parse('2027-02-13T21:59:59Z'), '2027-02-20')).toBe('upcoming')
+    expect(golfDayPhase('2027-02-14', Date.parse('2027-02-17T10:00:00Z'), '2027-02-20')).toBe('today')
+    expect(golfDayPhase('2027-02-14', Date.parse('2027-02-20T21:59:59Z'), '2027-02-20')).toBe('today')
+    expect(golfDayPhase('2027-02-14', Date.parse('2027-02-20T22:00:00Z'), '2027-02-20')).toBe('over')
+    expect(tabVisible(lastDay('2027-02-14', '2027-02-20'), Date.parse('2027-02-27T21:59:00Z'))).toBe(true)
+    expect(tabVisible(lastDay('2027-02-14', '2027-02-20'), Date.parse('2027-02-27T22:00:00Z'))).toBe(false)
+    expect(formatGolfDayDates('2027-02-14', '2027-02-20')).toBe('14–20 February')
+    expect(formatGolfDayDates('2027-02-28', '2027-03-03')).toBe('28 February – 3 March')
+    expect(formatGolfDayDates('2026-10-02', null)).toBe('Friday 2 October')
+    expect(golfDaySwingReference('d', 'u', 'h')).toBe('golfday_d_u_h')
+    expect(formatPrize(5000, 'USD')).toBe('$5,000')
+    expect(formatPrize(100000, 'ZAR')).toBe('R100\u00a0000')
+    expect(formatMoney(500_000, 'USD')).toBe('$5,000')
+    expect(formatMoney(500_000, 'ZAR')).toBe(formatMoney(500_000))
+  })
+
+  it('shows the trip: its dates, its dollar prize, each hole with its round', async () => {
+    asUser(null); seedTrip()
+    const { golfDay } = await (await read('rgc-sa')).json()
+    expect(golfDay).toMatchObject({ playsOn: addDays(today(), -1), endsOn: addDays(today(), 5), prize: 5000, currency: 'USD', phase: 'today' })
+    expect(golfDay.holes.map((h: { holeNumber: number; playsOn: string }) => [h.holeNumber, h.playsOn]))
+      .toEqual([[2, today()], [17, today()], [12, addDays(today(), 1)]])
+  })
+
+  it('one swing a round: both of today\'s holes, each once, for $5 000', async () => {
+    player(); const trip = seedTrip(); joined(trip)
+    const first = await tripSwing(EAST_2)
+    expect(first.status).toBe(200)
+    expect(await first.json()).toMatchObject({ prize: 5000, currency: 'USD', hole: { holeNumber: 2 } })
+    expect((await tripSwing(WEST_17)).status).toBe(200)
+    const again = await tripSwing(EAST_2)
+    expect(again.status).toBe(409)
+    expect((await again.json()).code).toBe('GOLF_DAY_ROUND_USED')
+    expect(swings().map(b => [b.hole_id, b.potential_win_pence, b.prize_currency, b.golf_day_slot, b.payment_intent_id])).toEqual([
+      [EAST_2, 500_000, 'USD', EAST_2, golfDaySwingReference(String(trip.id), USER_A.id, EAST_2)],
+      [WEST_17, 500_000, 'USD', WEST_17, golfDaySwingReference(String(trip.id), USER_A.id, WEST_17)],
+    ])
+    const { me } = await (await read('rgc-sa')).json()
+    expect(me.swings.map((sw: { holeId: string }) => sw.holeId).sort()).toEqual([EAST_2, WEST_17].sort())
+  })
+
+  it('a hole only on its round\'s day', async () => {
+    player(); joined(seedTrip())
+    const res = await tripSwing(EAST_12)
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe('GOLF_DAY_WRONG_DAY')
+    expect(swings()).toHaveLength(0)
+  })
+
+  it('a second tap on the same hole that slips past the check is caught by the one-swing-a-round index', async () => {
+    player(); const trip = seedTrip(); joined(trip)
+    db.beforeInsert = table => {
+      if (table !== 'bets') return
+      db.beforeInsert = null
+      db.seed('bets', { user_id: USER_A.id, tier: 'tier_golf_day', golf_day_id: trip.id, golf_day_slot: EAST_2, hole_id: EAST_2, status: 'active' })
+    }
+    expect((await (await tripSwing(EAST_2)).json()).code).toBe('GOLF_DAY_ROUND_USED')
+    expect(swings()).toHaveLength(1)
+  })
+
+  it('the database holds the round\'s date, the prize and its currency, and a golf day keeps one swing each', async () => {
+    const trip = seedTrip(); joined(trip)
+    const bets = createFakeClient(db).from('bets')
+    const insert = (over: Record<string, unknown>) => bets.insert({
+      user_id: USER_A.id, course_id: EAST, hole_id: EAST_2, tier: 'tier_golf_day', stake_pence: 0,
+      potential_win_pence: 500_000, prize_currency: 'USD', golf_day_id: trip.id, ...over,
+    })
+    expect((await insert({ hole_id: EAST_12 })).error?.message).toBe('GOLF_DAY_WRONG_DAY')
+    expect((await insert({ prize_currency: 'ZAR' })).error?.message).toBe('GOLF_DAY_WRONG_PRIZE')
+    expect((await insert({ potential_win_pence: 569_500 })).error?.message).toBe('GOLF_DAY_WRONG_PRIZE')
+    expect((await insert({})).error).toBeNull()
+    expect((await insert({})).error?.code).toBe('23505')
+    expect((await insert({ hole_id: WEST_17, course_id: WEST })).error).toBeNull()
+
+    const day = seedDay(); joined(day)
+    const onDay = (hole_id: string) => bets.insert({
+      user_id: USER_A.id, course_id: EAST, hole_id, tier: 'tier_golf_day', stake_pence: 0, potential_win_pence: 10_000_000, golf_day_id: day.id,
+    })
+    expect((await onDay(EAST_2)).error).toBeNull()
+    expect((await onDay(WEST_17)).error?.code).toBe('23505')
+    expect(db.rows('bets').filter(b => b.golf_day_id === day.id).map(b => b.golf_day_slot)).toEqual(['day'])
+  })
+
+  it('joining stays open until the last day ends, and the tab stays a week after it', async () => {
+    player(); seedTrip()
+    expect((await join('rgc-sa')).status).toBe(200)
+    expect(await (await myTab()).json()).toEqual({ tab: { slug: 'rgc-sa', tabLabel: 'RGC' } })
+
+    player(USER_B)
+    db.seed('golf_days', { slug: 'ended', name: 'Ended Trip', tab_label: 'Ended', plays_on: addDays(today(), -9), ends_on: addDays(today(), -1),
+      prize_pence: 500_000, prize_currency: 'USD', max_players: 24, note: null, disabled_at: null })
+    const res = await join('ended')
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe('GOLF_DAY_OVER')
+    // Its players keep the tab: the trip ended a day ago, though it started nine days back.
+    joined(db.find('golf_days', d => d.slug === 'ended')!, USER_B)
+    expect(await (await myTab()).json()).toEqual({ tab: { slug: 'ended', tabLabel: 'Ended' } })
+  })
+
+  describe('admin', () => {
+    const create = (body: Record<string, unknown>) => createDay(jsonRequest('http://x/api/admin/golf-days', body))
+    const patch = (id: string, body: Record<string, unknown>) => patchDay(jsonRequest('http://x', body, { method: 'PATCH' }), idParams(id))
+    const first = () => addDays(today(), 30)
+    const trip = (over: Record<string, unknown> = {}) => ({
+      slug: 'rgc-sa', name: 'Random Golf Club South Africa', tabLabel: 'RGC', playsOn: first(), endsOn: addDays(first(), 6),
+      prize: 5000, currency: 'USD', maxPlayers: 28,
+      holes: [{ holeId: EAST_2, playsOn: first() }, { holeId: WEST_17, playsOn: addDays(first(), 1) }, { holeId: EAST_12, playsOn: addDays(first(), 1) }],
+      ...over,
+    })
+
+    it('makes a trip in dollars, each hole on its round\'s date', async () => {
+      asAdmin()
+      const res = await create(trip())
+      expect(res.status).toBe(201)
+      const { data } = await res.json()
+      expect(data).toMatchObject({ slug: 'rgc-sa', endsOn: addDays(first(), 6), prize: 5000, currency: 'USD', phase: 'upcoming' })
+      expect(data.holes.map((h: { holeNumber: number; playsOn: string }) => [h.holeNumber, h.playsOn]))
+        .toEqual([[2, first()], [12, addDays(first(), 1)], [17, addDays(first(), 1)]])
+      expect(db.find('golf_days', d => d.slug === 'rgc-sa')).toMatchObject({ prize_pence: 500_000, prize_currency: 'USD', ends_on: addDays(first(), 6) })
+    })
+
+    it('refuses a hole without its date or outside the trip, a trip that ends before it starts or runs past 30 days, and over $50 000', async () => {
+      asAdmin()
+      for (const over of [
+        { holes: [{ holeId: EAST_2, playsOn: null }] },
+        { holes: [{ holeId: EAST_2, playsOn: addDays(first(), 7) }] },
+        { endsOn: first() },
+        { endsOn: addDays(first(), 31) },
+        { prize: 50_001 },
+        { currency: 'EUR' },
+        { holes: [{ holeId: EAST_2, playsOn: first() }, { holeId: EAST_2, playsOn: addDays(first(), 1) }] },
+      ]) {
+        expect((await create(trip(over))).status, JSON.stringify(over)).toBe(400)
+      }
+      expect(db.rows('golf_days')).toHaveLength(0)
+      // A golf day of one day takes no dates on its holes: any sent are dropped.
+      const day = await create(trip({ slug: 'one-day', endsOn: null, prize: 100000, currency: 'ZAR' }))
+      expect(day.status).toBe(201)
+      expect(db.rows('golf_day_holes').map(h => h.plays_on ?? null)).toEqual([null, null, null])
+    })
+
+    it('moves a hole to another round, and checks the dates the trip keeps', async () => {
+      asAdmin()
+      const { data } = await (await create(trip())).json()
+      const moved = await patch(data.id, { holes: [{ holeId: EAST_2, playsOn: addDays(first(), 2) }, { holeId: WEST_17, playsOn: addDays(first(), 1) }] })
+      expect(moved.status).toBe(200)
+      expect(db.rows('golf_day_holes').map(h => [h.hole_id, h.plays_on]).sort())
+        .toEqual([[EAST_2, addDays(first(), 2)], [WEST_17, addDays(first(), 1)]].sort())
+      // Shortening the trip past its holes' rounds is refused, holes unsent or not.
+      expect((await patch(data.id, { endsOn: addDays(first(), 1) })).status).toBe(400)
+      expect((await patch(data.id, { prize: 60_000 })).status).toBe(400)
+      expect((await patch(data.id, { currency: 'ZAR', prize: 90_000 })).status).toBe(200)
+    })
+
+    it('a golf day with swings stays a golf day, and a trip with swings stays a trip', async () => {
+      const day = seedDay({ plays_on: addDays(today(), -1) })
+      db.seed('bets', { user_id: USER_B.id, tier: 'tier_golf_day', golf_day_id: day.id, golf_day_slot: 'day', status: 'miss', hole_id: EAST_2 })
+      const tripRow = seedTrip()
+      db.seed('bets', { user_id: USER_B.id, tier: 'tier_golf_day', golf_day_id: tripRow.id, golf_day_slot: EAST_2, status: 'miss', hole_id: EAST_2 })
+      asAdmin()
+      const toTrip = await patch(String(day.id), { endsOn: addDays(today(), 2), holes: [{ holeId: EAST_2, playsOn: today() }] })
+      expect(toTrip.status).toBe(409)
+      expect((await toTrip.json()).code).toBe('GOLF_DAY_IN_USE')
+      expect((await patch(String(tripRow.id), { endsOn: null })).status).toBe(409)
+      // Without swings, a trip can become a day: its holes lose their dates.
+      const empty = seedTrip({ slug: 'empty' })
+      expect((await patch(String(empty.id), { endsOn: null })).status).toBe(200)
+      expect(db.rows('golf_day_holes').filter(h => h.golf_day_id === empty.id).map(h => h.plays_on)).toEqual([null, null, null])
+    })
+
+    it('lists every swing a player took on the trip', async () => {
+      const tripRow = seedTrip()
+      db.seed('profiles', { id: USER_A.id, name: 'Alice', email: USER_A.email })
+      joined(tripRow, USER_A)
+      db.seed('bets',
+        { user_id: USER_A.id, tier: 'tier_golf_day', golf_day_id: tripRow.id, status: 'miss', hole_id: EAST_2, created_at: '2027-02-15T08:00:00Z' },
+        { user_id: USER_A.id, tier: 'tier_golf_day', golf_day_id: tripRow.id, status: 'claimed', hole_id: WEST_17, created_at: '2027-02-15T13:00:00Z' },
+      )
+      asAdmin()
+      const { data } = await (await listPlayers(new Request('http://x'), idParams(String(tripRow.id)))).json()
+      expect(data[0].swings.map((sw: { status: string; hole: string }) => [sw.status, sw.hole])).toEqual([
+        ['miss', 'Royal Johannesburg & Kensington – East, hole 2'],
+        ['claimed', 'Royal Johannesburg & Kensington – West, hole 17'],
+      ])
+    })
+  })
+
+  it('the calendar spans the trip and lists its rounds; the message lists them too', () => {
+    const hole = (holeNumber: number, name: string, playsOn: string, distanceMetres: number) => ({
+      holeId: `${name}-${holeNumber}`, holeNumber, par: 3, distanceMetres, playsOn,
+      course: { id: name, name, location: 'Cape Town, Western Cape', region: 'Western Cape' },
+    })
+    const rgc = {
+      slug: 'rgc-sa', name: 'Random Golf Club South Africa', tabLabel: 'RGC', playsOn: '2027-02-14', endsOn: '2027-02-20',
+      prize: 5000, currency: 'USD' as const,
+      holes: [
+        hole(6, 'Metropolitan Golf Club', '2027-02-14', 152),
+        hole(15, 'Royal Cape Golf Club', '2027-02-15', 148),
+        hole(7, 'Steenberg Golf Club', '2027-02-15', 148),
+        hole(9, 'De Zalze Golf Club', '2027-02-20', 146),
+      ],
+    }
+    const event = golfDayEvent(rgc, { site: 'https://www.getluckyholeinone.com', venue: 'Cape Town' })
+    expect(event).toMatchObject({
+      title: 'Random Golf Club South Africa: a free swing every round for $5,000',
+      start: '20270214',
+      end: '20270221',
+      location: 'Cape Town',
+    })
+    expect(event.details).toContain('Sun 14 Feb: Metropolitan Golf Club 6 (152 m)')
+    expect(event.details).toContain('Mon 15 Feb: Royal Cape Golf Club 15 (148 m) and Steenberg Golf Club 7 (148 m)')
+    expect(toIcs(event, new Date('2026-10-03T12:00:00Z'))).toContain('DTEND;VALUE=DATE:20270221')
+
+    expect(golfDayMessage(rgc, { site: 'https://www.getluckyholeinone.com', venue: 'Cape Town' })).toBe([
+      '⛳ *Random Golf Club South Africa × Get Lucky* 🍀',
+      '',
+      'A free swing every round, on one hole a course. *$5,000* if one drops. 💰',
+      '',
+      '📲 *Before Sunday:* tap the link, sign in, hit *Join*, then add it to your home screen and calendar.',
+      'https://www.getluckyholeinone.com/golf-day/rgc-sa',
+      '',
+      "🏌️ *Every round:* open the *RGC* tab, tap the day's hole when you get there and get a mate to film it.",
+      'Sun 14 Feb: Metropolitan 6',
+      'Mon 15 Feb: Royal Cape 15 and Steenberg 7',
+      'Sat 20 Feb: De Zalze 9',
+      '',
+      "18+. One swing a round. Swing like the rent's due. 🍀",
+    ].join('\n'))
   })
 })

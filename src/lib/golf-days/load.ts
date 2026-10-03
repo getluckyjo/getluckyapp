@@ -5,7 +5,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { MIN_HOLE_METRES, isHolePlayable } from '@/lib/holes'
-import type { GolfDayHole } from './rules'
+import { currencyFrom, type GolfDayHole, type PrizeCurrency } from './rules'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = SupabaseClient<any, any, any>
@@ -23,14 +23,28 @@ export interface GolfDayRow {
   created_at: string
   /** The look set in the admin (migration 031); read with parseLook. Absent before 031 has run. */
   look?: unknown
+  /** A trip's last day and its currency (migration 033). Absent before 033 has run. */
+  ends_on?: string | null
+  prize_currency?: string
 }
 
 /**
- * Every column, rather than a list: `look` arrives with migration 031, and
- * naming it would break every golf day screen on a database 031 has not
- * reached yet. Callers map the row to what they show.
+ * Every column, rather than a list: `look` arrives with migration 031 and
+ * the trip columns with 033, and naming them would break every golf day
+ * screen on a database that has not reached them yet. Callers map the row
+ * to what they show.
  */
 export const GOLF_DAY_SELECT = '*'
+
+/** A row's dates and prize as every screen shows them: a trip's end, and the prize in whole rand or dollars. */
+export function golfDayFacts(row: GolfDayRow): { playsOn: string; endsOn: string | null; prize: number; currency: PrizeCurrency } {
+  return {
+    playsOn: row.plays_on,
+    endsOn: row.ends_on ?? null,
+    prize: Math.round(row.prize_pence / 100),
+    currency: currencyFrom(row.prize_currency),
+  }
+}
 
 export async function golfDayBySlug(admin: Client, slug: string): Promise<GolfDayRow | null> {
   const { data, error } = await admin.from('golf_days').select(GOLF_DAY_SELECT).eq('slug', slug).maybeSingle()
@@ -43,7 +57,8 @@ export async function holesFor(admin: Client, golfDayIds: string[]): Promise<Map
   const out = new Map<string, GolfDayHole[]>(golfDayIds.map(id => [id, []]))
   if (!golfDayIds.length) return out
 
-  const { data: links, error } = await admin.from('golf_day_holes').select('golf_day_id, hole_id').in('golf_day_id', golfDayIds)
+  // Every column: plays_on (a trip round's date) arrives with migration 033.
+  const { data: links, error } = await admin.from('golf_day_holes').select('*').in('golf_day_id', golfDayIds)
   if (error) throw error
   const holeIds = [...new Set((links ?? []).map((l: { hole_id: string }) => l.hole_id))]
   if (!holeIds.length) return out
@@ -61,7 +76,7 @@ export async function holesFor(admin: Client, golfDayIds: string[]): Promise<Map
   const holeById = new Map((holes ?? []).map((h: HoleRow) => [h.id, h]))
   const courseById = new Map((courses ?? []).map((c: CourseRow) => [c.id, c]))
 
-  for (const link of (links ?? []) as { golf_day_id: string; hole_id: string }[]) {
+  for (const link of (links ?? []) as { golf_day_id: string; hole_id: string; plays_on?: string | null }[]) {
     const hole = holeById.get(link.hole_id)
     const course = hole && courseById.get(hole.course_id)
     if (!hole || !course) continue
@@ -71,10 +86,12 @@ export async function holesFor(admin: Client, golfDayIds: string[]): Promise<Map
       par: hole.par,
       distanceMetres: hole.distance_metres,
       course: { id: course.id, name: course.name, location: course.location_text ?? course.region ?? '', region: course.region ?? '' },
+      playsOn: link.plays_on ?? null,
     })
   }
+  // A trip's in the order they are played; within a day (or a golf day), by course.
   for (const list of out.values()) {
-    list.sort((a, b) => a.course.name.localeCompare(b.course.name) || a.holeNumber - b.holeNumber)
+    list.sort((a, b) => (a.playsOn ?? '').localeCompare(b.playsOn ?? '') || a.course.name.localeCompare(b.course.name) || a.holeNumber - b.holeNumber)
   }
   return out
 }

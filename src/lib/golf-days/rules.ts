@@ -3,6 +3,11 @@
  * joins through its link one free swing, on that day, on its holes, for its
  * prize.
  *
+ * A golf trip (migration 033) is a golf day that runs over several days,
+ * from playsOn to endsOn: a swing for each player in every round, on that
+ * round's hole (each hole carries its round's date), for the trip's prize,
+ * which can be in dollars.
+ *
  * The database holds every rule: a trigger caps who can join and closes
  * joining once the day is over, a unique index allows one swing per player,
  * and a second trigger allows the swing only to a joined player, only on the
@@ -22,6 +27,21 @@ export function golfDayPath(slug: string): string {
   return `/golf-day/${slug}`
 }
 
+/** A golf day's prize is in rand; a golf trip's can be in dollars (migration 033). */
+export type PrizeCurrency = 'ZAR' | 'USD'
+export const PRIZE_CURRENCIES: readonly PrizeCurrency[] = ['ZAR', 'USD']
+
+/** The most a prize may be, in whole units: R1 000 000, or $50 000 (about the same). */
+export const PRIZE_MAX: Record<PrizeCurrency, number> = { ZAR: 1_000_000, USD: 50_000 }
+
+/** A trip runs at most this many days after it starts (the table's check). */
+export const TRIP_MAX_DAYS = 30
+
+/** golf_days.prize_currency, read safely: rand before migration 033, or for anything unknown. */
+export function currencyFrom(raw: unknown): PrizeCurrency {
+  return raw === 'USD' ? 'USD' : 'ZAR'
+}
+
 /** South Africa keeps +02:00 all year, so a date is one fixed 24-hour window. */
 const SAST_OFFSET = '+02:00'
 const DAY_MS = 24 * 3_600_000
@@ -39,17 +59,29 @@ export function closesAt(playsOn: string): number {
   return opensAt(playsOn) + DAY_MS
 }
 
+/** 'today' is the day itself, or any day of a trip. */
 export type GolfDayPhase = 'upcoming' | 'today' | 'over'
 
-export function golfDayPhase(playsOn: string, now: number = Date.now()): GolfDayPhase {
+/** The last day a golf day runs: a trip's end date, or the one day. */
+export function lastDay(playsOn: string, endsOn: string | null | undefined): string {
+  return endsOn ?? playsOn
+}
+
+export function golfDayPhase(playsOn: string, now: number = Date.now(), endsOn: string | null = null): GolfDayPhase {
   if (now < opensAt(playsOn)) return 'upcoming'
-  if (now < closesAt(playsOn)) return 'today'
+  if (now < closesAt(lastDay(playsOn, endsOn))) return 'today'
   return 'over'
 }
 
-/** Whether a joined player still sees the golf day tab in place of Icons. */
-export function tabVisible(playsOn: string, now: number = Date.now()): boolean {
-  return now < closesAt(playsOn) + TAB_DAYS_AFTER * DAY_MS
+/** Whether a joined player still sees the golf day tab in place of Icons. Pass a trip's last day. */
+export function tabVisible(lastPlayed: string, now: number = Date.now()): boolean {
+  return now < closesAt(lastPlayed) + TAB_DAYS_AFTER * DAY_MS
+}
+
+/** A date (YYYY-MM-DD) n days on. */
+export function addDays(date: string, n: number): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10)
 }
 
 /** Today's date in South Africa, as YYYY-MM-DD. */
@@ -57,17 +89,57 @@ export function todayInSouthAfrica(now: number = Date.now()): string {
   return new Date(now + 2 * 3_600_000).toISOString().slice(0, 10)
 }
 
-/** "Friday 2 October", for a golf day's date. (en-ZA would give "Friday, 02 October".) */
+/** "Friday 2 October", for a golf day's date. (en-GB: en-ZA would give "Friday, 02 October".) */
 export function formatGolfDayDate(playsOn: string): string {
   return new Date(`${playsOn}T12:00:00${SAST_OFFSET}`).toLocaleDateString('en-GB', {
     weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Africa/Johannesburg',
   })
 }
 
-/** The reference a golf day swing carries. Deterministic per golf day and
- *  player, so the unique index on payment_intent_id is a second lock. */
-export function golfDaySwingReference(golfDayId: string, userId: string): string {
-  return `golfday_${golfDayId}_${userId}`
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/**
+ * A trip round's date, short: "Sun 14 Feb". Spelt out by hand: en-GB's
+ * short form is "Sun, 14 Feb" in Chrome and "Sun 14 Feb" in Node.
+ */
+export function formatRoundDate(playsOn: string): string {
+  const [y, m, d] = playsOn.split('-').map(Number)
+  return `${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} ${MONTHS[m - 1]}`
+}
+
+/** "Friday 2 October" for a day; "14–20 February" or "28 February – 3 March" for a trip. */
+export function formatGolfDayDates(playsOn: string, endsOn: string | null): string {
+  if (!endsOn) return formatGolfDayDate(playsOn)
+  const part = (date: string, opts: Intl.DateTimeFormatOptions) =>
+    new Date(`${date}T12:00:00${SAST_OFFSET}`).toLocaleDateString('en-GB', { ...opts, timeZone: 'Africa/Johannesburg' })
+  const sameMonth = playsOn.slice(0, 7) === endsOn.slice(0, 7)
+  return sameMonth
+    ? `${part(playsOn, { day: 'numeric' })}–${part(endsOn, { day: 'numeric', month: 'long' })}`
+    : `${part(playsOn, { day: 'numeric', month: 'long' })} – ${part(endsOn, { day: 'numeric', month: 'long' })}`
+}
+
+/**
+ * The reference a golf day swing carries. Deterministic per golf day and
+ * player, and on a trip per hole too (one swing a round), so the unique
+ * index on payment_intent_id is a second lock.
+ */
+export function golfDaySwingReference(golfDayId: string, userId: string, tripHoleId?: string): string {
+  return tripHoleId ? `golfday_${golfDayId}_${userId}_${tripHoleId}` : `golfday_${golfDayId}_${userId}`
+}
+
+/** The holes whose round is on `date`. On a golf day of one day (no dates on its holes), all of them. */
+export function holesOn(holes: GolfDayHole[], date: string): GolfDayHole[] {
+  return holes.filter(h => !h.playsOn || h.playsOn === date)
+}
+
+/** A trip's holes by the date of their round, in date order; holes with no date last. */
+export function rounds(holes: GolfDayHole[]): { date: string | null; holes: GolfDayHole[] }[] {
+  const byDate = new Map<string | null, GolfDayHole[]>()
+  for (const h of holes) byDate.set(h.playsOn, [...(byDate.get(h.playsOn) ?? []), h])
+  return [...byDate.entries()]
+    .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : a.localeCompare(b)))
+    .map(([date, list]) => ({ date, holes: list }))
 }
 
 /** Every reason a player can be turned away. */
@@ -80,7 +152,9 @@ export type GolfDayRefusal =
   | 'GOLF_DAY_NOT_JOINED'
   | 'GOLF_DAY_WRONG_HOLE'
   | 'GOLF_DAY_WRONG_PRIZE'
+  | 'GOLF_DAY_WRONG_DAY'
   | 'GOLF_DAY_SWING_USED'
+  | 'GOLF_DAY_ROUND_USED'
 
 /** What the player is told for each, and with which status. */
 export const GOLF_DAY_REFUSALS: Record<GolfDayRefusal, { status: number; error: string }> = {
@@ -92,13 +166,16 @@ export const GOLF_DAY_REFUSALS: Record<GolfDayRefusal, { status: number; error: 
   GOLF_DAY_NOT_JOINED:  { status: 403, error: 'Join the golf day first, then take your swing.' },
   GOLF_DAY_WRONG_HOLE:  { status: 400, error: 'Your swing can only be played on the golf day’s holes.' },
   GOLF_DAY_WRONG_PRIZE: { status: 400, error: 'Your swing could not be started. Please try again.' },
+  GOLF_DAY_WRONG_DAY:   { status: 409, error: 'That hole’s round is on another day. Your swing there opens on the day.' },
   GOLF_DAY_SWING_USED:  { status: 409, error: 'You have already taken your swing at this golf day.' },
+  GOLF_DAY_ROUND_USED:  { status: 409, error: 'You have already taken your swing on this hole. Your next one is in the next round.' },
 }
 
-/** The refusals the migration 029 triggers raise, as their message. */
+/** The refusals the migration 029 and 033 triggers raise, as their message. */
 const TRIGGER_REFUSALS = new Set<GolfDayRefusal>([
   'GOLF_DAY_NOT_FOUND', 'GOLF_DAY_CLOSED', 'GOLF_DAY_OVER', 'GOLF_DAY_FULL',
   'GOLF_DAY_NOT_YET', 'GOLF_DAY_NOT_JOINED', 'GOLF_DAY_WRONG_HOLE', 'GOLF_DAY_WRONG_PRIZE',
+  'GOLF_DAY_WRONG_DAY',
 ])
 
 /** A trigger's refusal, when that is what an insert error is. */
@@ -115,6 +192,8 @@ export interface GolfDayHole {
   par: number
   distanceMetres: number | null
   course: { id: string; name: string; location: string; region: string }
+  /** On a trip, the date of this hole's round; null on a golf day of one day. */
+  playsOn: string | null
 }
 
 export interface PublicGolfDay {
@@ -122,7 +201,11 @@ export interface PublicGolfDay {
   name: string
   tabLabel: string
   playsOn: string
-  prizeZAR: number
+  /** A trip's last day; null for a golf day of one day. */
+  endsOn: string | null
+  /** The prize in whole rand, or whole dollars on a trip priced in dollars. */
+  prize: number
+  currency: PrizeCurrency
   phase: GolfDayPhase
   closed: boolean
   full: boolean
@@ -142,7 +225,8 @@ export interface GolfDaySwing {
 export interface GolfDayMe {
   joined: boolean
   ageVerified: boolean
-  swing: GolfDaySwing | null
+  /** Their swings: at most one on a golf day, one a round on a trip. */
+  swings: GolfDaySwing[]
 }
 
 export interface AdminGolfDay {
@@ -151,7 +235,9 @@ export interface AdminGolfDay {
   name: string
   tabLabel: string
   playsOn: string
-  prizeZAR: number
+  endsOn: string | null
+  prize: number
+  currency: PrizeCurrency
   maxPlayers: number
   note: string | null
   disabledAt: string | null
@@ -166,16 +252,26 @@ export interface AdminGolfDay {
   missingOfficials: string[]
 }
 
-/** The club all the holes belong to ("Royal Johannesburg & Kensington"), or the course names. */
+/**
+ * The club all the holes belong to ("Royal Johannesburg & Kensington"), or
+ * the course names; over more than three clubs (a trip), how many courses.
+ * A trip's admin names its venue ("Cape Town") in the look.
+ */
 export function golfDayVenue(holes: GolfDayHole[]): string {
   const names = [...new Set(holes.map(h => h.course.name))]
   const clubs = [...new Set(names.map(n => (n.includes(' – ') ? n.slice(0, n.lastIndexOf(' – ')) : n)))]
-  return clubs.length === 1 ? clubs[0] : names.join(' · ')
+  if (clubs.length === 1) return clubs[0]
+  return clubs.length > 3 ? `${names.length} courses` : names.join(' · ')
 }
 
 /** Every hole is on the one course, so a hole needs no course named beside it ("Hole 16"). */
 export function oneCourse(holes: GolfDayHole[]): boolean {
   return new Set(holes.map(h => h.course.id)).size <= 1
+}
+
+/** A course as golfers say it: "Pearl Valley" for "Pearl Valley Golf Club", "Clovelly" for "Clovelly Country Club". */
+export function plainCourseName(name: string): string {
+  return name.replace(/\s+(golf (?:club|course|estate)|country club|golf & country (?:club|estate))$/i, '')
 }
 
 /** Course names carry the club: "Royal Johannesburg & Kensington – East" reads "East" next to its sibling. */

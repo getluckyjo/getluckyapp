@@ -6,8 +6,8 @@
  */
 import type { CSSProperties } from 'react'
 import Image from 'next/image'
-import { formatRand } from '@/lib/format'
-import { formatGolfDayDate, golfDayVenue, type GolfDayHole } from '@/lib/golf-days/rules'
+import { formatPrize } from '@/lib/format'
+import { formatGolfDayDates, golfDayVenue, type GolfDayHole, type PrizeCurrency } from '@/lib/golf-days/rules'
 import type { GolfDayHero, GolfDayTheme } from '@/lib/golf-days/themes'
 
 /** The theme's colours as the CSS variables the .gd-* styles read. */
@@ -15,9 +15,9 @@ export function themeVars(theme: GolfDayTheme): CSSProperties {
   return { '--gd-ink': theme.ink, '--gd-accent': theme.accent, '--gd-paper': theme.paper, '--gd-page': theme.page } as CSSProperties
 }
 
-/** "Bomb Squad Golf Day" sets as the host, then GOLF DAY on a line of its own; a Golf Trek or Golf Tour too. */
+/** "Bomb Squad Golf Day" sets as the host, then GOLF DAY on a line of its own; a Golf Trek, Tour or Trip too. */
 export function nameLines(name: string): [string, string | null] {
-  const m = /^(.*\S)\s+(golf (?:day|trek|tour))$/i.exec(name.trim())
+  const m = /^(.*\S)\s+(golf (?:day|trek|tour|trip))$/i.exec(name.trim())
   return m ? [m[1], m[2]] : [name, null]
 }
 
@@ -42,12 +42,18 @@ export function GolfDayHeroArt({ hero }: { hero: GolfDayHero }) {
   )
 }
 
-/** The label card: host × Get Lucky, the name, the prize, FREE SWING, where and when, the tagline. */
-export function GolfDayLabel({ theme, name, prizeZAR, playsOn, holes }: {
+/**
+ * The label card: host × Get Lucky, the name, the prize, FREE SWING, where
+ * and when, the tagline. A trip's dates are its first to its last, and say
+ * the swing is every round.
+ */
+export function GolfDayLabel({ theme, name, prize, currency, playsOn, endsOn, holes }: {
   theme: GolfDayTheme
   name: string
-  prizeZAR: number
+  prize: number
+  currency: PrizeCurrency
   playsOn: string
+  endsOn: string | null
   holes: GolfDayHole[]
 }) {
   const [top, bottom] = nameLines(name)
@@ -55,9 +61,9 @@ export function GolfDayLabel({ theme, name, prizeZAR, playsOn, holes }: {
     <section className="gd-label">
       <p className="gd-kicker">{theme.host} <span aria-hidden>×</span> Get Lucky</p>
       <h1 className="gd-name">{top}{bottom && <><br />{bottom}</>}</h1>
-      <p className="gd-prize">{formatRand(prizeZAR)}</p>
+      <p className="gd-prize">{formatPrize(prize, currency)}</p>
       <p className="gd-band"><span>Free swing</span></p>
-      <p className="gd-meta">{theme.venue ?? golfDayVenue(holes)}<br />{formatGolfDayDate(playsOn)}</p>
+      <p className="gd-meta">{theme.venue ?? golfDayVenue(holes)}<br />{formatGolfDayDates(playsOn, endsOn)}{endsOn && <><br />Every round</>}</p>
       <p className="gd-tagline">{theme.tagline}</p>
     </section>
   )

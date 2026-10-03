@@ -24,6 +24,23 @@ export function formatZAR(cents: number): string {
   return `R${(cents / 100).toLocaleString('en-ZA', { minimumFractionDigits: 0 })}`
 }
 
+/**
+ * A prize in whole units of its currency. Rand as formatRand ("R100 000");
+ * dollars as an American golfer reads them ("$5,695"). Only a golf trip's
+ * prize is ever in dollars (migration 033); every other prize is rand.
+ */
+export function formatPrize(amount: number, currency: 'ZAR' | 'USD' = 'ZAR'): string {
+  if (currency === 'ZAR') return formatRand(amount)
+  const whole = Math.round(Math.abs(amount)).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+  return `${amount < 0 ? '-' : ''}$${whole}`
+}
+
+/** A bet's prize in cents of its currency (bets.prize_currency), for the admin panel: "R25 000", "$5,695". */
+export function formatMoney(cents: number, currency: 'ZAR' | 'USD' | string | null | undefined = 'ZAR'): string {
+  if (currency !== 'USD') return formatZAR(cents)
+  return `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
+}
+
 /** Up to two initials from a name, else the first letter of the email, else "GL". */
 export function getInitials(name: string | null | undefined, email: string | null | undefined): string {
   if (name) return name.split(' ').filter(Boolean).map(p => p[0]).join('').toUpperCase().slice(0, 2)

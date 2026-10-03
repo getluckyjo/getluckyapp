@@ -1,22 +1,24 @@
 /**
  * A golf day as a calendar event, so a player who joined has the day, the
- * holes and the link in their calendar, with a reminder that morning.
+ * holes and the link in their calendar, with a reminder that morning. A
+ * golf trip is one event over all its days, listing each round's hole, with
+ * the reminder on its first morning.
  *
  * Two forms of one event: an .ics file (GET /api/golf-days/[slug]/calendar),
  * which an iPhone opens straight into its "Add to Calendar" sheet, and a
  * Google Calendar link, which is how an Android phone adds an event. Google
  * Calendar ignores reminders in a link; the phone's default one applies.
  */
-import { formatRand } from '@/lib/format'
-import { golfDayPath, golfDayVenue, oneCourse, shortCourseName, type PublicGolfDay } from './rules'
+import { formatPrize } from '@/lib/format'
+import { addDays, formatRoundDate, golfDayPath, golfDayVenue, oneCourse, rounds, shortCourseName, type GolfDayHole, type PublicGolfDay } from './rules'
 
-export type CalendarDay = Pick<PublicGolfDay, 'slug' | 'name' | 'tabLabel' | 'playsOn' | 'prizeZAR' | 'holes'>
+export type CalendarDay = Pick<PublicGolfDay, 'slug' | 'name' | 'tabLabel' | 'playsOn' | 'endsOn' | 'prize' | 'currency' | 'holes'>
 
 export interface GolfDayEvent {
   /** The same for everyone and every download, so adding it twice updates rather than repeats. */
   uid: string
   title: string
-  /** An all-day event on the golf day's date: start inclusive, end exclusive, as YYYYMMDD. */
+  /** An all-day event on the golf day's date (a trip's dates): start inclusive, end exclusive, as YYYYMMDD. */
   start: string
   end: string
   location: string
@@ -31,11 +33,6 @@ export const REMINDER_HOUR = 7
 
 const compact = (date: string) => date.replaceAll('-', '')
 
-function dayAfter(date: string): string {
-  const [y, m, d] = date.split('-').map(Number)
-  return new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10)
-}
-
 /** "A", "A or B", "A, B or C". */
 function either(items: string[]): string {
   return items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`
@@ -47,18 +44,39 @@ function either(items: string[]): string {
  */
 export function golfDayEvent(day: CalendarDay, { site, venue }: { site: string; venue: string | null }): GolfDayEvent {
   const url = `${site.replace(/\/$/, '')}${golfDayPath(day.slug)}`
-  const prize = formatRand(day.prizeZAR)
+  const prize = formatPrize(day.prize, day.currency)
   const names = day.holes.map(h => h.course.name)
   const single = oneCourse(day.holes)
-  const holes = day.holes.map(h => `${single ? 'hole' : shortCourseName(h.course.name, names)} ${h.holeNumber}${h.distanceMetres ? ` (${h.distanceMetres} m)` : ''}`)
+  const holeName = (h: GolfDayHole) => `${single ? 'hole' : shortCourseName(h.course.name, names)} ${h.holeNumber}${h.distanceMetres ? ` (${h.distanceMetres} m)` : ''}`
+  const holes = day.holes.map(holeName)
   const where = day.holes.find(h => h.course.location)?.course.location
   const club = venue ?? golfDayVenue(day.holes)
+
+  if (day.endsOn) {
+    const schedule = rounds(day.holes).map(r => `${r.date ? formatRoundDate(r.date) : 'Any day'}: ${r.holes.map(holeName).join(' and ')}`)
+    return {
+      uid: `golf-day-${day.slug}@${new URL(site).host}`,
+      title: `${day.name}: a free swing every round for ${prize}`,
+      start: compact(day.playsOn),
+      end: compact(addDays(day.endsOn, 1)),
+      // A trip moves from course to course: the place as a whole, not the first course's suburb.
+      location: club,
+      details: [
+        `A free swing every round for ${prize}. Hole one and it's yours.`,
+        ...(schedule.length ? [`The holes:\n${schedule.join('\n')}`] : []),
+        `Each round, open the ${day.tabLabel} tab in Get Lucky, or this link, and tap the day's hole. A playing partner films your tee shot.\n${url}`,
+        '18+ only. One swing a round.',
+      ].join('\n\n'),
+      url,
+      reminder: `${day.name} starts today. Open the ${day.tabLabel} tab in Get Lucky for your free swing each round.`,
+    }
+  }
 
   return {
     uid: `golf-day-${day.slug}@${new URL(site).host}`,
     title: `${day.name}: free swing for ${prize}`,
     start: compact(day.playsOn),
-    end: compact(dayAfter(day.playsOn)),
+    end: compact(addDays(day.playsOn, 1)),
     location: where ? `${club}, ${where}` : club,
     details: [
       `Your free swing for ${prize}. Hole it and it's yours.`,

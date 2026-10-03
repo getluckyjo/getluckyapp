@@ -5,7 +5,7 @@ import { ImagePlus, Trash2 } from 'lucide-react'
 import { GolfDayHeroArt, GolfDayLabel, themeVars } from '@/components/golf-days/GolfDayCard'
 import { HEX_COLOUR, alcoholFootnote, contrast, type GolfDayLook, type Palette } from '@/lib/golf-days/look'
 import { DEFAULT_THEME, type GolfDayHero, type GolfDayTheme } from '@/lib/golf-days/themes'
-import type { GolfDayHole } from '@/lib/golf-days/rules'
+import type { GolfDayHole, PrizeCurrency } from '@/lib/golf-days/rules'
 
 /** A golf day's look as the form holds it: text as typed, colours as #rrggbb. */
 export interface LookForm {
@@ -98,12 +98,14 @@ const COLOURS: { key: 'ink' | 'accent' | 'paper' | 'page'; label: string; hint: 
  * print and colours, with a preview built from the player screen's own
  * card. Uploading a picture suggests colours from it.
  */
-export default function LookEditor({ form, onChange, name, prizeZAR, playsOn, holes }: {
+export default function LookEditor({ form, onChange, name, prize, currency, playsOn, endsOn, holes }: {
   form: LookForm
   onChange: (form: LookForm) => void
   name: string
-  prizeZAR: number
+  prize: number
+  currency: PrizeCurrency
   playsOn: string
+  endsOn: string | null
   holes: GolfDayHole[]
 }) {
   const [uploading, setUploading] = useState(false)
@@ -221,9 +223,9 @@ export default function LookEditor({ form, onChange, name, prizeZAR, playsOn, ho
           style={{ ...themeVars(theme), width: 'min(340px, 100%)', padding: '14px 14px 18px', borderRadius: 24, border: '8px solid #111', maxHeight: 760, overflowY: 'auto' }}
         >
           {theme.hero && <GolfDayHeroArt hero={theme.hero} />}
-          <GolfDayLabel theme={theme} name={name || 'Your Golf Day'} prizeZAR={prizeZAR || 0} playsOn={playsOn} holes={holes} />
+          <GolfDayLabel theme={theme} name={name || 'Your Golf Day'} prize={prize || 0} currency={currency} playsOn={playsOn} endsOn={endsOn} holes={holes} />
           <div className="gd-action">
-            <button type="button" className="btn-lime btn-lime--block" tabIndex={-1}>Join the golf day</button>
+            <button type="button" className="btn-lime btn-lime--block" tabIndex={-1}>{endsOn ? 'Join the trip' : 'Join the golf day'}</button>
           </div>
           {theme.footnote && <p className="gd-footnote">{theme.footnote}</p>}
         </div>
