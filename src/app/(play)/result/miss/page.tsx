@@ -18,7 +18,7 @@ import { useShareVideo } from '@/hooks/useShareVideo'
  */
 export default function TryAgainPage() {
   const router = useRouter()
-  const { selectedTier, betId, resetSession, videoBlob, selectedCourse, selectedHole } = useBet()
+  const { selectedTier, betId, resetSession, videoBlob, selectedCourse, selectedHole, uploadStatus, uploadProgress, retryUpload } = useBet()
   const { profile } = useAuth()
   const [toast, setToast] = useState<string | null>(null)
 
@@ -87,6 +87,14 @@ export default function TryAgainPage() {
     : `R${tierData.stakeZAR.toLocaleString('en-ZA').replace(/,/g, ' ')}`
   const totalAttempts = profile?.total_attempts ?? 0
 
+  // The footage is still uploading when most players land here, and a miss
+  // is when the phone goes back in the pocket. Say so, and offer the retry.
+  const saveChip =
+    uploadStatus === 'uploading' ? { tone: 'busy', label: `Saving video · ${uploadProgress}% · keep the app open` } :
+    uploadStatus === 'error'     ? { tone: 'error', label: 'Video not saved. Tap to retry' } :
+    uploadStatus === 'done'      ? { tone: 'ok', label: 'Video saved' } :
+    null
+
   if (!betId) return null
 
   return (
@@ -121,6 +129,18 @@ export default function TryAgainPage() {
             )}
             <h1 className="v2-title">{'Great\nswing.'}</h1>
             <p className="v2-sub">The ace is coming.{'\n'}It&apos;s just a matter of time.</p>
+
+            {saveChip && (
+              <button
+                type="button"
+                className={`cf-chip cf-chip--${saveChip.tone} miss-save`}
+                disabled={saveChip.tone !== 'error'}
+                onClick={() => { if (saveChip.tone === 'error') retryUpload() }}
+              >
+                {saveChip.tone === 'busy' && <span className="cf-spinner" aria-hidden />}
+                {saveChip.label}
+              </button>
+            )}
 
             <div className="miss-actions">
               <button type="button" className="btn-lime" onClick={handlePlayAgain}>

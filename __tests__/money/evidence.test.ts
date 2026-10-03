@@ -119,6 +119,22 @@ describe('POST /api/videos/upload-url — capture attestation', () => {
     expect(bet).toMatchObject({ capture_lat: -34, capture_distance_m: 10 })
   })
 
+  it('a retry without a report keeps the one the first slot recorded', async () => {
+    asUser()
+    const bet = ownBet()
+    expect((await call({ betId: bet.id, capture: capture({ lat: -34.0190, lng: 22.4070, accuracyM: 8 }) })).status).toBe(200)
+    expect((await call({ betId: bet.id }, 'OlderApp/0.9')).status).toBe(200)
+    expect(bet).toMatchObject({ capture_duration_ms: 30_000, capture_lat: -34.019, capture_accuracy_m: 8, capture_user_agent: 'TestPhone/1.0' })
+  })
+
+  it('a new report before the footage is sealed replaces the earlier one', async () => {
+    asUser()
+    const bet = ownBet()
+    await call({ betId: bet.id, capture: capture({ lat: -34.0190, lng: 22.4070 }) })
+    await call({ betId: bet.id, capture: capture({ lat: -34.0186, lng: 22.4064, accuracyM: 5 }) })
+    expect(bet).toMatchObject({ capture_lat: -34.0186, capture_accuracy_m: 5 })
+  })
+
   it('rejects a malformed report', async () => {
     asUser()
     const bet = ownBet()

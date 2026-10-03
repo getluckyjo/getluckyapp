@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
     // Verify bet belongs to the current user (prevent IDOR)
     const { data: bet } = await supabase
       .from('bets')
-      .select('id, status, expires_at, course_id, video_sha256')
+      .select('id, status, expires_at, course_id, video_url, video_sha256')
       .eq('id', betId)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -66,11 +66,12 @@ export async function POST(request: NextRequest) {
       return apiError('claim.upload_url_failed', error, { path: 'claim', fields: { user_id: user.id, bet_id: betId }, message: 'Could not prepare the upload.' })
     }
 
-    // The capture report is recorded once, with the first upload slot, and
-    // never after the footage is sealed: the attestation belongs to the bytes
-    // that were hashed, not to a later retry.
+    // The capture report is recorded with the upload slot, and never after
+    // the footage is sealed: the attestation belongs to the bytes that were
+    // hashed, not to a later retry. A retry that sends no report (an older
+    // app's retry button) keeps the one the first slot recorded.
     const { data: course } = await supabase.from('courses').select('lat, lng').eq('id', bet.course_id).maybeSingle()
-    const attestation = bet.video_sha256
+    const attestation = bet.video_sha256 || (!capture && bet.video_url)
       ? {}
       : captureColumns(capture, { course: course ?? null, userAgent: request.headers.get('user-agent') })
 

@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import type { CaptureInput } from '@/lib/claims/capture'
+import { uploadFootage, xhrPut, type FootageJob } from '@/lib/claims/upload-footage'
 
 // Re-export shared tier definitions so existing client imports keep working
 export { BET_TIERS } from '@/lib/tiers'
@@ -50,6 +51,8 @@ interface BetContextType extends BetSession {
   declareResult: (result: 'hole_in_one' | 'miss') => void
   resetSession: () => void
   startBackgroundUpload: (blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) => void
+  /** Upload the current bet's footage again, with the recorder's report it was first sent with. */
+  retryUpload: () => void
 }
 
 const defaultSession: BetSession = {
@@ -69,6 +72,13 @@ const BetContext = createContext<BetContextType | null>(null)
 
 export function BetProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<BetSession>(defaultSession)
+
+  // The footage of the bet in hand, kept for retries; the slots the server
+  // issued, reused once it stops issuing them (see upload-footage.ts); and
+  // the bet whose upload is running, so a retry never doubles it.
+  const footageRef = useRef<FootageJob | null>(null)
+  const slotsRef = useRef(new Map<string, string>())
+  const inFlightRef = useRef<string | null>(null)
 
   function selectCourse(course: Course, hole: Hole) {
     setSession(s => ({ ...s, selectedCourse: course, selectedHole: hole }))
@@ -93,59 +103,56 @@ export function BetProvider({ children }: { children: ReactNode }) {
     setSession(s => ({ ...s, declaredResult: result }))
   }
   function resetSession() {
+    footageRef.current = null
     setSession(defaultSession)
   }
 
-  function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) {
-    setSession(s => ({ ...s, uploadStatus: 'uploading', uploadProgress: 0 }))
+  // Status belongs to the footage in hand. An upload still running after
+  // Play again must not mark the next bet's footage as saved.
+  const forBet = useCallback((betId: string, patch: Partial<BetSession>) => {
+    if (footageRef.current?.betId === betId) setSession(s => ({ ...s, ...patch }))
+  }, [])
+
+  const runUpload = useCallback((job: FootageJob) => {
+    if (inFlightRef.current === job.betId) return
+    inFlightRef.current = job.betId
+    forBet(job.betId, { uploadStatus: 'uploading', uploadProgress: 0 })
 
     // Fire-and-forget — upload runs in the background
-    ;(async () => {
-      try {
-        const urlRes = await fetch('/api/videos/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ betId, mimeType, ...(capture ? { capture } : {}) }),
-        })
-        const { signedUrl } = await urlRes.json()
-
-        if (signedUrl) {
-          await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest()
-            xhr.open('PUT', signedUrl)
-            xhr.setRequestHeader('Content-Type', mimeType)
-            xhr.upload.onprogress = (e) => {
-              if (e.lengthComputable) {
-                const pct = Math.round((e.loaded / e.total) * 100)
-                setSession(s => ({ ...s, uploadProgress: pct }))
-              }
-            }
-            xhr.onload = () =>
-              xhr.status < 300 ? resolve() : reject(new Error(`Upload ${xhr.status}`))
-            xhr.onerror = () => reject(new Error('Network error'))
-            xhr.send(blob)
-          })
-
-          // The server reads the object back and records its hash, size and
-          // its own timestamp on the bet. Without this the footage is
-          // uploaded but not sealed, so treat a failure as an upload failure.
-          const sealRes = await fetch('/api/videos/uploaded', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ betId }),
-          })
-          if (!sealRes.ok) throw new Error(`Seal ${sealRes.status}`)
-        } else {
-          throw new Error('No upload slot')
-        }
-
-        setSession(s => ({ ...s, uploadStatus: 'done', uploadProgress: 100 }))
-      } catch (err) {
+    uploadFootage(job, { fetch, put: xhrPut, slots: slotsRef.current }, pct => forBet(job.betId, { uploadProgress: pct }))
+      .then(() => forBet(job.betId, { uploadStatus: 'done', uploadProgress: 100 }))
+      .catch(err => {
         console.error('[upload] Background upload failed:', err)
-        setSession(s => ({ ...s, uploadStatus: 'error' }))
-      }
-    })()
+        forBet(job.betId, { uploadStatus: 'error' })
+      })
+      .finally(() => {
+        if (inFlightRef.current === job.betId) inFlightRef.current = null
+      })
+  }, [forBet])
+
+  function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) {
+    footageRef.current = { betId, blob, mimeType, capture }
+    runUpload(footageRef.current)
   }
+
+  const retryUpload = useCallback(() => {
+    if (footageRef.current) runUpload(footageRef.current)
+  }, [runUpload])
+
+  // A phone locked or switched away mid-upload, or a dead spot on the
+  // course, fails the upload. Try again when the app is back in front or
+  // the signal returns, as long as the footage is still in memory.
+  const uploadFailed = session.uploadStatus === 'error'
+  useEffect(() => {
+    if (!uploadFailed) return
+    const retry = () => { if (document.visibilityState === 'visible') retryUpload() }
+    document.addEventListener('visibilitychange', retry)
+    window.addEventListener('online', retry)
+    return () => {
+      document.removeEventListener('visibilitychange', retry)
+      window.removeEventListener('online', retry)
+    }
+  }, [uploadFailed, retryUpload])
 
   return (
     <BetContext.Provider
@@ -160,6 +167,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
         declareResult,
         resetSession,
         startBackgroundUpload,
+        retryUpload,
       }}
     >
       {children}

@@ -16,7 +16,7 @@ import { useBet } from '@/context/BetContext'
  */
 export default function ConfirmPage() {
   const router = useRouter()
-  const { videoBlob, betId, selectedCourse, selectedHole, declareResult, uploadStatus, uploadProgress, startBackgroundUpload } = useBet()
+  const { videoBlob, selectedCourse, selectedHole, declareResult, uploadStatus, uploadProgress, retryUpload } = useBet()
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const hasVideo = !!(videoBlob && videoBlob.size > 0)
@@ -87,11 +87,7 @@ export default function ConfirmPage() {
                   type="button"
                   className={`cf-chip cf-chip--${saveChip.tone}`}
                   disabled={saveChip.tone !== 'error'}
-                  onClick={() => {
-                    if (saveChip.tone === 'error' && videoBlob && betId) {
-                      startBackgroundUpload(videoBlob, videoBlob.type || 'video/webm', betId)
-                    }
-                  }}
+                  onClick={() => { if (saveChip.tone === 'error') retryUpload() }}
                 >
                   {saveChip.tone === 'busy' && <span className="cf-spinner" aria-hidden />}
                   {saveChip.label}
