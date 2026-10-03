@@ -131,7 +131,7 @@ export default function InstallScreen() {
                 <li><span className="install-step-icon"><PlusIcon /></span><span>Scroll down and tap <strong>Add to Home Screen</strong></span></li>
                 <li><span className="install-step-icon"><TickIcon /></span><span>Tap <strong>Add</strong> in the top corner</span></li>
               </ol>
-              <p className="inst-note">Then open <strong>Get Lucky</strong> from your home screen and sign in once with the six-digit code from your email.</p>
+              <p className="inst-note">Then open <strong>Get Lucky</strong> from your home screen and sign in once with the code from your email.</p>
             </>
           )}
 

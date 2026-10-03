@@ -45,7 +45,7 @@ it into Safari first.
 
 You will need to sign in once inside the installed app, even if you were
 signed in in Safari; the installed app keeps its own session. Use the
-six-digit code from the email, not the link.
+code from the email, not the link.
 
 Needs iOS 16.4 or later for the best experience; iOS 15 works but without
 some of the offline behaviour.
@@ -55,7 +55,7 @@ some of the offline behaviour.
 Do these in order once, then use the app as you normally would.
 
 1. **Install** as above. Note whether the card or sheet appeared on its own, and whether the icon and splash screen look right.
-2. **Sign in** inside the installed app with the six-digit code.
+2. **Sign in** inside the installed app with the code from the email.
 3. **Buy a bet** on the R50 tier with your own card; it is refunded afterwards. You should come back to the Record screen with a small buzz on Android.
 4. **Record** a shot, declare the result, and for a "hole-in-one" go through the claim with a friend as witness. The witness gets an email with one question.
 5. **Lock the phone** for 20 minutes, unlock, reopen the app: still signed in, same screen?
@@ -85,7 +85,7 @@ your phone model and a screenshot.
 
 - **iPhone: Chrome and in-app browsers cannot install.** Safari only.
 - **No push notifications yet.** Claim updates arrive by email. Push is planned after the beta (see `docs/pwa-push.md`).
-- **Offline is read-only.** You can open the app and see the last screens, but buying a bet, uploading a shot or submitting a claim needs signal. A recorded shot stays on the phone until the upload succeeds, but only while the app stays open.
+- **Offline is read-only.** You can open the app and see the last screens, but buying a bet, uploading a shot or submitting a claim needs signal. A recorded shot stays on the phone until the upload succeeds, but only while the app stays open. A failed upload tries again when the app comes back to the front or the signal returns, and the Miss screen shows whether the video is saved.
 - **Video upload on a weak signal** can take a few minutes. Keep the app in the foreground until the claim screen says it is submitted.
 - **The desktop view** shows a phone-shaped frame; that is by design for reviewers, not a bug.
 
