@@ -90,7 +90,7 @@ type PaymentsBody = Extract<z.infer<typeof Body>, { type: 'payments' }>
 // bet placed meanwhile cannot shift a page and repeat a row.
 
 async function betsSheet(admin: SupabaseClient, f: BetsBody, before: string): Promise<Sheet> {
-  const headers = ['ID', 'User', 'Course', 'Hole', 'Tier', 'Stake (cents)', 'Potential Win (cents)', 'Status', 'Declared Result', 'Created (SAST)']
+  const headers = ['ID', 'User', 'Course', 'Hole', 'Tier', 'Stake (cents)', 'Potential Win (cents)', 'Prize Currency', 'Status', 'Declared Result', 'Created (SAST)']
   const conds = f.search ? await betSearchConditions(admin, f.search) : null
   if (conds && !conds.length) return { headers, rows: [], capped: false }
 
@@ -105,7 +105,7 @@ async function betsSheet(admin: SupabaseClient, f: BetsBody, before: string): Pr
   return {
     headers,
     capped,
-    rows: bets.map(b => [b.id, names.users.get(b.user_id) ?? '', names.courses.get(b.course_id) ?? '', String(names.holes.get(b.hole_id) ?? ''), b.tier, String(b.stake_pence), String(b.potential_win_pence), b.status, b.declared_result ?? '', sast(b.created_at)]),
+    rows: bets.map(b => [b.id, names.users.get(b.user_id) ?? '', names.courses.get(b.course_id) ?? '', String(names.holes.get(b.hole_id) ?? ''), b.tier, String(b.stake_pence), String(b.potential_win_pence), b.prize_currency ?? 'ZAR', b.status, b.declared_result ?? '', sast(b.created_at)]),
   }
 }
 
@@ -150,11 +150,11 @@ async function verificationsSheet(admin: SupabaseClient, before: string): Promis
   const bets = joined(await inSlices(rows, s => betsForVerifications(admin, s)))
   const names = joinNames(await inSlices([...bets.values()], s => namesForBets(admin, s)))
   return {
-    headers: ['ID', 'Bet ID', 'User', 'Course', 'Hole', 'Tier', 'Potential Win (cents)', 'Status', 'Submitted (SAST)', 'Docs Received (SAST)', 'Verified (SAST)'],
+    headers: ['ID', 'Bet ID', 'User', 'Course', 'Hole', 'Tier', 'Potential Win (cents)', 'Prize Currency', 'Status', 'Submitted (SAST)', 'Docs Received (SAST)', 'Verified (SAST)'],
     capped,
     rows: rows.map(v => {
       const b = bets.get(v.bet_id)
-      return [v.id, v.bet_id, b ? names.users.get(b.user_id) ?? '' : '', b ? names.courses.get(b.course_id) ?? '' : '', b ? String(names.holes.get(b.hole_id) ?? '') : '', b?.tier ?? '', String(b?.potential_win_pence ?? ''), v.status, sast(v.created_at), sast(v.documents_received_at), sast(v.verified_at)]
+      return [v.id, v.bet_id, b ? names.users.get(b.user_id) ?? '' : '', b ? names.courses.get(b.course_id) ?? '' : '', b ? String(names.holes.get(b.hole_id) ?? '') : '', b?.tier ?? '', String(b?.potential_win_pence ?? ''), b ? b.prize_currency ?? 'ZAR' : '', v.status, sast(v.created_at), sast(v.documents_received_at), sast(v.verified_at)]
     }),
   }
 }

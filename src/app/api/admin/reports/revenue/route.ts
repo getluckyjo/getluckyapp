@@ -44,6 +44,8 @@ export async function GET() {
       netProfit: totalRevenue - totalPayouts,
       margin: totalRevenue > 0 ? ((totalRevenue - totalPayouts) / totalRevenue * 100).toFixed(1) : '0',
       prizesOwed: totals.prizesOwedCents,
+      prizesPaidUsd: totals.prizesPaidUsdCents,
+      prizesOwedUsd: totals.prizesOwedUsdCents,
       byTier,
       byCourse,
       totalBets: totals.totalBets,

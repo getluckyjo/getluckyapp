@@ -9,7 +9,7 @@ import VideoPlayer from '@/components/admin/VideoPlayer'
 import DocumentViewer from '@/components/admin/DocumentViewer'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
-import { formatZAR, timeAgo } from '@/lib/format'
+import { formatZAR, timeAgo, formatMoney } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { PaginatedResponse, VerificationQueueItem } from '@/types/admin'
 import { REVIEW_CHECKLIST, MIN_DECISION_NOTES } from '@/lib/claims/checklist'
@@ -317,7 +317,7 @@ export default function VerificationDetailPage() {
   const d = detail
   const name = d.userName || d.player.email || 'Unnamed player'
   const payee = d.userName || d.player.email || 'the player'
-  const prize = formatZAR(d.potentialWinCents)
+  const prize = formatMoney(d.potentialWinCents, d.prizeCurrency)
   const isOpen = (OPEN_REVIEW_STATUSES as readonly string[]).includes(d.status)
   const warnings = warningsFor(d)
   const checklistComplete = REVIEW_CHECKLIST.every(i => checklist[i.key])

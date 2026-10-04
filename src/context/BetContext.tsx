@@ -30,8 +30,10 @@ interface BetSession {
   selectedCourse: Course | null
   selectedHole: Hole | null
   selectedTier: BetTier | null
-  /** The prize when it is not the tier's: a golf day swing's, set per golf day. */
-  prizeZAR: number | null
+  /** The prize when it is not the tier's: a golf day swing's, set per golf day, in whole units of prizeCurrency. */
+  prize: number | null
+  /** A golf trip's prize can be in dollars (migration 033); every other prize is rand. */
+  prizeCurrency: 'ZAR' | 'USD'
   paymentIntentId: string | null
   betId: string | null
   videoBlob: Blob | null
@@ -43,7 +45,7 @@ interface BetSession {
 interface BetContextType extends BetSession {
   selectCourse: (course: Course, hole: Hole) => void
   selectTier: (tier: BetTier) => void
-  setPrizeZAR: (prize: number) => void
+  setPrize: (prize: number, currency?: 'ZAR' | 'USD') => void
   confirmPayment: (intentId: string) => void
   setBetId: (id: string) => void
   setVideoBlob: (blob: Blob) => void
@@ -56,7 +58,8 @@ const defaultSession: BetSession = {
   selectedCourse: null,
   selectedHole: null,
   selectedTier: null,
-  prizeZAR: null,
+  prize: null,
+  prizeCurrency: 'ZAR',
   paymentIntentId: null,
   betId: null,
   videoBlob: null,
@@ -75,10 +78,10 @@ export function BetProvider({ children }: { children: ReactNode }) {
   }
   // A new tier clears any golf day prize; the golf day screen sets its own after.
   function selectTier(tier: BetTier) {
-    setSession(s => ({ ...s, selectedTier: tier, prizeZAR: null }))
+    setSession(s => ({ ...s, selectedTier: tier, prize: null, prizeCurrency: 'ZAR' }))
   }
-  function setPrizeZAR(prize: number) {
-    setSession(s => ({ ...s, prizeZAR: prize }))
+  function setPrize(prize: number, currency: 'ZAR' | 'USD' = 'ZAR') {
+    setSession(s => ({ ...s, prize, prizeCurrency: currency }))
   }
   function confirmPayment(intentId: string) {
     setSession(s => ({ ...s, paymentIntentId: intentId }))
@@ -153,7 +156,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
         ...session,
         selectCourse,
         selectTier,
-        setPrizeZAR,
+        setPrize,
         confirmPayment,
         setBetId,
         setVideoBlob,

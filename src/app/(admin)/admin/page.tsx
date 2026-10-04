@@ -6,7 +6,7 @@ import { Banknote, Ticket, ClipboardCheck, Hourglass, Trophy, HandCoins, Users, 
 import StatCard from '@/components/admin/StatCard'
 import StatusBadge from '@/components/admin/StatusBadge'
 import LoadError from '@/components/admin/LoadError'
-import { formatZAR, timeAgo } from '@/lib/format'
+import { formatZAR, timeAgo, formatMoney } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminBetRecord, VerificationQueueItem } from '@/types/admin'
 import { downloadExport } from '@/app/(admin)/admin/bets/client-helpers'
@@ -23,6 +23,9 @@ interface DashboardStats {
   claimsToReview: number | null
   claimsWaiting: number | null
   prizesOwed: number | null
+  /** A golf trip's dollar prizes (migration 033), kept apart from rand; null before it runs. */
+  prizesPaidUsd: number | null
+  prizesOwedUsd: number | null
   recentBets: AdminBetRecord[]
   /** The oldest open claims, oldest first. */
   recentVerifications: VerificationQueueItem[]
@@ -40,6 +43,8 @@ function ago(iso: string): string {
 /** A figure the server did not send is "—", never a zero that is not true. */
 const count = (n: number | null | undefined) => (n == null ? '—' : n.toLocaleString('en-ZA'))
 const money = (cents: number | null | undefined) => (cents == null ? '—' : formatZAR(cents))
+/** A golf trip's dollar prizes, said beside the rand they are never added to. */
+const plusDollars = (cents: number | null | undefined) => (cents ? `Plus ${formatMoney(cents, 'USD')} on golf trips` : undefined)
 
 /** A stat card in its own box: admin.css spaces a card that follows another (.adm-card + .adm-card), which in a row would push all but the first down. */
 function Tile(props: React.ComponentProps<typeof StatCard>) {
@@ -128,9 +133,9 @@ export default function AdminDashboardPage() {
                 <Tile title="Waiting on golfer" value={count(stats.claimsWaiting)} icon={Hourglass} subtitle="Their documents are not in yet" />
               </>
             )}
-            <Tile title="Prizes paid" value={money(stats.totalPayouts)} icon={Trophy} />
+            <Tile title="Prizes paid" value={money(stats.totalPayouts)} icon={Trophy} subtitle={plusDollars(stats.prizesPaidUsd)} />
             {stats.prizesOwed != null && (
-              <Tile title="Prizes owed" value={money(stats.prizesOwed)} icon={HandCoins} subtitle="Verified, not yet paid" />
+              <Tile title="Prizes owed" value={money(stats.prizesOwed)} icon={HandCoins} subtitle={plusDollars(stats.prizesOwedUsd) ?? 'Verified, not yet paid'} />
             )}
             <Tile title="Users" value={count(stats.totalUsers)} icon={Users} />
           </div>
@@ -188,7 +193,7 @@ export default function AdminDashboardPage() {
                       key={v.id}
                       href={`/admin/verification-queue/${v.id}`}
                       name={v.userName || 'Unknown'}
-                      detail={`${v.courseName} · ${formatZAR(v.potentialWinCents)}`}
+                      detail={`${v.courseName} · ${formatMoney(v.potentialWinCents, v.prizeCurrency)}`}
                       status={v.status}
                       at={v.createdAt}
                     />

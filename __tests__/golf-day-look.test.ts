@@ -100,12 +100,12 @@ describe('colours from a picture', () => {
 
 describe('the WhatsApp message', () => {
   const hole = (course: string, holeNumber: number): GolfDayHole =>
-    ({ holeId: `${course}${holeNumber}`, holeNumber, par: 3, distanceMetres: 150, course: { id: course, name: course, location: '', region: '' } })
+    ({ holeId: `${course}${holeNumber}`, holeNumber, par: 3, distanceMetres: 150, course: { id: course, name: course, location: '', region: '' }, playsOn: null })
   const SITE = 'https://www.getluckyholeinone.com'
 
   it('Bomb Squad: two courses, the BS tab, short', () => {
     const text = golfDayMessage({
-      slug: 'bombsquad', name: 'Bomb Squad Golf Day', tabLabel: 'BS', playsOn: '2026-10-02', prizeZAR: 100000,
+      slug: 'bombsquad', name: 'Bomb Squad Golf Day', tabLabel: 'BS', playsOn: '2026-10-02', endsOn: null, prize: 100000, currency: 'ZAR',
       holes: [hole('Royal Johannesburg & Kensington – East', 16), hole('Royal Johannesburg & Kensington – West', 17)],
     }, { site: SITE, venue: 'Royal Johannesburg' })
     expect(text).toBe([
@@ -124,7 +124,7 @@ describe('the WhatsApp message', () => {
 
   it('SaSwazi: one hole on one course, named by the venue', () => {
     const text = golfDayMessage({
-      slug: 'saswazi', name: 'SaSwazi Golf Trek', tabLabel: 'SaSwazi', playsOn: '2026-10-02', prizeZAR: 100000,
+      slug: 'saswazi', name: 'SaSwazi Golf Trek', tabLabel: 'SaSwazi', playsOn: '2026-10-02', endsOn: null, prize: 100000, currency: 'ZAR',
       holes: [hole('Umdoni Park Golf Club', 16)],
     }, { site: `${SITE}/`, venue: 'Umdoni Park' })
     expect(text).toContain("at Umdoni Park's *16th*, open the *SaSwazi* tab, tap the hole and get a mate to film it.")

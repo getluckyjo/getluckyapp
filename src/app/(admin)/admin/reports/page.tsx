@@ -6,7 +6,7 @@ import { Banknote, TrendingUp, Trophy, HandCoins, Download, Gift } from 'lucide-
 import StatCard from '@/components/admin/StatCard'
 import Pagination from '@/components/admin/Pagination'
 import LoadError from '@/components/admin/LoadError'
-import { formatZAR } from '@/lib/format'
+import { formatZAR, formatMoney } from '@/lib/format'
 import type { AdminBetRecord } from '@/types/admin'
 import { downloadExport, sastDate } from '@/app/(admin)/admin/bets/client-helpers'
 
@@ -18,6 +18,9 @@ interface RevenueData {
   margin: string
   /** Verified, not yet paid; null before migration 032. */
   prizesOwed: number | null
+  /** A golf trip's dollar prizes (migration 033), kept apart from rand; null before it runs. */
+  prizesPaidUsd: number | null
+  prizesOwedUsd: number | null
   totalBets: number
   byTier: { tier: string; label: string; count: number; revenue: number; payouts: number }[]
   byCourse: { name: string; revenue: number; count: number }[]
@@ -176,7 +179,7 @@ export default function AdminReportsPage() {
 
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 22 }} aria-busy={revenue.loading}>
         <Tile title="Stakes taken" value={money(rev?.totalRevenue)} icon={Banknote} subtitle={rev ? `${rev.totalBets.toLocaleString('en-ZA')} entries, free swings included` : undefined} />
-        <Tile title="Prizes paid" value={money(rev?.totalPayouts)} icon={Trophy} />
+        <Tile title="Prizes paid" value={money(rev?.totalPayouts)} icon={Trophy} subtitle={rev?.prizesPaidUsd ? `Plus ${formatMoney(rev.prizesPaidUsd, 'USD')} on golf trips` : undefined} />
         <Tile
           title="Stakes minus prizes paid"
           value={money(rev?.netProfit)}
@@ -184,7 +187,7 @@ export default function AdminReportsPage() {
           subtitle={rev ? `${rev.margin}% of stakes${rev.prizesOwed ? ', before the prizes owed' : ''}` : undefined}
         />
         {rev?.prizesOwed != null && (
-          <Tile title="Prizes owed" value={money(rev.prizesOwed)} icon={HandCoins} subtitle="Verified, not yet paid" />
+          <Tile title="Prizes owed" value={money(rev.prizesOwed)} icon={HandCoins} subtitle={rev.prizesOwedUsd ? `Plus ${formatMoney(rev.prizesOwedUsd, 'USD')} on golf trips` : 'Verified, not yet paid'} />
         )}
       </div>
 
@@ -280,7 +283,7 @@ export default function AdminReportsPage() {
                       <tr key={p.id}>
                         <td><Link href={`/admin/bets/${p.id}`} className="adm-row-link">{p.userName || 'Unknown'}</Link></td>
                         <td className="adm-muted">{p.courseName}, hole {p.holeNumber}</td>
-                        <td className="adm-num" style={{ fontWeight: 700 }}>{formatZAR(p.potentialWinCents)}</td>
+                        <td className="adm-num" style={{ fontWeight: 700 }}>{formatMoney(p.potentialWinCents, p.prizeCurrency)}</td>
                         {kind === 'owed' ? (
                           <>
                             <td className="adm-muted">{showDate(p.verifiedAt)}</td>

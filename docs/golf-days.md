@@ -11,6 +11,11 @@ Nobody else sees any of it. Anyone who has not joined, signed out included,
 keeps the Icons tab. The golf day screen is not linked from anywhere else
 in the app.
 
+A **golf trip** is a golf day over several days (migration 033): one
+link for a whole tour, a free swing for every player in every round, each
+on that round's hole, and a prize that can be in dollars. See "Golf trips"
+below.
+
 Set one up at `/admin/golf-days` (see "Adding a golf day" below), or ask
 Claude with the `golf-day` skill (`.claude/skills/golf-day/SKILL.md`),
 which also researches the holes.
@@ -39,6 +44,35 @@ Everything is in `/admin/golf-days` → **New golf day**. No code, no deploy:
 Only a drawn tab icon, like Bomb Squad's bomb, needs code
 (`GOLF_DAY_ICONS` in `src/components/layout/BottomTabBar.tsx`); any
 other golf day's tab shows a flag.
+
+## Golf trips
+
+A golf day with a **Last day** is a trip. Same form, three differences:
+
+- **Dates.** "First day" and "Last day" (at most 30 days apart). Joining
+  stays open until the last day ends, South African time, and the tab
+  stays a week after it.
+- **A hole per round, each with its date.** Every hole gets the date of
+  the round it is played in (the picker beside each hole). A player's
+  swing on a hole opens on that date only, and each hole takes one swing
+  each. A day on two courses (Royal Cape in the morning, Steenberg in the
+  afternoon) is two holes on the same date: two swings that day.
+- **The prize's currency.** R or $. A dollar prize is shown as "$5,000"
+  everywhere a player or the admin sees it, and the swing carries it
+  (`bets.prize_currency`). It is never added to rand: the dashboard and
+  reports give rand totals with "Plus $… on golf trips" beside them, the
+  history and winners show each prize in its own currency, and the
+  exports have a Prize Currency column. A dollar prize is at most $50 000.
+
+The player's screen lists the rounds by date. On a round day it shows
+that day's hole (two on a two-course day) to tap, then "Today's swing is
+in" with the next round's date and hole; each hole in the list says how
+its swing went. The calendar event spans the trip and lists every round.
+The WhatsApp message lists the rounds too.
+
+Once a swing has been taken, a golf day cannot become a trip or a trip a
+golf day: the one-swing rule counts them differently. The dates and holes
+can still change; a swing already taken keeps its prize.
 
 ## The Bomb Squad Golf Day
 
@@ -128,6 +162,55 @@ https://www.getluckyholeinone.com/golf-day/saswazi
 18+. One swing each. Swing like the rent's due. 🍀
 ```
 
+## The Random Golf Club South Africa trip
+
+Offered to Random Golf Club (randomgolfclub.com, a US golf travel club)
+for its South Africa trip: everyone who signs up gets a free swing on the
+signature par 3 of every course, and a hole-in-one on any of them wins
+**$5,000**, captured in the app. Insured through Indwe and Santam: cover
+to be confirmed before the link goes out.
+
+| | |
+|---|---|
+| Link | `https://www.getluckyholeinone.com/golf-day/rgc-sa` (proposed; agree it before it is sent: it cannot change) |
+| Dates | Sunday 14 to Saturday 20 February 2027 (the trip is 14–21; the 21st is the flight home) |
+| Prize | $5,000 (USD), every player, any round |
+| Places | 28: 24 golfers and a few spare |
+| Tab | "RGC" |
+| Look | Host "Random Golf Club", venue "Cape Town", RGC's logo uploaded in the admin |
+
+The holes, one a course, each a signature par 3 near 150 m, chosen from
+the clubs' own cards in October 2026 (migration 034 corrects the app's
+par 3s for these courses):
+
+| Round | Course | Hole | Tee | m | Why | Alternative |
+|---|---|---|---|---|---|---|
+| Sun 14 Feb | Metropolitan | 6 "Thermopylae" | White | 152 | Nearest 150 on the front nine, which the arrival nine plays | 18 "The Breakwater", 148 m, over the dam to the green under the clubhouse, if the nine played is the back routing |
+| Mon 15 Feb | Royal Cape | 15 | Yellow | 148 | "A finely judged shot over the water which encroaches right up to the edge of the green" | 13, 165 m yellow |
+| Mon 15 Feb | Steenberg | 7 | Yellow | 148 | The island green, "Steenberg's signature hole" (the club). The club lists 140 m from the white tees | 14, the club's featured hole: 166 m white |
+| Tue 16 Feb | Arabella | 5 | Yellow | 153 | Ends the "Arabella Turn" of signature holes (147 m from the white) | 17 along the lagoon, 167 m yellow |
+| Wed 17 Feb | Stellenbosch | 9 | Yellow | 148 | Uphill, all carry | The famous downhill 7th is 139 m yellow, under the 140 m minimum |
+| Thu 18 Feb | Clovelly | 16 | White | 148 | Nearest 150; Clovelly's signature is a par 5 | 8, the longest, 156 m white |
+| Fri 19 Feb | Pearl Valley | 3 "Ace" | White | 145 | Water carry; the club says it has the most recorded holes-in-one (tell Indwe) | 13, the club's signature hole, 140 m white / 160 m yellow |
+| Sat 20 Feb | De Zalze | 9 | Yellow | 146 | Elevated tee over a dam | 3, 145 m white / 159 m yellow |
+
+Eight swings a golfer, 192 for 24 golfers. At the usual 1 in 12,500 for
+an amateur's swing at a par 3, about a 1.5% chance that someone wins.
+
+Before the link goes out:
+
+1. Migrations 033 and 034 (Going live, below), then deploy.
+2. Indwe's cover confirmed. Then the small print can say so (the look's
+   footnote), and `/terms` may need a line for a dollar prize; Johannes
+   decides.
+3. RGC confirms which nine Metropolitan plays, and the tees: the app
+   keeps one distance a hole, from the tee above. A different tee changes
+   that hole in Admin → Courses.
+4. A club official for each of the eight courses (Admin → Courses →
+   Contacts); the admin row warns until they are in.
+5. Make it in `/admin/golf-days` with the values above, then copy the
+   message from the speech-bubble button.
+
 ## Every golf day
 
 ### Home screen
@@ -182,7 +265,13 @@ issuer account.
    Squad with the tab label BS. Then `031_golf_day_looks.sql`, before the
    admin can save a look: it adds `golf_days.look`, the public
    `golf-day-art` bucket, and copies Bomb Squad's and SaSwazi's looks
-   onto their rows.
+   onto their rows. Then `033_golf_day_trips.sql` **before deploying**
+   the trips code (the history and the admin read `bets.prize_currency`):
+   its select lists every golf day as a day, in rand, with every swing
+   already taken in the slot `day`. Then `034_cape_town_par_3s.sql`: its
+   select lists the eight Cape Town courses' par 3s (Royal Cape 15 at
+   148 m, Steenberg 2/7/14/17 on and 3/6/11 off, Stellenbosch 7/9/13/15
+   on and 4/12 off, Metropolitan with four).
 2. **Deploy.** Merge the pull request.
 3. **Sign-ups.** Raise Supabase's email rate limit before the link goes
    out (Authentication → Rate Limits). The default of 30 an hour will stall
@@ -217,9 +306,10 @@ Swings already started are not affected.
 | Rule | Held by |
 |---|---|
 | Never more players than the day takes, even when two players race for the last place | Trigger on `golf_day_players` that locks the golf day, then counts |
-| No joining after the day | Same trigger |
-| One swing per player | Unique index on `bets (golf_day_id, user_id)`, plus the `golfday_<day>_<user>` reference on the unique `payment_intent_id` |
-| Only a joined player, only on the day (South African time), only on the day's holes, only for the day's prize | Trigger on `bets` |
+| No joining after the day (a trip's last day) | Same trigger |
+| One swing per player; on a trip, one per player per hole | Unique index on `bets (golf_day_id, user_id, golf_day_slot)`, the slot set by the swing trigger (`day`, or the hole on a trip), plus the `golfday_<day>_<user>` reference (`…_<hole>` on a trip) on the unique `payment_intent_id` |
+| Only a joined player, only on the day or the trip's days (South African time), only on its holes, a trip's hole only on its round's date, only for its prize in its currency | Trigger on `bets` |
+| A prize in dollars only on a golf day swing | Check constraint `bets_prize_currency_check` |
 | A golf day swing names its golf day, and nothing else does | Check constraint `bets_golf_day_matches_tier` |
 | Never bought or matched to a payment | `tier_golf_day` is not in `BET_TIERS` |
 | The hole is a real, active, partner par 3 of 140 m or more | Checked when the golf day is saved, and again by the swing (`checkTarget`) |
@@ -229,13 +319,18 @@ a first-timer sent through the 18+ check (`safeNext` accepts
 `/golf-day/<slug>`, and `/age-check` honours it). A player who tapped
 "Sign in to join" is joined automatically on the way back.
 
-The golf day tab stays for a week after the day, while any claim is in
-hand. Then Icons comes back.
+The golf day tab stays for a week after the day (a trip's last day),
+while any claim is in hand. Then Icons comes back.
 
 ## Testing
 
 `__tests__/money/golf-day.test.ts` covers the day's time window, the
 routes, the tab, the admin and both races, staged through the test fake.
+Its last block covers trips: the window over several days, a swing a
+round (two on a two-course day), a hole only on its round's date, the
+dollar prize, the race on one hole, the admin's dates and the rule that
+a golf day with swings stays what it is, and the trip's calendar event
+and message.
 `__tests__/money/auth-flow.test.ts` covers the way back from sign-in. The
 calendar event is pinned in `golf-day.test.ts` too (dates, escaping, line
 folding, the reminder, the Google link and the route), and the Bomb Squad
@@ -245,6 +340,14 @@ upload (a logo and a photo through sharp into the art bucket), and the
 missing-official warning. `__tests__/golf-day-look.test.ts` pins the look
 rules, the theme merge, the colours suggested from a picture, and the
 WhatsApp message word for word.
+
+Migrations 033 and 034 were applied to a local Postgres 16 after
+001–032, each twice. Every new rule was exercised there: a trip's swing
+on two courses the same day, the second on one hole refused by the
+index, tomorrow's hole refused, a rand or wrong prize refused, a dollar
+bet outside a golf day refused, joining after a trip's last day refused,
+and a golf day swing taken before 033 backfilled to the slot `day`, so a
+second swing there is still refused.
 
 Migrations 001–029 were applied to a local Postgres 16. Every trigger rule
 was exercised there: full, over, not joined, wrong hole, wrong prize, not

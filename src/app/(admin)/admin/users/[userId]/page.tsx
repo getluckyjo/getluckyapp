@@ -9,7 +9,7 @@ import StatusBadge from '@/components/admin/StatusBadge'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
 import Pagination from '@/components/admin/Pagination'
-import { formatZAR } from '@/lib/format'
+import { formatZAR, formatMoney } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminUserRecord, AdminBetRecord, AdminPaymentRecord } from '@/types/admin'
 import { sastDate, sastDateTime } from '../../bets/client-helpers'
@@ -193,7 +193,7 @@ export default function AdminUserDetailPage() {
                     <td><Link href={`/admin/bets/${bet.id}`} className="adm-row-link">{bet.courseName || 'Unknown course'}, hole {bet.holeNumber || '?'}</Link></td>
                     <td>{TIER_LABELS[bet.tier] ?? bet.tier}</td>
                     <td className="adm-num">{formatZAR(bet.stakeCents)}</td>
-                    <td className="adm-num" style={{ fontWeight: 600 }}>{formatZAR(bet.potentialWinCents)}</td>
+                    <td className="adm-num" style={{ fontWeight: 600 }}>{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</td>
                     <td><StatusBadge status={bet.status} small /></td>
                     <td>
                       {bet.claim

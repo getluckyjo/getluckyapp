@@ -12,7 +12,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export interface Totals {
   /** Every stake taken: free, promo and golf day swings count as R0. */
   stakesCents: number
-  /** Prizes recorded as paid. */
+  /** Prizes recorded as paid, in rand. A golf trip's dollar prizes are apart (below), never added in. */
   prizesPaidCents: number
   totalBets: number
   activeBets: number
@@ -27,6 +27,9 @@ export interface Totals {
   claimsWaiting: number | null
   /** Verified, not yet paid. */
   prizesOwedCents: number | null
+  // ── From migration 033: a golf trip's prizes in dollars; null before it runs ──
+  prizesPaidUsdCents: number | null
+  prizesOwedUsdCents: number | null
 }
 
 export async function readTotals(admin: SupabaseClient): Promise<Totals> {
@@ -46,5 +49,7 @@ export async function readTotals(admin: SupabaseClient): Promise<Totals> {
     claimsToReview: maybe('claims_to_review'),
     claimsWaiting: maybe('claims_waiting'),
     prizesOwedCents: maybe('prizes_owed_cents'),
+    prizesPaidUsdCents: maybe('total_payout_usd_cents'),
+    prizesOwedUsdCents: maybe('prizes_owed_usd_cents'),
   }
 }

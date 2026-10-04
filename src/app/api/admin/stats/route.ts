@@ -42,6 +42,8 @@ export async function GET() {
       claimsToReview: totals.claimsToReview,
       claimsWaiting: totals.claimsWaiting,
       prizesOwed: totals.prizesOwedCents,
+      prizesPaidUsd: totals.prizesPaidUsdCents,
+      prizesOwedUsd: totals.prizesOwedUsdCents,
       recentBets: recentBets.map(b => toAdminBetRecord(b, names)),
       // Oldest first: the claims that have waited longest.
       recentVerifications: oldestClaims.map(v => toQueueItem(v, claimBets.get(v.bet_id), names)),

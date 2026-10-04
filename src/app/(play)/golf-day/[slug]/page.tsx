@@ -14,7 +14,7 @@ import { useIsStandalone } from '@/hooks/useIsStandalone'
 import { setGolfDayTab } from '@/hooks/useGolfDayTab'
 import { track } from '@/lib/analytics'
 import { promptInstall } from '@/lib/pwa/install'
-import { formatRand } from '@/lib/format'
+import { formatPrize } from '@/lib/format'
 import { GOLF_DAY_TIER } from '@/lib/tiers'
 import { themeFor } from '@/lib/golf-days/themes'
 import { GolfDayHeroArt, GolfDayLabel, themeVars } from '@/components/golf-days/GolfDayCard'
@@ -22,8 +22,8 @@ import { golfDayEvent, googleCalendarUrl } from '@/lib/golf-days/calendar'
 import { siteUrl } from '@/lib/email/layout'
 import { CalendarIcon } from '@/components/icons'
 import {
-  formatGolfDayDate, golfDayPath, oneCourse, shortCourseName,
-  type GolfDayHole, type GolfDayMe, type PublicGolfDay,
+  formatGolfDayDate, formatGolfDayDates, formatRoundDate, golfDayPath, holesOn, oneCourse, plainCourseName, rounds, shortCourseName,
+  todayInSouthAfrica, type GolfDayHole, type GolfDayMe, type GolfDaySwing, type PrizeCurrency, type PublicGolfDay,
 } from '@/lib/golf-days/rules'
 
 interface Loaded { golfDay: PublicGolfDay; me: GolfDayMe | null }
@@ -48,12 +48,16 @@ function CourseName({ name, venue }: { name: string; venue: string | null }) {
   return <>{venue && dash !== -1 ? `${venue} – ${name.slice(dash + 3)}` : name}</>
 }
 
-/** "East · Hole 16" over two courses; "Hole 16" when there is only the one (its club is on the label). */
+/** "East · Hole 16" over two courses; "Hole 16" when there is only the one (its club is on the label); "Pearl Valley · Hole 3" on a trip. */
 function holeTitle(hole: GolfDayHole, all: GolfDayHole[]): string {
   if (oneCourse(all)) return `Hole ${hole.holeNumber}`
-  const course = shortCourseName(hole.course.name, all.map(h => h.course.name))
+  const names = all.map(h => h.course.name)
+  const course = hole.playsOn ? plainCourseName(hole.course.name) : shortCourseName(hole.course.name, names)
   return `${course} · Hole ${hole.holeNumber}`
 }
+
+/** Where a trip player's swing on a hole stands, in a word. */
+const SWING_WORD: Record<string, string> = { active: 'Started', miss: 'Missed', claimed: 'Claimed', verified: 'Verified', paid: 'Paid' }
 
 function holeMeta(hole: GolfDayHole): string {
   return `Par ${hole.par}${hole.distanceMetres ? ` · ${hole.distanceMetres} m` : ''}`
@@ -78,7 +82,7 @@ export default function GolfDayPage() {
   const slug = String(params?.slug ?? '')
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
-  const { selectCourse, selectTier, setPrizeZAR, setBetId, resetSession } = useBet()
+  const { selectCourse, selectTier, setPrize, setBetId, resetSession } = useBet()
   const refreshTick = useRefreshSignal()
 
   const [data, setData] = useState<Loaded | null>(null)
@@ -156,14 +160,14 @@ export default function GolfDayPage() {
   }
 
   /** Put the bet on this session's context, exactly as the stake screen does, and go film it. */
-  function goRecord(betId: string, hole: GolfDayHole, prizeZAR: number) {
+  function goRecord(betId: string, hole: GolfDayHole, prize: number, currency: PrizeCurrency) {
     resetSession()
     selectCourse(
       { id: hole.course.id, name: hole.course.name, location: hole.course.location, region: hole.course.region, emoji: '⛳' },
       { id: hole.holeId, courseId: hole.course.id, holeNumber: hole.holeNumber, par: hole.par, distanceMetres: hole.distanceMetres ?? 0 },
     )
     selectTier(GOLF_DAY_TIER.tier)
-    setPrizeZAR(prizeZAR)
+    setPrize(prize, currency)
     setBetId(betId)
     router.push('/record')
   }
@@ -178,10 +182,10 @@ export default function GolfDayPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ holeId: hole.holeId }),
       })
-      const body = await res.json().catch(() => ({})) as { betId?: string; prizeZAR?: number; error?: string; code?: string }
+      const body = await res.json().catch(() => ({})) as { betId?: string; prize?: number; currency?: PrizeCurrency; error?: string; code?: string }
       if (res.ok && body.betId) {
         track('golf_day_swing_started', { golf_day: slug })
-        goRecord(body.betId, hole, body.prizeZAR ?? data.golfDay.prizeZAR)
+        goRecord(body.betId, hole, body.prize ?? data.golfDay.prize, body.currency ?? data.golfDay.currency)
         return
       }
       if (body.code === 'AGE_NOT_VERIFIED') {
@@ -202,7 +206,13 @@ export default function GolfDayPage() {
   // The code theme for this link at once, then the look set in the admin once the golf day has loaded.
   const theme = themeFor(slug, golfDay?.look)
   const me = data?.me ?? null
-  const swingHole = me?.swing ? golfDay?.holes.find(h => h.holeId === me.swing!.holeId) ?? null : null
+  const trip = Boolean(golfDay?.endsOn)
+  const prize = golfDay ? formatPrize(golfDay.prize, golfDay.currency) : ''
+  const swingByHole = new Map((me?.swings ?? []).map(sw => [sw.holeId, sw]))
+  /** A started swing still to film, and its hole: the one on a golf day, any round's on a trip. */
+  const started = me?.swings.find(sw => sw.status === 'active') ?? null
+  const startedHole = started ? golfDay?.holes.find(h => h.holeId === started.holeId) ?? null : null
+  const resume = () => { if (golfDay && started && startedHole) goRecord(started.betId, startedHole, golfDay.prize, golfDay.currency) }
 
   return (
     <PhoneFrame statusTheme="dark">
@@ -229,7 +239,7 @@ export default function GolfDayPage() {
             </section>
           ) : (
             <>
-              <GolfDayLabel theme={theme} name={golfDay.name} prizeZAR={golfDay.prizeZAR} playsOn={golfDay.playsOn} holes={golfDay.holes} />
+              <GolfDayLabel theme={theme} name={golfDay.name} prize={golfDay.prize} currency={golfDay.currency} playsOn={golfDay.playsOn} endsOn={golfDay.endsOn} holes={golfDay.holes} />
 
               <section className="gd-action" aria-live="polite">
                 {error && <div className="auth-error" role="alert">{error}</div>}
@@ -238,39 +248,67 @@ export default function GolfDayPage() {
                   me={me}
                   signedIn={Boolean(user)}
                   busy={busy}
-                  swingHole={swingHole}
+                  started={started}
+                  startedHole={startedHole}
                   onSignIn={signInToJoin}
                   onJoin={() => join(true)}
                   onInstall={offerInstall ? () => setInstallSheet('asked') : undefined}
                   venue={theme.venue}
                   onPick={setPicked}
-                  onResume={() => swingHole && me?.swing && goRecord(me.swing.betId, swingHole, golfDay.prizeZAR)}
+                  onResume={resume}
                 />
               </section>
 
-              <section className="gd-card">
-                <h2 className="gd-h2">The {golfDay.holes.length === 1 ? 'hole' : 'holes'}</h2>
-                <ul className="gd-holes">
-                  {golfDay.holes.map(h => (
-                    <li key={h.holeId}><strong>{holeTitle(h, golfDay.holes)}</strong><span>{holeMeta(h)}</span></li>
+              {trip ? (
+                <section className="gd-card">
+                  <h2 className="gd-h2">The rounds</h2>
+                  {rounds(golfDay.holes).map(r => (
+                    <div key={r.date ?? 'any'} className="gd-round">
+                      <h3 className="gd-round-date">{r.date ? formatRoundDate(r.date) : 'Any day'}</h3>
+                      <ul className="gd-holes">
+                        {r.holes.map(h => {
+                          const sw = me?.joined ? swingByHole.get(h.holeId) : undefined
+                          return (
+                            <li key={h.holeId}>
+                              <strong>{holeTitle(h, golfDay.holes)}</strong>
+                              <span>{sw ? SWING_WORD[sw.status] ?? 'Taken' : holeMeta(h)}</span>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    </div>
                   ))}
-                </ul>
-                <p className="gd-small">{golfDay.holes.length === 1 ? 'Play your swing when your round gets there.' : 'Play your swing on whichever of these your round takes you to.'}</p>
-              </section>
+                  <p className="gd-small">One swing on each, in its round. A two-course day has a swing on each course.</p>
+                </section>
+              ) : (
+                <section className="gd-card">
+                  <h2 className="gd-h2">The {golfDay.holes.length === 1 ? 'hole' : 'holes'}</h2>
+                  <ul className="gd-holes">
+                    {golfDay.holes.map(h => (
+                      <li key={h.holeId}><strong>{holeTitle(h, golfDay.holes)}</strong><span>{holeMeta(h)}</span></li>
+                    ))}
+                  </ul>
+                  <p className="gd-small">{golfDay.holes.length === 1 ? 'Play your swing when your round gets there.' : 'Play your swing on whichever of these your round takes you to.'}</p>
+                </section>
+              )}
 
               <section className="gd-card">
                 <h2 className="gd-h2">How it works</h2>
                 <ol className="gd-steps">
-                  <li><strong>Join before the day.</strong> Sign in from this link and tap Join. Your {golfDay.tabLabel} tab appears at the bottom of the app.</li>
-                  <li><strong>On the tee.</strong> Open the {golfDay.tabLabel} tab and tap the hole you are on. That starts your swing.</li>
+                  <li><strong>Join before {trip ? 'the trip' : 'the day'}.</strong> Sign in from this link and tap Join. Your {golfDay.tabLabel} tab appears at the bottom of the app.</li>
+                  <li><strong>On the tee.</strong> {trip
+                    ? <>Each round, open the {golfDay.tabLabel} tab and tap that day&rsquo;s hole when you reach it. That starts your swing.</>
+                    : <>Open the {golfDay.tabLabel} tab and tap the hole you are on. That starts your swing.</>}</li>
                   <li><strong>Film it.</strong> Hand your phone to a playing partner. They film your tee shot in the app.</li>
-                  <li><strong>Hole it.</strong> Claim in the app. Once the club and your playing partners confirm it, the {formatRand(golfDay.prizeZAR)} is yours.</li>
+                  <li><strong>Hole it.</strong> Claim in the app. Once the club and your playing partners confirm it, the {prize} is yours.</li>
                 </ol>
               </section>
 
               <p className="gd-rules">
-                One swing per player, on {formatGolfDayDate(golfDay.playsOn)} only, on the {golfDay.holes.length === 1 ? 'hole' : 'holes'} above, filmed in the app.
-                18+ only. A hole-in-one is paid after our review and confirmation from the club and your playing partners.
+                {trip
+                  ? <>One swing per player each round, on that round&rsquo;s hole and on its day ({formatGolfDayDates(golfDay.playsOn, golfDay.endsOn)}), filmed in the app.</>
+                  : <>One swing per player, on {formatGolfDayDate(golfDay.playsOn)} only, on the {golfDay.holes.length === 1 ? 'hole' : 'holes'} above, filmed in the app.</>}
+                {' '}18+ only. A hole-in-one is paid after our review and confirmation from the club and your playing partners.
                 The prize is paid by Get Lucky. <a href="/terms">Terms</a>
               </p>
               {theme.footnote && <p className="gd-footnote">{theme.footnote}</p>}
@@ -289,13 +327,13 @@ export default function GolfDayPage() {
               <dl className="stake-rows">
                 <div><dt>Course</dt><dd><CourseName name={picked.course.name} venue={theme.venue} /></dd></div>
                 <div><dt>Hole</dt><dd>Hole {picked.holeNumber} · {holeMeta(picked)}</dd></div>
-                <div className="stake-rows-win"><dt>You could win</dt><dd>{formatRand(golfDay.prizeZAR)}</dd></div>
+                <div className="stake-rows-win"><dt>You could win</dt><dd>{prize}</dd></div>
               </dl>
               <button type="button" className="btn-lime btn-lime--block" onClick={() => startSwing(picked)} disabled={busy === 'swing'}>
                 {busy === 'swing' ? 'Setting up your shot…' : 'Start my swing'}
               </button>
               <p className="stake-free-note">
-                You get one swing, and this uses it. Tap only when you are on this tee with a playing partner ready to film.
+                {trip ? 'You get one swing on this hole, and this uses it.' : 'You get one swing, and this uses it.'} Tap only when you are on this tee with a playing partner ready to film.
               </p>
             </div>
           </>
@@ -304,7 +342,9 @@ export default function GolfDayPage() {
         {installSheet && golfDay && (
           <AddToHomeSheet
             title={installSheet === 'joined' ? 'You\u2019re in. One more step' : 'Put Get Lucky on your home screen'}
-            lead={`Put Get Lucky on your home screen, so your ${golfDay.tabLabel} swing is one tap away on the day.`}
+            lead={trip
+              ? `Put Get Lucky on your home screen, so your ${golfDay.tabLabel} swing is one tap away every round.`
+              : `Put Get Lucky on your home screen, so your ${golfDay.tabLabel} swing is one tap away on the day.`}
             source="golf_day"
             onClose={() => setInstallSheet(null)}
           />
@@ -345,12 +385,14 @@ function AddToCalendar({ golfDay, venue }: { golfDay: PublicGolfDay; venue: stri
   )
 }
 
-function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPick, onResume, onInstall, venue }: {
+function Action({ golfDay, me, signedIn, busy, started, startedHole, onSignIn, onJoin, onPick, onResume, onInstall, venue }: {
   golfDay: PublicGolfDay
   me: GolfDayMe | null
   signedIn: boolean
   busy: 'join' | 'swing' | null
-  swingHole: GolfDayHole | null
+  /** A swing started and not yet filmed or declared, and its hole. */
+  started: GolfDaySwing | null
+  startedHole: GolfDayHole | null
   onSignIn: () => void
   onJoin: () => void
   onPick: (hole: GolfDayHole) => void
@@ -360,44 +402,49 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
   /** The theme's short name for the club, for the calendar event. */
   venue: string | null
 }) {
-  const date = formatGolfDayDate(golfDay.playsOn)
+  const trip = Boolean(golfDay.endsOn)
   const joined = Boolean(me?.joined)
+  const prize = formatPrize(golfDay.prize, golfDay.currency)
 
-  if (golfDay.closed) return <p className="gd-status">This golf day is closed.</p>
+  if (golfDay.closed) return <p className="gd-status">This {trip ? 'trip' : 'golf day'} is closed.</p>
 
   // ── Not in yet ──
   if (!joined) {
-    if (golfDay.phase === 'over') return <p className="gd-status">This golf day is over. Thanks to everyone who played.</p>
-    if (golfDay.full) return <p className="gd-status">Every place on this golf day has been taken.</p>
+    if (golfDay.phase === 'over') return <p className="gd-status">This {trip ? 'trip' : 'golf day'} is over. Thanks to everyone who played.</p>
+    if (golfDay.full) return <p className="gd-status">Every place on this {trip ? 'trip' : 'golf day'} has been taken.</p>
     if (!signedIn) {
       return (
         <>
           <button type="button" className="btn-lime btn-lime--block" onClick={onSignIn}>Sign in to join</button>
-          <p className="gd-small">Google or your email, then your date of birth (18+). It takes a minute. Do it before the day.</p>
+          <p className="gd-small">Google or your email, then your date of birth (18+). It takes a minute. Do it before {trip ? 'the trip' : 'the day'}.</p>
         </>
       )
     }
     return (
       <button type="button" className="btn-lime btn-lime--block" onClick={onJoin} disabled={busy === 'join'}>
-        {busy === 'join' ? 'Joining…' : 'Join the golf day'}
+        {busy === 'join' ? 'Joining…' : trip ? 'Join the trip' : 'Join the golf day'}
       </button>
     )
   }
 
+  if (trip) return <TripAction golfDay={golfDay} me={me} busy={busy} started={started} startedHole={startedHole} onPick={onPick} onResume={onResume} onInstall={onInstall} venue={venue} />
+
+  const date = formatGolfDayDate(golfDay.playsOn)
+
   // ── Their swing, once taken ──
-  const swing = me?.swing
+  const swing = me?.swings[0]
   if (swing) {
     if (swing.status === 'active') {
       return swing.open ? (
         <>
-          <p className="gd-status">Your swing is started{swingHole ? ` on hole ${swingHole.holeNumber}` : ''}. Film it now.</p>
-          <button type="button" className="btn-lime btn-lime--block" onClick={onResume} disabled={!swingHole}>Film my swing</button>
+          <p className="gd-status">Your swing is started{startedHole ? ` on hole ${startedHole.holeNumber}` : ''}. Film it now.</p>
+          <button type="button" className="btn-lime btn-lime--block" onClick={onResume} disabled={!startedHole}>Film my swing</button>
         </>
       ) : <p className="gd-status">Your swing was started but never filmed, and its window has closed.</p>
     }
     if (swing.status === 'miss') return <p className="gd-status">Your swing is in. Not this time. Thanks for playing.</p>
     if (swing.status === 'claimed') return <p className="gd-status">Your hole-in-one claim is in. We are checking the footage and speaking to the club and your playing partners.</p>
-    if (swing.status === 'verified') return <p className="gd-status">Verified. {formatRand(golfDay.prizeZAR)} is on its way to you.</p>
+    if (swing.status === 'verified') return <p className="gd-status">Verified. {prize} is on its way to you.</p>
     if (swing.status === 'paid') return <p className="gd-status">Paid. Congratulations on your hole-in-one.</p>
     return <p className="gd-status">Your swing is in.</p>
   }
@@ -416,14 +463,79 @@ function Action({ golfDay, me, signedIn, busy, swingHole, onSignIn, onJoin, onPi
   return (
     <>
       <p className="gd-status"><strong>It&rsquo;s today.</strong> Tap the hole you are on to take your swing.</p>
-      <div className="gd-pick">
-        {golfDay.holes.map(h => (
-          <button key={h.holeId} type="button" className="gd-hole" onClick={() => onPick(h)} disabled={busy !== null}>
-            <span className="gd-hole-name">{holeTitle(h, golfDay.holes)}</span>
-            <span className="gd-hole-meta">{holeMeta(h)}</span>
-          </button>
-        ))}
-      </div>
+      <HoleButtons holes={golfDay.holes} all={golfDay.holes} busy={busy} onPick={onPick} />
+    </>
+  )
+}
+
+function HoleButtons({ holes, all, busy, onPick }: { holes: GolfDayHole[]; all: GolfDayHole[]; busy: 'join' | 'swing' | null; onPick: (hole: GolfDayHole) => void }) {
+  return (
+    <div className="gd-pick">
+      {holes.map(h => (
+        <button key={h.holeId} type="button" className="gd-hole" onClick={() => onPick(h)} disabled={busy !== null}>
+          <span className="gd-hole-name">{holeTitle(h, all)}</span>
+          <span className="gd-hole-meta">{holeMeta(h)}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * A joined player on a trip: before it, the date of the first round; each
+ * day of it, a swing started and not yet filmed, then that day's holes
+ * still to swing at (a two-course day has two), or when the next round is;
+ * after it, thanks. How each swing went is in the rounds card below.
+ */
+function TripAction({ golfDay, me, busy, started, startedHole, onPick, onResume, onInstall, venue }: {
+  golfDay: PublicGolfDay
+  me: GolfDayMe | null
+  busy: 'join' | 'swing' | null
+  started: GolfDaySwing | null
+  startedHole: GolfDayHole | null
+  onPick: (hole: GolfDayHole) => void
+  onResume: () => void
+  onInstall?: () => void
+  venue: string | null
+}) {
+  const today = todayInSouthAfrica()
+  const taken = new Set((me?.swings ?? []).map(sw => sw.holeId))
+  const next = rounds(golfDay.holes).find(r => r.date && r.date > today && r.holes.some(h => !taken.has(h.holeId)))
+  const nextLine = next?.date
+    ? <>Your next swing is on {formatGolfDayDate(next.date)}, at {next.holes.map(h => holeTitle(h, golfDay.holes)).join(' and ')}.</>
+    : <>That was the last round. Thanks for playing.</>
+
+  if (golfDay.phase === 'upcoming') {
+    const first = rounds(golfDay.holes).find(r => r.date)?.date ?? golfDay.playsOn
+    return (
+      <>
+        <p className="gd-status"><strong>You&rsquo;re in.</strong> Your first swing opens on {formatGolfDayDate(first)}. Come back to this tab every round.</p>
+        <AddToCalendar golfDay={golfDay} venue={venue} />
+        {onInstall && <button type="button" className="gd-link" onClick={onInstall}>Put Get Lucky on your home screen</button>}
+      </>
+    )
+  }
+  if (golfDay.phase === 'over') return <p className="gd-status">The trip is over. Thanks for playing.</p>
+
+  const toPlay = holesOn(golfDay.holes, today).filter(h => !taken.has(h.holeId))
+  return (
+    <>
+      {started && (started.open ? (
+        <>
+          <p className="gd-status">Your swing is started{startedHole ? ` at ${holeTitle(startedHole, golfDay.holes)}` : ''}. Film it now.</p>
+          <button type="button" className="btn-lime btn-lime--block" onClick={onResume} disabled={!startedHole}>Film my swing</button>
+        </>
+      ) : <p className="gd-status">A swing{startedHole ? ` at ${holeTitle(startedHole, golfDay.holes)}` : ''} was started but never filmed, and its window has closed.</p>)}
+      {toPlay.length > 0 ? (
+        <>
+          <p className="gd-status"><strong>Today&rsquo;s round.</strong> Tap the hole when you reach it to take your swing.</p>
+          <HoleButtons holes={toPlay} all={golfDay.holes} busy={busy} onPick={onPick} />
+        </>
+      ) : holesOn(golfDay.holes, today).some(h => h.playsOn === today) ? (
+        <p className="gd-status"><strong>Today&rsquo;s swing is in.</strong> {nextLine}</p>
+      ) : (
+        <p className="gd-status"><strong>No round today.</strong> {nextLine}</p>
+      )}
     </>
   )
 }

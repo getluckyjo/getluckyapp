@@ -15,6 +15,8 @@ export interface PublicWinner {
   name: string
   initials: string
   amountCents: number
+  /** The currency of amountCents: rand, or a golf trip's dollars. */
+  currency: 'ZAR' | 'USD'
   stakeCents: number
   course: string
   paidAt: string
@@ -27,7 +29,7 @@ export async function GET() {
     const admin = createAdminClient()
     const { data: bets, error } = await admin
       .from('bets')
-      .select('id, user_id, course_id, potential_win_pence, stake_pence, declared_at, updated_at, created_at')
+      .select('id, user_id, course_id, potential_win_pence, prize_currency, stake_pence, declared_at, updated_at, created_at')
       .eq('status', 'paid')
       .order('potential_win_pence', { ascending: false })
       .limit(100)
@@ -51,13 +53,15 @@ export async function GET() {
         name: display,
         initials,
         amountCents: b.potential_win_pence ?? 0,
+        currency: b.prize_currency === 'USD' ? 'USD' : 'ZAR',
         stakeCents: b.stake_pence ?? 0,
         course: courses.get(b.course_id) ?? 'Partner course',
         paidAt: (b.updated_at ?? b.declared_at ?? b.created_at) as string,
       }
     })
 
-    const totalPaidOutCents = winners.reduce((s, w) => s + w.amountCents, 0)
+    // Rand: a golf trip's dollar prize is listed, not added to the rand total.
+    const totalPaidOutCents = winners.filter(w => w.currency === 'ZAR').reduce((s, w) => s + w.amountCents, 0)
     return NextResponse.json({ winners, totalPaidOutCents }, { headers: CACHE_HEADERS })
   } catch (err) {
     log.error('winners.failed', err)

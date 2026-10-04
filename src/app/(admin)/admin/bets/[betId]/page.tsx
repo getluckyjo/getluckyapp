@@ -7,7 +7,7 @@ import { ArrowLeft, AlertTriangle, CreditCard, ExternalLink, ShieldAlert } from 
 import StatusBadge from '@/components/admin/StatusBadge'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
-import { formatZAR, timeAgo } from '@/lib/format'
+import { formatZAR, timeAgo, formatMoney } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import { RULE_LABELS, describeFlag } from '@/lib/risk/labels'
 import type { AdminBetDetail } from '@/types/admin'
@@ -152,7 +152,7 @@ export default function AdminBetDetailPage() {
         <div>
           <h1 className="adm-title">{bet.courseName}, hole {bet.holeNumber}</h1>
           <p className="adm-lead">
-            {TIER_LABELS[bet.tier]} · {formatZAR(bet.stakeCents)} to win {formatZAR(bet.potentialWinCents)} · placed <When at={bet.createdAt} />
+            {TIER_LABELS[bet.tier]} · {formatZAR(bet.stakeCents)} to win {formatMoney(bet.potentialWinCents, bet.prizeCurrency)} · placed <When at={bet.createdAt} />
           </p>
         </div>
         <StatusBadge status={bet.status} />
@@ -270,13 +270,13 @@ export default function AdminBetDetailPage() {
           <h2 className="adm-h3">Payout</h2>
           {paidOut ? (
             <dl className="adm-grid-2" style={{ margin: 0 }}>
-              <Field name="Prize">{formatZAR(bet.potentialWinCents)}</Field>
+              <Field name="Prize">{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</Field>
               <Field name="Reference"><span className="adm-mono">{bet.payoutReference || '—'}</span></Field>
             </dl>
           ) : (
             <>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-                The claim is verified: <strong>{formatZAR(bet.potentialWinCents)}</strong> is owed to <strong>{payee}</strong>.
+                The claim is verified: <strong>{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</strong> is owed to <strong>{payee}</strong>.
                 Record the payout once the money has left the account; the reference is kept with the bet.
               </p>
               <div>
@@ -325,7 +325,7 @@ export default function AdminBetDetailPage() {
       <ConfirmModal
         open={payoutOpen}
         title="Confirm the prize was paid"
-        message={`Only confirm once ${formatZAR(bet.potentialWinCents)} has left the account for ${payee}. This marks the bet as paid, puts it on the winners list, and records your admin id in its history.`}
+        message={`Only confirm once ${formatMoney(bet.potentialWinCents, bet.prizeCurrency)} has left the account for ${payee}. This marks the bet as paid, puts it on the winners list, and records your admin id in its history.`}
         confirmLabel="Yes, the prize was paid"
         variant="success"
         busy={saving}
@@ -336,7 +336,7 @@ export default function AdminBetDetailPage() {
       >
         <div className="adm-stack">
           <dl className="adm-grid-2" style={{ margin: 0 }}>
-            <Field name="Prize">{formatZAR(bet.potentialWinCents)}</Field>
+            <Field name="Prize">{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</Field>
             <Field name="Paid to">
               {bet.user.name || '—'}
               <div className="adm-small" style={{ fontWeight: 400 }}>{bet.user.email || 'No email on record'}</div>

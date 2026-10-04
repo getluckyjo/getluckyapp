@@ -205,6 +205,10 @@ export interface Database {
           payout_reference: string | null
           promo_code_id: string | null
           golf_day_id: string | null
+          /** The currency of potential_win_pence: 'ZAR', or a golf trip's 'USD' (migration 033). */
+          prize_currency: 'ZAR' | 'USD'
+          /** Set by the golf day swing trigger (migration 033); null outside golf days. */
+          golf_day_slot: string | null
           declared_result: 'miss' | 'win' | null
           declared_at: string | null
           expires_at: string
@@ -245,6 +249,7 @@ export interface Database {
           payout_reference?: string | null
           promo_code_id?: string | null
           golf_day_id?: string | null
+          prize_currency?: 'ZAR' | 'USD'
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -602,7 +607,10 @@ export interface Database {
           name: string
           tab_label: string
           plays_on: string
+          /** A golf trip's last day (migration 033); null for a golf day of one day. */
+          ends_on: string | null
           prize_pence: number
+          prize_currency: 'ZAR' | 'USD'
           max_players: number
           note: string | null
           disabled_at: string | null
@@ -616,7 +624,9 @@ export interface Database {
           name: string
           tab_label: string
           plays_on: string
+          ends_on?: string | null
           prize_pence: number
+          prize_currency?: 'ZAR' | 'USD'
           max_players: number
           note?: string | null
           disabled_at?: string | null
@@ -626,7 +636,9 @@ export interface Database {
           name?: string
           tab_label?: string
           plays_on?: string
+          ends_on?: string | null
           prize_pence?: number
+          prize_currency?: 'ZAR' | 'USD'
           max_players?: number
           note?: string | null
           disabled_at?: string | null
@@ -635,9 +647,10 @@ export interface Database {
         Relationships: []
       }
       golf_day_holes: {
-        Row: { golf_day_id: string; hole_id: string }
-        Insert: { golf_day_id: string; hole_id: string }
-        Update: never
+        /** plays_on: the date of a golf trip's round (migration 033); null on a golf day of one day. */
+        Row: { golf_day_id: string; hole_id: string; plays_on: string | null }
+        Insert: { golf_day_id: string; hole_id: string; plays_on?: string | null }
+        Update: { plays_on?: string | null }
         Relationships: []
       }
       golf_day_players: {

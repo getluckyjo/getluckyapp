@@ -1,9 +1,10 @@
 /**
  * GET /api/admin/golf-days/[golfDayId]/players
- * Returns: { data: [{ userId, name, email, joinedAt, swing }] }
+ * Returns: { data: [{ userId, name, email, joinedAt, swings }] }
  *
  * Who joined a golf day and where each player's swing stands, for the day
- * itself: who has not taken theirs yet, and which ones came in.
+ * itself: who has not taken theirs yet, and which ones came in. On a trip,
+ * every swing a player took, in the order of its rounds.
  */
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
@@ -60,24 +61,28 @@ export async function GET(_request: Request, { params }: Ctx) {
     }
 
     const profileById = new Map(profiles.map(p => [p.id, p]))
-    const swingByUser = new Map(swings.map(s => [s.user_id, s]))
+    const swingsByUser = new Map<string, Swing[]>()
+    for (const s of [...swings].sort((a, b) => a.created_at.localeCompare(b.created_at))) {
+      swingsByUser.set(s.user_id, [...(swingsByUser.get(s.user_id) ?? []), s])
+    }
     const holeById = new Map((holes.get(golfDayId) ?? []).map(h => [h.holeId, h]))
 
     const data = players.map(p => {
       const profile = profileById.get(p.user_id)
-      const swing = swingByUser.get(p.user_id)
-      const hole = swing ? holeById.get(swing.hole_id) : undefined
       return {
         userId: p.user_id,
         name: profile?.name ?? null,
         email: profile?.email ?? null,
         joinedAt: p.joined_at,
-        swing: swing ? {
-          betId: swing.id,
-          status: swing.status,
-          at: swing.created_at,
-          hole: hole ? `${hole.course.name}, hole ${hole.holeNumber}` : null,
-        } : null,
+        swings: (swingsByUser.get(p.user_id) ?? []).map(swing => {
+          const hole = holeById.get(swing.hole_id)
+          return {
+            betId: swing.id,
+            status: swing.status,
+            at: swing.created_at,
+            hole: hole ? `${hole.course.name}, hole ${hole.holeNumber}` : null,
+          }
+        }),
       }
     })
     return NextResponse.json({ data })

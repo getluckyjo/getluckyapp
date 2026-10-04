@@ -8,7 +8,7 @@ import AppHeader from '@/components/layout/AppHeader'
 import { useAuth } from '@/context/AuthContext'
 import PullToRefresh from '@/components/pwa/PullToRefresh'
 import { useRefreshSignal } from '@/hooks/useRefreshSignal'
-import { getInitials, formatRandFromCents as formatRand } from '@/lib/format'
+import { getInitials, formatPrize, formatRandFromCents as formatRand } from '@/lib/format'
 
 type Tab = 'biggest' | 'recent'
 
@@ -17,6 +17,8 @@ interface Winner {
   name: string
   initials: string
   amountCents: number
+  /** Rand, or a golf trip's dollars; rand when absent. */
+  currency?: 'ZAR' | 'USD'
   stakeCents: number
   course: string
   paidAt: string
@@ -93,7 +95,7 @@ export default function LeaderboardPage() {
                   <span className="lb-podium-rank" aria-label={`Rank ${w.rank}`}>#{w.rank}</span>
                   <div className="lb-podium-avatar" aria-hidden>{w.initials}</div>
                   <div className="lb-podium-name">{w.name}</div>
-                  <div className="lb-podium-amount">{formatRand(w.amountCents)}</div>
+                  <div className="lb-podium-amount">{formatPrize(w.amountCents / 100, w.currency ?? 'ZAR')}</div>
                   <div className="lb-podium-course">{w.course}</div>
                 </div>
               ))}
@@ -128,7 +130,7 @@ export default function LeaderboardPage() {
                   <div className="lb-name">{w.name}</div>
                   <div className="lb-sub">{w.course} · {formatDate(w.paidAt)}</div>
                 </div>
-                <div className="lb-amount">{formatRand(w.amountCents)}</div>
+                <div className="lb-amount">{formatPrize(w.amountCents / 100, w.currency ?? 'ZAR')}</div>
               </div>
             ))}
           </div>

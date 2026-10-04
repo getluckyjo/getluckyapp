@@ -2,17 +2,23 @@
  * The WhatsApp message that goes out with a golf day's link, as the admin
  * offers it to copy. Asterisks are WhatsApp's bold. Short and a bit cheeky,
  * in Johannes's voice, and every step in it is a real one: sign in, Join,
- * home screen and calendar; on the day, the tab and the hole.
+ * home screen and calendar; on the day, the tab and the hole. A golf
+ * trip's lists each round's hole by date.
  */
-import { formatRand } from '@/lib/format'
-import { formatGolfDayDate, golfDayPath, golfDayVenue, oneCourse, shortCourseName, type GolfDayHole } from './rules'
+import { formatPrize } from '@/lib/format'
+import {
+  formatGolfDayDate, formatRoundDate, golfDayPath, golfDayVenue, oneCourse, plainCourseName, rounds, shortCourseName,
+  type GolfDayHole, type PrizeCurrency,
+} from './rules'
 
 export interface MessageDay {
   slug: string
   name: string
   tabLabel: string
   playsOn: string
-  prizeZAR: number
+  endsOn: string | null
+  prize: number
+  currency: PrizeCurrency
   holes: GolfDayHole[]
 }
 
@@ -42,17 +48,42 @@ function where(day: MessageDay, venue: string | null): string {
   return `at ${either(day.holes.map(h => `*${shortCourseName(h.course.name, names)} ${h.holeNumber}*`))}`
 }
 
+/** A trip's rounds, a line each: "Mon 15 Feb: Royal Cape 15 and Steenberg 7". */
+function schedule(holes: GolfDayHole[]): string[] {
+  return rounds(holes).map(r => {
+    const where = r.holes.map(h => `${plainCourseName(h.course.name)} ${h.holeNumber}`).join(' and ')
+    return `${r.date ? formatRoundDate(r.date) : 'Any day'}: ${where}`
+  })
+}
+
 /** The message, ready to paste into WhatsApp. `site` is the app's origin. */
 export function golfDayMessage(day: MessageDay, { site, venue }: { site: string; venue: string | null }): string {
   const date = formatGolfDayDate(day.playsOn) // "Friday 2 October"
   const weekday = date.split(' ')[0]
   const link = `${site.replace(/\/$/, '')}${golfDayPath(day.slug)}`
   const theHole = day.holes.length === 1 ? 'the' : 'your'
+  const prize = formatPrize(day.prize, day.currency)
+
+  if (day.endsOn) {
+    return [
+      `⛳ *${day.name} × Get Lucky* 🍀`,
+      '',
+      `A free swing every round, on one hole a course. *${prize}* if one drops. 💰`,
+      '',
+      `📲 *Before ${weekday}:* tap the link, sign in, hit *Join*, then add it to your home screen and calendar.`,
+      link,
+      '',
+      `🏌️ *Every round:* open the *${day.tabLabel}* tab, tap the day's hole when you get there and get a mate to film it.`,
+      ...schedule(day.holes),
+      '',
+      "18+. One swing a round. Swing like the rent's due. 🍀",
+    ].join('\n')
+  }
 
   return [
     `⛳ *${day.name} × Get Lucky* 🍀`,
     '',
-    `One free swing. One hole. *${formatRand(day.prizeZAR)}* if it drops on *${date}*. 💰`,
+    `One free swing. One hole. *${prize}* if it drops on *${date}*. 💰`,
     '',
     `📲 *Before ${weekday}:* tap the link, sign in, hit *Join*, then add it to your home screen and calendar.`,
     link,

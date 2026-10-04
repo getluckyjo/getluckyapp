@@ -17,6 +17,8 @@ export interface BetRowLike {
   tier: BetTier
   stake_pence: number
   potential_win_pence: number
+  /** 'ZAR', or a golf trip's 'USD' (migration 033); read as rand when absent. */
+  prize_currency?: string | null
   status: BetStatus
   declared_result: 'miss' | 'win' | null
   declared_at: string | null
@@ -84,6 +86,7 @@ export function toAdminBetRecord(b: BetRowLike, names: Names): AdminBetRecord {
     tier: b.tier,
     stakeCents: b.stake_pence,
     potentialWinCents: b.potential_win_pence,
+    prizeCurrency: b.prize_currency === 'USD' ? 'USD' : 'ZAR',
     status: b.status,
     declaredResult: b.declared_result,
     declaredAt: b.declared_at,
@@ -105,6 +108,7 @@ export function toQueueItem(v: VerificationRowLike, bet: BetRowLike | undefined,
     tier: bet?.tier ?? 'tier_1',
     stakeCents: bet?.stake_pence ?? 0,
     potentialWinCents: bet?.potential_win_pence ?? 0,
+    prizeCurrency: bet?.prize_currency === 'USD' ? 'USD' : 'ZAR',
     videoUrl: bet?.video_url ?? null,
     certificatePath: v.certificate_path,
     affidavitPath: v.affidavit_path,
@@ -134,7 +138,7 @@ export async function betsForVerifications(admin: SupabaseClient, rows: Pick<Ver
   return new Map(((data ?? []) as BetRowLike[]).map(b => [b.id, b]))
 }
 
-export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, status, declared_result, declared_at, video_url, payment_intent_id, created_at, risk_score, risk_flags, payout_reference'
+export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, prize_currency, status, declared_result, declared_at, video_url, payment_intent_id, created_at, risk_score, risk_flags, payout_reference'
 
 /**
  * A search term safe to embed in a PostgREST `.or()` filter string: the

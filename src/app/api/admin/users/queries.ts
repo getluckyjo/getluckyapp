@@ -56,18 +56,19 @@ export async function betTotals(admin: SupabaseClient, userIds: string[]): Promi
   for (;;) {
     const { data, count, error } = await admin
       .from('bets')
-      .select('id, user_id, stake_pence, potential_win_pence, status', { count: 'exact' })
+      .select('id, user_id, stake_pence, potential_win_pence, prize_currency, status', { count: 'exact' })
       .in('user_id', userIds)
       .order('id', { ascending: true })
       .range(read, read + PAGE - 1)
     if (error) throw error
-    const rows = (data ?? []) as { user_id: string; stake_pence: number | null; potential_win_pence: number | null; status: string }[]
+    const rows = (data ?? []) as { user_id: string; stake_pence: number | null; potential_win_pence: number | null; prize_currency?: string | null; status: string }[]
     for (const b of rows) {
       const t = totals.get(b.user_id)
       if (!t) continue
       t.bets += 1
       t.staked += b.stake_pence ?? 0
-      if (b.status === 'paid' || b.status === 'verified') t.won += b.potential_win_pence ?? 0
+      // Rand only: a golf trip's dollar prize is not added to rand.
+      if ((b.status === 'paid' || b.status === 'verified') && b.prize_currency !== 'USD') t.won += b.potential_win_pence ?? 0
     }
     read += rows.length
     if (rows.length === 0 || (rows.length < PAGE && read >= (count ?? 0))) return totals

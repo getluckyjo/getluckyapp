@@ -17,6 +17,8 @@ export interface VerificationQueueItem {
   tier: BetTier
   stakeCents: number
   potentialWinCents: number
+  /** The currency of potentialWinCents: rand, or a golf trip's dollars. */
+  prizeCurrency: 'ZAR' | 'USD'
   videoUrl: string | null
   certificatePath: string | null
   affidavitPath: string | null
@@ -110,6 +112,8 @@ export interface AdminBetRecord {
   tier: BetTier
   stakeCents: number
   potentialWinCents: number
+  /** The currency of potentialWinCents: rand, or a golf trip's dollars. */
+  prizeCurrency: 'ZAR' | 'USD'
   status: BetStatus
   declaredResult: 'miss' | 'win' | null
   declaredAt: string | null
