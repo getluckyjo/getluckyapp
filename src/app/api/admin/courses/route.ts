@@ -1,6 +1,4 @@
 import { NextResponse } from 'next/server'
-import { z } from 'zod'
-import type { SupabaseClient } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, invalidInput, parseBody, parseQuery, pagination, boolString, searchTerm } from '@/lib/api/http'
 import { orSearchTerm } from '@/lib/admin/data'
@@ -11,48 +9,24 @@ import type { AdminCourseRecord, PaginatedResponse } from '@/types/admin'
 const Query = pagination.extend({
   search: searchTerm.optional(),
   partner: boolString.optional(),
-  /** 'none': partner courses with no club official, where a claim has nobody to confirm it. */
-  officials: z.enum(['none']).optional(),
 })
 
 interface CourseRowLike { id: string; name: string; [k: string]: unknown }
 
-/** A course in the list, with its club officials counted: 0 on a partner course is a gap. */
+/** A course in the list, with its optional club contacts counted. */
 type CourseListRecord = AdminCourseRecord & { officialCount: number }
-
-/**
- * Partner courses with no club official. Partners are few (tens), so their
- * ids fit in the list query's filter, and the paging and count stay in SQL.
- */
-async function partnersWithoutOfficials(admin: SupabaseClient): Promise<string[]> {
-  const { data: partners, error } = await admin.from('courses').select('id').eq('is_partner', true)
-  if (error) throw error
-  const ids = ((partners ?? []) as { id: string }[]).map(c => c.id)
-  if (!ids.length) return []
-  const { data: contacts, error: contactsErr } = await admin.from('course_contacts').select('course_id').in('course_id', ids)
-  if (contactsErr) throw contactsErr
-  const covered = new Set(((contacts ?? []) as { course_id: string }[]).map(c => c.course_id))
-  return ids.filter(id => !covered.has(id))
-}
 
 export async function GET(request: Request) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const q = parseQuery(request.url, Query)
   if (!q.ok) return q.response
-  const { search, partner, officials, page, limit } = q.data
+  const { search, partner, page, limit } = q.data
   const admin = auth.adminClient
-  const empty = (): NextResponse => NextResponse.json({ data: [], total: 0, page, limit, totalPages: 0 } satisfies PaginatedResponse<CourseListRecord>)
 
   try {
     let query = admin.from('courses').select('*', { count: 'exact' })
-    if (officials === 'none') {
-      const ids = await partnersWithoutOfficials(admin)
-      if (!ids.length) return empty()
-      query = query.in('id', ids)
-    } else if (partner !== undefined) {
-      query = query.eq('is_partner', partner)
-    }
+    if (partner !== undefined) query = query.eq('is_partner', partner)
     if (search) {
       // In the query, before the page is cut, so the count and the pages are right.
       const s = orSearchTerm(search)

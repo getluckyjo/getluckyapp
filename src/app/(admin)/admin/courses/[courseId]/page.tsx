@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { AlertTriangle, ArrowLeft, Check, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { ArrowLeft, Check, Pencil, Plus, Trash2, X } from 'lucide-react'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
 import type { CourseRow, HoleRow } from '@/types/admin'
@@ -133,7 +133,7 @@ export default function AdminEditCoursePage() {
     try {
       const res = await send(`/api/admin/courses/${courseId}/contacts`, 'POST', newContact)
       const json = await res.json().catch(() => ({}))
-      if (!res.ok) { setContactError(reasonFrom(json, 'The club official could not be added. Please try again.')); return }
+      if (!res.ok) { setContactError(reasonFrom(json, 'The club contact could not be added. Please try again.')); return }
       setNewContact({ name: '', email: '' })
       if (!(await refreshLists())) setContactError(STALE)
     } catch {
@@ -247,8 +247,6 @@ export default function AdminEditCoursePage() {
   if (loadError) return <><title>Course · Get Lucky admin</title><LoadError what="The course" detail={loadError.detail} onRetry={() => { setLoadError(null); setAttempt(n => n + 1) }} /></>
   if (!course || !form) return <><title>Course · Get Lucky admin</title><p className="adm-muted">Loading…</p></>
 
-  const lastOfficial = contacts.length === 1
-  const noOfficial = course.is_partner && contacts.length === 0
 
   return (
     <div style={{ maxWidth: 860 }}>
@@ -265,12 +263,6 @@ export default function AdminEditCoursePage() {
         </div>
         <span className={course.is_partner ? 'adm-pill adm-pill--lime' : 'adm-pill'}>{course.is_partner ? 'Partner' : 'Not a partner'}</span>
       </div>
-
-      {noOfficial && (
-        <p role="status" className="adm-warn" style={{ margin: '0 0 16px', fontSize: 13 }}>
-          <AlertTriangle size={15} aria-hidden /> No club official: a hole-in-one claim here has nobody to confirm the certificate. Add one under Club officials.
-        </p>
-      )}
 
       <form onSubmit={handleSave} className="adm-card adm-stack">
         <h2 className="adm-h2">Details</h2>
@@ -318,9 +310,10 @@ export default function AdminEditCoursePage() {
 
       <section className="adm-card adm-stack">
         <div>
-          <h2 className="adm-h2">Club officials ({contacts.length})</h2>
+          <h2 className="adm-h2">Club contacts ({contacts.length})</h2>
           <p className="adm-small" style={{ margin: '6px 0 0' }}>
-            Every hole-in-one claim at this course emails these people a one-tap question: did the club issue the certificate? Independent of what the golfer uploads.
+            Optional. The club confirms a hole-in-one with its certificate, which the golfer uploads with the claim. Anyone listed here is also
+            emailed a one-tap question on every claim at this course: did the club issue the certificate?
           </p>
         </div>
         {contacts.length > 0 && (
@@ -338,15 +331,7 @@ export default function AdminEditCoursePage() {
                         className="adm-icon-btn adm-icon-btn--warn"
                         aria-label={`Remove ${c.name}`}
                         title="Remove"
-                        onClick={() => ask(lastOfficial
-                          ? {
-                            title: 'Remove the last club official?',
-                            message: `${c.name} is the only club official at ${course.name}. Until you add another, a hole-in-one claim here has nobody to confirm the certificate${course.is_partner ? ', and golfers can still pay to play here' : ''}.`,
-                            confirmLabel: 'Remove anyway',
-                            section: 'contacts',
-                            request: () => send(`/api/admin/courses/${courseId}/contacts?id=${c.id}`, 'DELETE'),
-                          }
-                          : {
+                        onClick={() => ask({
                             title: `Remove ${c.name}?`,
                             message: `${c.email} stops getting claim confirmations for ${course.name}. Requests already sent for open claims still count.`,
                             confirmLabel: 'Remove',

@@ -10,15 +10,14 @@ import LoadError from '@/components/admin/LoadError'
 import type { AdminCourseRecord, PaginatedResponse } from '@/types/admin'
 import { OFFLINE } from './course-fields'
 
-/** A course in the list, with its club officials counted (the API adds officialCount). */
+/** A course in the list, with its optional club contacts counted (the API adds officialCount). */
 type CourseListRecord = AdminCourseRecord & { officialCount: number }
 
-/** The one filter box: partner status, or partner courses nobody can confirm a claim at. */
+/** The one filter box: partner status. */
 const FILTERS: Record<string, Record<string, string>> = {
   '': {},
   partners: { partner: 'true' },
   others: { partner: 'false' },
-  'no-official': { officials: 'none' },
 }
 
 type Pending =
@@ -106,7 +105,7 @@ export default function AdminCoursesPage() {
         <div>
           <h1 className="adm-title">Courses</h1>
           <p className="adm-lead">
-            Golf courses, their par 3s and the club officials who confirm a claim. Golfers can pay to play only at partner courses.
+            Golf courses and their par 3s. Golfers can pay to play only at partner courses. A club confirms a hole-in-one with its certificate, which the golfer uploads with the claim.
           </p>
         </div>
         <Link href="/admin/courses/new" className="adm-btn" style={{ textDecoration: 'none' }}>
@@ -129,7 +128,6 @@ export default function AdminCoursesPage() {
           <option value="">All courses</option>
           <option value="partners">Partners</option>
           <option value="others">Not partners</option>
-          <option value="no-official">Partners with no club official</option>
         </select>
       </div>
 
@@ -145,7 +143,7 @@ export default function AdminCoursesPage() {
                   <th>Location</th>
                   <th>Partner</th>
                   <th className="adm-num">Holes on sale</th>
-                  <th className="adm-num">Officials</th>
+                  <th className="adm-num">Club contacts</th>
                   <th className="adm-num">Bets</th>
                   <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -158,7 +156,6 @@ export default function AdminCoursesPage() {
                     {filtered ? 'No courses match.' : 'No courses yet. Add the first with Add course.'}
                   </td></tr>
                 ) : data.map((course) => {
-                  const noOfficial = course.is_partner && course.officialCount === 0
                   return (
                     <tr key={course.id} style={{ opacity: loading ? 0.6 : 1 }}>
                       <td><Link href={`/admin/courses/${course.id}`} className="adm-row-link">{course.name}</Link></td>
@@ -167,11 +164,7 @@ export default function AdminCoursesPage() {
                         <span className={course.is_partner ? 'adm-pill adm-pill--lime' : 'adm-pill'}>{course.is_partner ? 'Partner' : 'Not yet'}</span>
                       </td>
                       <td className="adm-num">{course.activeHoleCount} of {course.holeCount}</td>
-                      <td className="adm-num">
-                        {noOfficial
-                          ? <span className="adm-pill adm-pill--red" title="A claim here has nobody to confirm the certificate">None</span>
-                          : course.officialCount}
-                      </td>
+                      <td className="adm-num">{course.officialCount}</td>
                       <td className="adm-num">{course.totalBets.toLocaleString('en-ZA')}</td>
                       <td>
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
@@ -200,13 +193,7 @@ export default function AdminCoursesPage() {
         onCancel={() => setPending(null)}
         busy={busy}
         error={actionError}
-      >
-        {pending?.kind === 'partner' && !pending.course.is_partner && pending.course.officialCount === 0 && (
-          <p className="adm-warn" style={{ margin: 0 }}>
-            It has no club official yet, so a claim here would have nobody to confirm the certificate. Add one on the course page first.
-          </p>
-        )}
-      </ConfirmModal>
+      />
     </div>
   )
 }
@@ -217,7 +204,7 @@ function modalText(p: Pending | null): { title: string; message: string; confirm
   if (p.kind === 'delete') {
     return {
       title: `Delete ${course.name}?`,
-      message: 'Its holes and club officials go with it. A course with bets cannot be deleted; end the partnership instead.',
+      message: 'Its holes and club contacts go with it. A course with bets cannot be deleted; end the partnership instead.',
       confirmLabel: 'Delete course',
       variant: 'danger',
     }

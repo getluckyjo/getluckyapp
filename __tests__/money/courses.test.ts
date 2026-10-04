@@ -4,9 +4,9 @@
  * Each hole is flagged `playable` (par 3, 140 m or more) and the playable
  * ones come first.
  *
- * The admin course routes: search before the page is cut, officials and bets
- * counted per course, the "no club official" filter, coordinates in pairs,
- * and refusals that say why.
+ * The admin course routes: search before the page is cut, club contacts and
+ * bets counted per course, coordinates in pairs, and refusals that say why.
+ * No course needs a club contact: the club confirms with its certificate.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, jsonRequest, USER_A } from '../helpers/fake-supabase'
@@ -38,7 +38,6 @@ const list = async (qs = '') => (await listCourses(new Request(`http://x/api/adm
 const course = (id: string) => ({ params: Promise.resolve({ courseId: id }) })
 const C1 = '10000000-0000-4000-8000-000000000001'
 const C2 = '10000000-0000-4000-8000-000000000002'
-const C3 = '10000000-0000-4000-8000-000000000003'
 
 describe('GET /api/courses', () => {
   it('returns non-partner courses too, partners first, then by name', async () => {
@@ -97,23 +96,6 @@ describe('GET /api/admin/courses', () => {
       expect.objectContaining({ id: C1, holeCount: 2, activeHoleCount: 1, officialCount: 2, totalBets: 2 }),
       expect.objectContaining({ id: C2, holeCount: 0, activeHoleCount: 0, officialCount: 0, totalBets: 1 }),
     ])
-  })
-
-  it('"no club official" lists only partner courses nobody can confirm a claim at', async () => {
-    asAdmin()
-    db.seed('courses',
-      { id: C1, name: 'Arabella', is_partner: true },
-      { id: C2, name: 'Bellville', is_partner: false },
-      { id: C3, name: 'Clovelly', is_partner: true },
-    )
-    db.seed('course_contacts', { course_id: C1, name: 'Manager', email: 'm@arabella.test' })
-    const none = await list('?officials=none')
-    expect(none.data.map((c: { id: string }) => c.id)).toEqual([C3])
-    expect(none.data[0].officialCount).toBe(0)
-    // Everyone covered: an empty page, not every course.
-    db.seed('course_contacts', { course_id: C3, name: 'Pro', email: 'p@clovelly.test' })
-    expect(await list('?officials=none')).toMatchObject({ total: 0, data: [] })
-    expect((await listCourses(new Request('http://x/api/admin/courses?officials=some'))).status).toBe(400)
   })
 
   it('a failed count is a 500, never a zero', async () => {

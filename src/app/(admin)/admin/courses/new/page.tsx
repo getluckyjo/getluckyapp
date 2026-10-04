@@ -41,7 +41,7 @@ export default function AdminNewCoursePage() {
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data.id) { setError(reasonFrom(data, 'The course could not be created. Please try again.')); return }
-      // Straight to the course, where its holes and club officials are added.
+      // Straight to the course, where its holes are added.
       router.push(`/admin/courses/${data.id}`)
     } catch {
       setError(OFFLINE)
@@ -59,7 +59,7 @@ export default function AdminNewCoursePage() {
       <div className="adm-head">
         <div>
           <h1 className="adm-title">New course</h1>
-          <p className="adm-lead">Holes and club officials are added on the next page.</p>
+          <p className="adm-lead">Holes are added on the next page.</p>
         </div>
       </div>
 

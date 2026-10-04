@@ -75,8 +75,8 @@ Ask for anything missing. Do not guess the date, prize or venue.
 **The admin does it all** (docs/golf-days.md, "Adding a golf day"):
 `/admin/golf-days` → New golf day. Link, name, tab label, date, prize,
 players, holes (course, then hole), then the look (step 4), then save. The
-row answers with the link, and warns about a course with no club official
-or a tab label over 7 characters. Claude has no access to production, so
+row answers with the link, and warns about a tab label over 7
+characters. Claude has no access to production, so
 hand Johannes the exact values to type, the hole choice with its reasons,
 and anything to upload.
 
@@ -150,7 +150,8 @@ nothing there.
 
 ## 5. Before the link goes out
 
-- Club officials for claims: Admin → Courses → Contacts, for each course.
+- No club official to set up: the club confirms a hole-in-one with its
+  certificate, which the golfer uploads with the claim.
 - Supabase: Authentication → Rate Limits. Raise the email limit (default 30
   an hour) before a large group signs up.
 - Terms: `/terms` says every prize is insured by Indwe. If Get Lucky covers
