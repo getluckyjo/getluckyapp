@@ -35,8 +35,9 @@ Everything is in `/admin/golf-days` → **New golf day**. No code, no deploy:
    click). The preview beside the form is the player's screen itself, and
    warns when the ink is hard to read on the card.
 3. **Save.** The row shows the link to copy, and warns about anything
-   still to do: a course with no club official to confirm a claim, a tab
-   label too long for small phones.
+   still to do: a tab label too long for small phones. No club official
+   is needed: the club confirms a hole-in-one with its certificate, which
+   the golfer uploads with the claim.
 4. **The message:** the speech-bubble button gives the WhatsApp message
    for players, ready to copy, with the link, date, holes and tab filled
    in. Change anything before copying it.
@@ -206,10 +207,9 @@ Before the link goes out:
 3. RGC confirms which nine Metropolitan plays, and the tees: the app
    keeps one distance a hole, from the tee above. A different tee changes
    that hole in Admin → Courses.
-4. A club official for each of the eight courses (Admin → Courses →
-   Contacts); the admin row warns until they are in.
-5. Make it in `/admin/golf-days` with the values above, then copy the
-   message from the speech-bubble button.
+4. Made in production on 4 October 2026 (`rgc-sa`, tagline "One swing
+   every round. Hole it and the $5,000 is yours."). Upload RGC's logo in
+   the admin, then copy the message from the speech-bubble button.
 
 ## Every golf day
 
@@ -278,11 +278,12 @@ issuer account.
    200 players signing up in one evening. Ask players to sign up before
    the day, not at registration: 200 people on one clubhouse Wi-Fi at once
    is the busiest moment the app could have.
-4. **Claims.** A claim asks the club to confirm by email. Johannes is the
-   club official for Royal Johannesburg East and West (Admin → Courses →
-   Contacts, 25 September 2026). Every claim at either course, golf day or
-   paid, emails him. Umdoni Park needs its own official before the
-   SaSwazi Golf Trek (Admin → Courses → Umdoni Park Golf Club → Contacts).
+4. **Claims.** The club confirms a hole-in-one with its certificate,
+   which the golfer uploads with the claim; no club official has to be set
+   up first (Johannes, 4 October 2026). A course can still list club
+   contacts (Admin → Courses), and anyone listed is emailed a one-tap
+   question on each claim there: Johannes is listed for Royal
+   Johannesburg East and West.
 5. **Terms.** `/terms` says every prize is insured by Indwe. The golf day
    screen says the prize is paid by Get Lucky. Johannes chose to leave the
    terms as they are (25 September 2026).
@@ -336,8 +337,7 @@ calendar event is pinned in `golf-day.test.ts` too (dates, escaping, line
 folding, the reminder, the Google link and the route), and the Bomb Squad
 file was read back with Python's `icalendar` parser. So are the looks
 (saved checked, shown to players, used by the calendar), the picture
-upload (a logo and a photo through sharp into the art bucket), and the
-missing-official warning. `__tests__/golf-day-look.test.ts` pins the look
+upload (a logo and a photo through sharp into the art bucket). `__tests__/golf-day-look.test.ts` pins the look
 rules, the theme merge, the colours suggested from a picture, and the
 WhatsApp message word for word.
 

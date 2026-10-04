@@ -248,8 +248,6 @@ export interface AdminGolfDay {
   holes: GolfDayHole[]
   createdAt: string
   look: GolfDayLook | null
-  /** Courses among its holes with no club official to confirm a claim (Admin → Courses → Contacts). */
-  missingOfficials: string[]
 }
 
 /**

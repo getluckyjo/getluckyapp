@@ -20,7 +20,7 @@
  *  - a golf day's look is set in the admin (migration 031): saved checked,
  *    shown to players, used by the calendar; a picture is uploaded, resized
  *    and stored in the art bucket, as a logo or a photo, with colours
- *    suggested; the admin says which courses have no club official
+ *    suggested
  *  - a golf trip (migration 033) runs from its first day to the end of its
  *    last: one swing a player per hole, each hole only on its round's date
  *    (two courses in a day are two swings), for its prize in its currency
@@ -713,15 +713,6 @@ describe('the look, set in the admin', () => {
     seedDay({ slug: 'acme', look: { venue: 'The Royal' } })
     const ics = await (await dayCalendar(new Request('http://x'), slugParams('acme'))).text()
     expect(ics.replace(/\r\n /g, '')).toContain('LOCATION:The Royal\\, Linksfield\\, Gauteng')
-  })
-
-  it('the list says which courses have no club official to confirm a claim', async () => {
-    asAdmin(); seedDay()
-    db.seed('course_contacts', { course_id: EAST, name: 'Johannes', email: 'j@example.com', role: 'club_official' })
-    const { data } = await (await listDays()).json()
-    expect(data[0].missingOfficials).toEqual(['Royal Johannesburg & Kensington – West'])
-    db.seed('course_contacts', { course_id: WEST, name: 'Johannes', email: 'j@example.com', role: 'club_official' })
-    expect((await (await listDays()).json()).data[0].missingOfficials).toEqual([])
   })
 
   describe('uploading a picture', () => {

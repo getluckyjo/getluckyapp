@@ -598,14 +598,14 @@ export default function AdminGolfDaysPage() {
   )
 }
 
-/** What still needs doing for a golf day that is not over: a course nobody can confirm a claim at, a tab label too long. */
+/**
+ * What still needs doing for a golf day that is not over: a tab label too
+ * long. No club official is needed: the club confirms a hole-in-one with
+ * its certificate, which the claim carries.
+ */
 function checks(r: AdminGolfDay): { text: string; href?: string; action?: string }[] {
   if (r.phase === 'over') return []
-  const out: { text: string; href?: string; action?: string }[] = r.missingOfficials.map(course => ({
-    text: `No club official for ${course}: a claim there has nobody to confirm it.`,
-    href: '/admin/courses',
-    action: 'Add one in Courses → Contacts',
-  }))
+  const out: { text: string; href?: string; action?: string }[] = []
   if (r.tabLabel.length > 7) out.push({ text: `The tab label is ${r.tabLabel.length} characters. Over 7 it is shrunk, and can be cut short on small phones.` })
   return out
 }
