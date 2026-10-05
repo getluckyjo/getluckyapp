@@ -10,7 +10,9 @@
  *  - one swing per player, only for a joined player, only on the day's holes,
  *    only for the day's prize (the body cannot set it), never through the money path
  *  - the swing passes the same target check as every entry
- *  - only joined players see the tab; switching the day off takes it away
+ *  - only joined players see the tab; switching the day off takes it away,
+ *    and so does the day ending, unless the player's swing is still in hand
+ *    (then a week at most)
  *  - a signed-out visitor sees the day, not who or how many joined
  *  - admins make and change golf days, and only with holes that can be played;
  *    changing the holes adds before it removes, and checks only the new ones;
@@ -46,7 +48,7 @@ import { formatMoney, formatPrize } from '@/lib/format'
 import { siteUrl } from '@/lib/email/layout'
 import {
   closesAt, formatGolfDayDate, formatGolfDayDates, golfDayPhase, golfDaySwingReference, lastDay, opensAt, refusalFromDbError, shortCourseName,
-  tabVisible, todayInSouthAfrica,
+  swingInHand, tabShows, tabVisible, todayInSouthAfrica,
 } from '@/lib/golf-days/rules'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
@@ -145,9 +147,20 @@ describe('the day, in South African time', () => {
     expect(golfDayPhase('2026-10-02', Date.parse('2026-10-02T22:00:00Z'))).toBe('over')
   })
 
-  it('keeps the tab for a week after the day, then gives Icons back', () => {
+  it('keeps the tab through the day; after it, only for a swing in hand, and a week at most', () => {
     expect(tabVisible('2026-10-02', Date.parse('2026-10-09T21:59:00Z'))).toBe(true)
     expect(tabVisible('2026-10-02', Date.parse('2026-10-09T22:00:00Z'))).toBe(false)
+    expect(tabShows('2026-10-02', false, Date.parse('2026-10-02T21:59:59Z'))).toBe(true)
+    expect(tabShows('2026-10-02', false, Date.parse('2026-10-02T22:00:00Z'))).toBe(false)
+    expect(tabShows('2026-10-02', true, Date.parse('2026-10-09T21:59:00Z'))).toBe(true)
+    expect(tabShows('2026-10-02', true, Date.parse('2026-10-09T22:00:00Z'))).toBe(false)
+    const now = Date.parse('2026-10-03T08:00:00Z')
+    expect(swingInHand('claimed', null, now)).toBe(true)
+    expect(swingInHand('verified', null, now)).toBe(true)
+    expect(swingInHand('active', '2026-10-03T09:00:00Z', now)).toBe(true)
+    expect(swingInHand('active', '2026-10-03T07:00:00Z', now)).toBe(false)
+    expect(swingInHand('miss', null, now)).toBe(false)
+    expect(swingInHand('paid', null, now)).toBe(false)
   })
 
   it('knows the South African date either side of midnight UTC', () => {
@@ -375,13 +388,37 @@ describe('GET /api/golf-days: the tab', () => {
     expect(await tab()).toEqual({ slug: 'bombsquad', tabLabel: 'Bomb Squad' })
   })
 
-  it('goes when the day is switched off, and a week after the day', async () => {
+  it('goes when the day is switched off, and once the day is over', async () => {
     player()
     const off = seedDay({ slug: 'off', disabled_at: '2026-09-01T00:00:00Z' }); joined(off)
-    const old = seedDay({ slug: 'old', plays_on: addDays(today(), -8) }); joined(old)
+    const missed = seedDay({ slug: 'missed', plays_on: addDays(today(), -3) }); joined(missed)
+    db.seed('bets', { user_id: USER_A.id, tier: 'tier_golf_day', golf_day_id: missed.id, status: 'miss', hole_id: EAST_2 })
+    const unplayed = seedDay({ slug: 'unplayed', plays_on: addDays(today(), -1) }); joined(unplayed)
     expect(await tab()).toBeNull()
-    const recent = seedDay({ slug: 'recent', tab_label: 'Recent', plays_on: addDays(today(), -3) }); joined(recent)
-    expect(await tab()).toEqual({ slug: 'recent', tabLabel: 'Recent' })
+  })
+
+  it('after the day, stays while the player\'s swing is in hand, for a week at most', async () => {
+    player()
+    const day = seedDay({ slug: 'claimed', tab_label: 'Claimed', plays_on: addDays(today(), -3) }); joined(day)
+    const [bet] = db.seed('bets', { user_id: USER_A.id, tier: 'tier_golf_day', golf_day_id: day.id, status: 'claimed', hole_id: EAST_2 })
+    expect(await tab()).toEqual({ slug: 'claimed', tabLabel: 'Claimed' })
+    bet.status = 'verified'
+    expect(await tab()).toEqual({ slug: 'claimed', tabLabel: 'Claimed' })
+    bet.status = 'paid'
+    expect(await tab()).toBeNull()
+    // Someone else's claim keeps nobody else's tab.
+    bet.status = 'claimed'; bet.user_id = USER_B.id
+    expect(await tab()).toBeNull()
+    // A week after the day, even a claim gives Icons back.
+    const old = seedDay({ slug: 'old', plays_on: addDays(today(), -8) }); joined(old)
+    db.seed('bets', { user_id: USER_A.id, tier: 'tier_golf_day', golf_day_id: old.id, status: 'claimed', hole_id: EAST_2 })
+    expect(await tab()).toBeNull()
+  })
+
+  it('a trip keeps it until its last day is over', async () => {
+    player()
+    joined(seedDay({ slug: 'trip', tab_label: 'Trip', plays_on: addDays(today(), -5), ends_on: today() }))
+    expect(await tab()).toEqual({ slug: 'trip', tabLabel: 'Trip' })
   })
 
   it('with two, the sooner one', async () => {
@@ -855,7 +892,7 @@ describe('a golf trip (migration 033): a swing every round, in dollars', () => {
     expect(db.rows('bets').filter(b => b.golf_day_id === day.id).map(b => b.golf_day_slot)).toEqual(['day'])
   })
 
-  it('joining stays open until the last day ends, and the tab stays a week after it', async () => {
+  it('joining stays open until the last day ends; after it, the tab stays only for a swing in hand', async () => {
     player(); seedTrip()
     expect((await join('rgc-sa')).status).toBe(200)
     expect(await (await myTab()).json()).toEqual({ tab: { slug: 'rgc-sa', tabLabel: 'RGC' } })
@@ -866,8 +903,11 @@ describe('a golf trip (migration 033): a swing every round, in dollars', () => {
     const res = await join('ended')
     expect(res.status).toBe(409)
     expect((await res.json()).code).toBe('GOLF_DAY_OVER')
-    // Its players keep the tab: the trip ended a day ago, though it started nine days back.
-    joined(db.find('golf_days', d => d.slug === 'ended')!, USER_B)
+    // Over: the tab goes, unless a swing is still in hand (the trip ended a day ago, though it started nine days back).
+    const ended = db.find('golf_days', d => d.slug === 'ended')!
+    joined(ended, USER_B)
+    expect(await (await myTab()).json()).toEqual({ tab: null })
+    db.seed('bets', { user_id: USER_B.id, tier: 'tier_golf_day', golf_day_id: ended.id, status: 'claimed', hole_id: EAST_2 })
     expect(await (await myTab()).json()).toEqual({ tab: { slug: 'ended', tabLabel: 'Ended' } })
   })
 

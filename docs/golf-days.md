@@ -51,8 +51,8 @@ other golf day's tab shows a flag.
 A golf day with a **Last day** is a trip. Same form, three differences:
 
 - **Dates.** "First day" and "Last day" (at most 30 days apart). Joining
-  stays open until the last day ends, South African time, and the tab
-  stays a week after it.
+  stays open until the last day ends, South African time, and so does the
+  tab (see "After the day" below).
 - **A hole per round, each with its date.** Every hole gets the date of
   the round it is played in (the picker beside each hole). A player's
   swing on a hole opens on that date only, and each hole takes one swing
@@ -302,6 +302,20 @@ If something goes wrong, the power button switches the golf day off. Its
 tab disappears and no one can start a swing until you switch it back on.
 Swings already started are not affected.
 
+## After the day
+
+A finished golf day gets out of the way (Johannes, 5 October 2026):
+
+- **Players** get Icons back as soon as the day (a trip's last day) is
+  over. The tab stays only for a player whose swing there is still in
+  hand: started and still open to film, claimed, or verified and not yet
+  paid. Even then, for a week at most. The link keeps working and shows
+  that the day is over.
+- **The admin list** shows what is on and coming up. Golf days that are
+  over fold away under **Past golf days**, one click to open, with their
+  players, swings and claims as before. A claim also stays in the
+  Verification Queue like any other.
+
 ## How it holds
 
 | Rule | Held by |
@@ -320,8 +334,9 @@ a first-timer sent through the 18+ check (`safeNext` accepts
 `/golf-day/<slug>`, and `/age-check` honours it). A player who tapped
 "Sign in to join" is joined automatically on the way back.
 
-The golf day tab stays for a week after the day (a trip's last day),
-while any claim is in hand. Then Icons comes back.
+Once the day (a trip's last day) is over, the tab goes, unless the
+player's swing there is still in hand; then it stays a week at most
+(`tabShows` and `swingInHand` in `src/lib/golf-days/rules.ts`).
 
 ## Testing
 
