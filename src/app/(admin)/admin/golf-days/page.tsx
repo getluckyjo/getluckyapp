@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle, Trash2 } from 'lucide-react'
+import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
 import type { AdminGolfDay, GolfDayHole, GolfDayPhase, PrizeCurrency } from '@/lib/golf-days/rules'
@@ -133,6 +133,8 @@ export default function AdminGolfDaysPage() {
   const [confirmBusy, setConfirmBusy] = useState(false)
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
+  // Golf days that are over, folded away until asked for.
+  const [showPast, setShowPast] = useState(false)
   // The golf day whose WhatsApp message is open, and the message as edited before copying.
   const [message, setMessage] = useState<{ id: string; text: string } | null>(null)
   // list: null while loading; failed: the list could not be read (never shown as "nobody").
@@ -323,6 +325,110 @@ export default function AdminGolfDaysPage() {
   const pickable = courses.find(c => c.id === pickCourse)?.holes.filter(h => h.playable) ?? []
   const dates = editing ? tripDates(editing.form.playsOn, editing.form.endsOn) : []
 
+
+  // Finished golf days go under Past, folded away: what is on and coming up stays in view.
+  const current = (rows ?? []).filter(r => r.phase !== 'over')
+  const past = (rows ?? []).filter(r => r.phase === 'over')
+
+  /** One golf day's card in the list: its facts, the link, the checks, the stats and the buttons. */
+  function row(r: AdminGolfDay) {
+    const phase = r.disabledAt ? { label: 'Off', pill: 'adm-pill adm-pill--red' } : PHASE[r.phase]
+    return (
+      <div key={r.id} className="adm-card">
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <h2 className="adm-h2">{r.name}</h2>
+              <span className={phase.pill}>{phase.label}</span>
+            </div>
+            <p style={{ fontSize: 14, margin: '8px 0 0' }}>
+              <strong>{showDates(r)}</strong> · {formatPrize(r.prize, r.currency)}{r.endsOn ? ' · a swing every round' : ''} · tab &ldquo;{r.tabLabel}&rdquo;
+            </p>
+            <p className="adm-muted" style={{ fontSize: 13, margin: '4px 0 0' }}>{showHoles(r)}</p>
+            <p className="adm-mono" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 0', fontWeight: 600, wordBreak: 'break-all' }}>
+              {origin}{golfDayPath(r.slug)}
+              <button type="button" onClick={() => copy(r.id, `${origin}${golfDayPath(r.slug)}`)} title="Copy the link" aria-label="Copy the link" className="adm-icon-btn" style={{ width: 30, height: 30 }}>
+                {copied === r.id ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </p>
+            {r.note && <p className="adm-small" style={{ margin: '6px 0 0' }}>{r.note}</p>}
+            {checks(r).map(c => (
+              <p key={c.text} className="adm-warn" style={{ margin: '8px 0 0' }}>
+                <AlertTriangle size={14} aria-hidden /> {c.text}
+                {c.href && <a href={c.href} style={{ fontWeight: 700 }}>{c.action}</a>}
+              </p>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
+            <Stat label="Joined" value={`${r.players} of ${r.maxPlayers}`} />
+            <Stat label="Swings" value={String(r.swings)} />
+            <Stat label="Claims" value={String(r.claimed)} alert={r.claimed > 0} />
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" title="WhatsApp message for players" aria-label="WhatsApp message for players" onClick={() => toggleMessage(r)} className="adm-icon-btn" aria-pressed={message?.id === r.id}><MessageCircle size={17} /></button>
+              <button type="button" title="Players" aria-label="Players" onClick={() => showPlayers(r)} className="adm-icon-btn" aria-pressed={players?.id === r.id}><Users size={17} /></button>
+              <button type="button" title="Edit" aria-label={`Edit ${r.name}`} onClick={() => leave({ to: 'edit', row: r })} className="adm-icon-btn"><Pencil size={17} /></button>
+              <button type="button" title={r.disabledAt ? 'Switch on' : 'Switch off'} aria-label={r.disabledAt ? `Switch ${r.name} on` : `Switch ${r.name} off`} onClick={() => (r.disabledAt ? void switchOn(r) : ask('off', r))} className={`adm-icon-btn${r.disabledAt ? ' adm-icon-btn--ok' : ' adm-icon-btn--warn'}`}><Power size={17} /></button>
+              {r.players === 0 && r.swings === 0 && (
+                <button type="button" title="Delete" aria-label={`Delete ${r.name}`} onClick={() => ask('delete', r)} className="adm-icon-btn" style={{ color: 'var(--red)' }}><Trash2 size={17} /></button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {message?.id === r.id && (
+          <div className="adm-stack" style={{ marginTop: 16, paddingTop: 14, borderTop: '2px solid var(--surface)', maxWidth: 600 }}>
+            <label className="adm-field">
+              Message for players <span className="adm-hint">WhatsApp: *bold*. Change anything before you copy it.</span>
+              <textarea value={message.text} onChange={e => setMessage({ id: r.id, text: e.target.value })} rows={12} className="adm-input" />
+            </label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button type="button" onClick={() => copy(`msg-${r.id}`, message.text)} className="adm-btn adm-btn--green">
+                {copied === `msg-${r.id}` ? <Check size={15} /> : <Copy size={15} />} {copied === `msg-${r.id}` ? 'Copied' : 'Copy message'}
+              </button>
+              <button type="button" onClick={() => setMessage({ id: r.id, text: golfDayMessage(r, { site: origin, venue: themeFor(r.slug, r.look).venue }) })} className="adm-btn adm-btn--quiet">
+                Start again
+              </button>
+            </div>
+          </div>
+        )}
+
+        {players?.id === r.id && (
+          <div style={{ marginTop: 16, paddingTop: 12, borderTop: '2px solid var(--surface)', overflowX: 'auto' }}>
+            {players.list === null ? (
+              <p className="adm-muted">Loading players…</p>
+            ) : players.failed ? (
+              <p className="adm-error">The players could not be loaded. Close and open the list to try again.</p>
+            ) : players.list.length === 0 ? (
+              <p className="adm-muted">Nobody has joined yet.</p>
+            ) : (
+              <table className="adm-table">
+                <thead>
+                  <tr><th>Player</th><th>Email</th><th>Joined</th><th>{r.endsOn ? 'Swings' : 'Swing'}</th></tr>
+                </thead>
+                <tbody>
+                  {players.list.map(p => (
+                    <tr key={p.userId}>
+                      <td style={{ fontWeight: 600 }}>{p.name ?? '—'}</td>
+                      <td className="adm-muted">{p.email ?? '—'}</td>
+                      <td className="adm-muted">{new Date(p.joinedAt).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
+                      <td>
+                        {p.swings.length
+                          ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{p.swings.map(sw => (
+                              <span key={sw.betId} className={sw.status === 'claimed' ? 'adm-pill adm-pill--red' : 'adm-pill'}>{SWING[sw.status] ?? sw.status}{sw.hole ? ` · ${sw.hole}` : ''}</span>
+                            ))}</span>
+                          : <span className="adm-muted">Not taken</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       <title>Golf days · Get Lucky admin</title>
@@ -472,103 +578,25 @@ export default function AdminGolfDaysPage() {
           <p className="adm-h2" style={{ marginBottom: 6 }}>No golf days yet</p>
           <p className="adm-muted" style={{ margin: 0 }}>Make the first one with New golf day.</p>
         </div>
-      ) : rows.map(r => {
-        const phase = r.disabledAt ? { label: 'Off', pill: 'adm-pill adm-pill--red' } : PHASE[r.phase]
-        return (
-          <div key={r.id} className="adm-card">
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <h2 className="adm-h2">{r.name}</h2>
-                  <span className={phase.pill}>{phase.label}</span>
-                </div>
-                <p style={{ fontSize: 14, margin: '8px 0 0' }}>
-                  <strong>{showDates(r)}</strong> · {formatPrize(r.prize, r.currency)}{r.endsOn ? ' · a swing every round' : ''} · tab &ldquo;{r.tabLabel}&rdquo;
-                </p>
-                <p className="adm-muted" style={{ fontSize: 13, margin: '4px 0 0' }}>{showHoles(r)}</p>
-                <p className="adm-mono" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 0', fontWeight: 600, wordBreak: 'break-all' }}>
-                  {origin}{golfDayPath(r.slug)}
-                  <button type="button" onClick={() => copy(r.id, `${origin}${golfDayPath(r.slug)}`)} title="Copy the link" aria-label="Copy the link" className="adm-icon-btn" style={{ width: 30, height: 30 }}>
-                    {copied === r.id ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
-                </p>
-                {r.note && <p className="adm-small" style={{ margin: '6px 0 0' }}>{r.note}</p>}
-                {checks(r).map(c => (
-                  <p key={c.text} className="adm-warn" style={{ margin: '8px 0 0' }}>
-                    <AlertTriangle size={14} aria-hidden /> {c.text}
-                    {c.href && <a href={c.href} style={{ fontWeight: 700 }}>{c.action}</a>}
-                  </p>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 22, alignItems: 'center', flexWrap: 'wrap' }}>
-                <Stat label="Joined" value={`${r.players} of ${r.maxPlayers}`} />
-                <Stat label="Swings" value={String(r.swings)} />
-                <Stat label="Claims" value={String(r.claimed)} alert={r.claimed > 0} />
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button type="button" title="WhatsApp message for players" aria-label="WhatsApp message for players" onClick={() => toggleMessage(r)} className="adm-icon-btn" aria-pressed={message?.id === r.id}><MessageCircle size={17} /></button>
-                  <button type="button" title="Players" aria-label="Players" onClick={() => showPlayers(r)} className="adm-icon-btn" aria-pressed={players?.id === r.id}><Users size={17} /></button>
-                  <button type="button" title="Edit" aria-label={`Edit ${r.name}`} onClick={() => leave({ to: 'edit', row: r })} className="adm-icon-btn"><Pencil size={17} /></button>
-                  <button type="button" title={r.disabledAt ? 'Switch on' : 'Switch off'} aria-label={r.disabledAt ? `Switch ${r.name} on` : `Switch ${r.name} off`} onClick={() => (r.disabledAt ? void switchOn(r) : ask('off', r))} className={`adm-icon-btn${r.disabledAt ? ' adm-icon-btn--ok' : ' adm-icon-btn--warn'}`}><Power size={17} /></button>
-                  {r.players === 0 && r.swings === 0 && (
-                    <button type="button" title="Delete" aria-label={`Delete ${r.name}`} onClick={() => ask('delete', r)} className="adm-icon-btn" style={{ color: 'var(--red)' }}><Trash2 size={17} /></button>
-                  )}
-                </div>
-              </div>
+      ) : (
+        <>
+          {current.map(row)}
+          {current.length === 0 && (
+            <div className="adm-card" style={{ textAlign: 'center', padding: 28 }}>
+              <p className="adm-h2" style={{ marginBottom: 6 }}>No golf days coming up</p>
+              <p className="adm-muted" style={{ margin: 0 }}>Make the next one with New golf day.</p>
             </div>
-
-            {message?.id === r.id && (
-              <div className="adm-stack" style={{ marginTop: 16, paddingTop: 14, borderTop: '2px solid var(--surface)', maxWidth: 600 }}>
-                <label className="adm-field">
-                  Message for players <span className="adm-hint">WhatsApp: *bold*. Change anything before you copy it.</span>
-                  <textarea value={message.text} onChange={e => setMessage({ id: r.id, text: e.target.value })} rows={12} className="adm-input" />
-                </label>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <button type="button" onClick={() => copy(`msg-${r.id}`, message.text)} className="adm-btn adm-btn--green">
-                    {copied === `msg-${r.id}` ? <Check size={15} /> : <Copy size={15} />} {copied === `msg-${r.id}` ? 'Copied' : 'Copy message'}
-                  </button>
-                  <button type="button" onClick={() => setMessage({ id: r.id, text: golfDayMessage(r, { site: origin, venue: themeFor(r.slug, r.look).venue }) })} className="adm-btn adm-btn--quiet">
-                    Start again
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {players?.id === r.id && (
-              <div style={{ marginTop: 16, paddingTop: 12, borderTop: '2px solid var(--surface)', overflowX: 'auto' }}>
-                {players.list === null ? (
-                  <p className="adm-muted">Loading players…</p>
-                ) : players.failed ? (
-                  <p className="adm-error">The players could not be loaded. Close and open the list to try again.</p>
-                ) : players.list.length === 0 ? (
-                  <p className="adm-muted">Nobody has joined yet.</p>
-                ) : (
-                  <table className="adm-table">
-                    <thead>
-                      <tr><th>Player</th><th>Email</th><th>Joined</th><th>{r.endsOn ? 'Swings' : 'Swing'}</th></tr>
-                    </thead>
-                    <tbody>
-                      {players.list.map(p => (
-                        <tr key={p.userId}>
-                          <td style={{ fontWeight: 600 }}>{p.name ?? '—'}</td>
-                          <td className="adm-muted">{p.email ?? '—'}</td>
-                          <td className="adm-muted">{new Date(p.joinedAt).toLocaleString('en-ZA', { timeZone: 'Africa/Johannesburg', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</td>
-                          <td>
-                            {p.swings.length
-                              ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>{p.swings.map(sw => (
-                                  <span key={sw.betId} className={sw.status === 'claimed' ? 'adm-pill adm-pill--red' : 'adm-pill'}>{SWING[sw.status] ?? sw.status}{sw.hole ? ` · ${sw.hole}` : ''}</span>
-                                ))}</span>
-                              : <span className="adm-muted">Not taken</span>}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })}
+          )}
+          {past.length > 0 && (
+            <>
+              <button type="button" onClick={() => setShowPast(v => !v)} className="adm-btn adm-btn--quiet" aria-expanded={showPast} style={{ marginTop: 6 }}>
+                {showPast ? <ChevronUp size={16} aria-hidden /> : <ChevronDown size={16} aria-hidden />} Past golf days ({past.length})
+              </button>
+              {showPast && <div style={{ marginTop: 14 }}>{past.map(row)}</div>}
+            </>
+          )}
+        </>
+      )}
 
       <p className="adm-small" style={{ marginTop: 16, maxWidth: 720 }}>
         A golf day&rsquo;s prize is Get Lucky&rsquo;s own, not Indwe&rsquo;s. Its swings go through the same claim and review as any entry, and a claim shows up in the Verification Queue.

@@ -46,7 +46,7 @@ export function currencyFrom(raw: unknown): PrizeCurrency {
 const SAST_OFFSET = '+02:00'
 const DAY_MS = 24 * 3_600_000
 
-/** The golf day tab stays up this long after the day, while claims are in hand. */
+/** The longest the golf day tab stays after the day, for a player whose swing is still in hand. */
 export const TAB_DAYS_AFTER = 7
 
 /** Midnight at the start of `playsOn` (YYYY-MM-DD) in South Africa. */
@@ -73,9 +73,29 @@ export function golfDayPhase(playsOn: string, now: number = Date.now(), endsOn: 
   return 'over'
 }
 
-/** Whether a joined player still sees the golf day tab in place of Icons. Pass a trip's last day. */
+/** The end of the most the golf day tab can stay up: a week after the day. Pass a trip's last day. */
 export function tabVisible(lastPlayed: string, now: number = Date.now()): boolean {
   return now < closesAt(lastPlayed) + TAB_DAYS_AFTER * DAY_MS
+}
+
+/**
+ * A swing still in hand: started and still open to film, claimed, or
+ * verified and not yet paid. A missed, paid or lapsed swing is done.
+ */
+export function swingInHand(status: string, expiresAt: string | null, now: number = Date.now()): boolean {
+  if (status === 'claimed' || status === 'verified') return true
+  return status === 'active' && (!expiresAt || Date.parse(expiresAt) > now)
+}
+
+/**
+ * Whether a joined player sees the golf day's tab in place of Icons: until
+ * the day (a trip's last day) is over; after it, only while one of their
+ * swings there is still in hand, and for a week at most. A finished golf
+ * day goes, and Icons comes back.
+ */
+export function tabShows(lastPlayed: string, inHand: boolean, now: number = Date.now()): boolean {
+  if (now < closesAt(lastPlayed)) return true
+  return inHand && tabVisible(lastPlayed, now)
 }
 
 /** A date (YYYY-MM-DD) n days on. */
