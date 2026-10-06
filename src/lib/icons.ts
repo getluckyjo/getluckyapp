@@ -3,9 +3,11 @@
  *
  * Get Lucky sponsors the event. It is public (icons-series.com), so the
  * app names it, shows the field by team and marks the captains. The prize
- * copy below was approved by Johannes on 16 September 2026; every word of
- * it lives here so it can be changed in one place. The field itself is
- * data, managed at /admin/icons.
+ * copy below was approved by Johannes on 16 September 2026, and on
+ * 6 October 2026 the R3m went to the Els for Autism Foundation as the
+ * event's charity partner, whoever holes it. Every word of it lives here
+ * so it can be changed in one place. The field itself is data, managed at
+ * /admin/icons.
  */
 export const ICONS_EVENT = {
   name: 'Icons Cup South Africa',
@@ -25,7 +27,7 @@ export const ICONS_EVENT = {
   prizes: [
     { amount: 'R1m', count: 3, who: 'Fans who backed the Icon' },
     { amount: 'R4m', count: 1, who: 'The Icon' },
-    { amount: 'R3m', count: 1, who: 'A charity they support' },
+    { amount: 'R3m', count: 1, who: 'Els for Autism Foundation' },
   ],
   /** Under the "You're backing" card, with the Icon's name in front. */
   fanStake: 'holes it, you are in the draw for R1 million.',
