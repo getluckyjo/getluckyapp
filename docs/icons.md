@@ -6,21 +6,30 @@ Icons Cup South Africa. One pick per golfer, changeable until the event.
 
 ## What the app states, and what it does not
 
-Get Lucky sponsors Icons Cup South Africa (Team South Africa vs Team
-World, The Links at Fancourt, 11–13 December 2026). The event is public
+Icons Cup South Africa is Team South Africa vs Team World at The Links
+at Fancourt, 11–13 December 2026. The event is public
 (icons-series.com), so the screen shows the launch graphic, names the
-event and the teams, marks the captains and carries a sponsor line. On
-16 September 2026 Johannes set the prize split, shown as three tiles on
-a green card: R1m ×3 "Fans who backed the Icon", R4m "The Icon", R3m "A
-charity they support", captioned "R10 million hole-in-one prize · T&Cs
-apply". The intro is one line ("Who holes it on the Get Lucky hole? Pick
-one. Change it any time before the first tee."); the event's venue and
-dates are on the launch graphic and not repeated. The "You're backing"
-card carries the one sentence a golfer needs at the moment of picking:
-"If Ernie Els holes it, you are in the draw for R1 million." All copy
-lives in `src/lib/icons.ts`. The screen still does not name the insurer or the
-charity name. Terms for the fan prize need to exist somewhere a golfer
-can read them before the event.
+event and the teams and marks the captains. Get Lucky has not signed
+with the organisers yet, so since 7 October 2026 the footer reads "A Get
+Lucky fan pick for Icons Cup South Africa" instead of "Get Lucky is a
+proud sponsor of Icons Cup South Africa", and the prize card ends with
+"Subject to confirmation". Put the sponsor line back and drop the
+confirmation line once the organisers sign.
+
+On 16 September 2026 Johannes set the prize split, shown as three tiles
+on a green card: R1m ×3 "Fans who backed the Icon", R4m "The Icon", R3m
+"A charity they support", captioned "R10 million hole-in-one prize ·
+T&Cs apply". On 6 October 2026 he made the Els for Autism Foundation
+the charity partner for Icons Cup South Africa: the R3m tile reads "Els
+for Autism Foundation" and the money goes there whoever holes it. The
+intro is one line ("Who holes it on the Get Lucky hole? Pick one.
+Change it any time before the first tee."); the event's venue and dates
+are on the launch graphic and not repeated. The "You're backing" card
+carries the one sentence a golfer needs at the moment of picking: "If
+Ernie Els holes it, you are in the draw for R1 million." All copy lives
+in `src/lib/icons.ts`. The screen still does not name the insurer.
+Terms for the fan prize need to exist somewhere a golfer can read them
+before the event.
 
 Standings show a count of golfers backing each Icon, with a bar drawn
 against the most-backed Icon and a "Fan favourite" tag on the leader.
