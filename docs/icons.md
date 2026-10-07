@@ -12,8 +12,9 @@ at Fancourt, 11–13 December 2026. The event is public
 event and the teams and marks the captains. Get Lucky has not signed
 with the organisers yet, so since 7 October 2026 the footer reads "A Get
 Lucky fan pick for Icons Cup South Africa" instead of "Get Lucky is a
-proud sponsor of Icons Cup South Africa". Put the sponsor line back once
-the organisers sign.
+proud sponsor of Icons Cup South Africa", and the prize card ends with
+"Subject to confirmation". Put the sponsor line back and drop the
+confirmation line once the organisers sign.
 
 On 16 September 2026 Johannes set the prize split, shown as three tiles
 on a green card: R1m ×3 "Fans who backed the Icon", R4m "The Icon", R3m

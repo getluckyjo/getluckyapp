@@ -33,6 +33,12 @@ export const ICONS_EVENT = {
   ],
   /** Under the "You're backing" card, with the Icon's name in front. */
   fanStake: 'holes it, you are in the draw for R1 million.',
+  /**
+   * The last line on the prize card. The organisers have not signed the
+   * hole-in-one yet, so the card says so; remove this and its line in the
+   * page once they do.
+   */
+  prizeStatus: 'Subject to confirmation',
   /** Small print under the prize card. */
   prizeTerms: 'T&Cs apply',
   /** The footer line. It goes back to naming Get Lucky as a sponsor once the organisers sign. */

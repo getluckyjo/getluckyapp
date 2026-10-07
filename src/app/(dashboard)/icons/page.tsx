@@ -123,6 +123,7 @@ export default function IconsPage() {
                 </div>
               ))}
             </dl>
+            <p className="ic-prize-note">{ICONS_EVENT.prizeStatus}</p>
           </div>
 
           {mine && (
