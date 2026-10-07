@@ -298,7 +298,7 @@ export default function AdminIconsPage() {
       )}
 
       <p className="adm-small" style={{ marginTop: 12 }}>
-        Event name, venue, dates, the prize card and the sponsor line come from <code>src/lib/icons.ts</code>. Player photos need rights; leave the URL blank for initials.
+        Event name, venue, dates, the prize card and the footer line come from <code>src/lib/icons.ts</code>. Player photos need rights; leave the URL blank for initials.
       </p>
 
       <ConfirmModal

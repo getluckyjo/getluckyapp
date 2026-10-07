@@ -1,8 +1,10 @@
 /**
  * Back an Icon: the fan pick for Icons Cup South Africa.
  *
- * Get Lucky sponsors the event. It is public (icons-series.com), so the
- * app names it, shows the field by team and marks the captains. The prize
+ * The event is public (icons-series.com), so the app names it, shows the
+ * field by team and marks the captains. Get Lucky has not signed with the
+ * organisers yet, so the footer says what the pick is and does not claim a
+ * sponsorship. The prize
  * copy below was approved by Johannes on 16 September 2026, and on
  * 6 October 2026 the R3m went to the Els for Autism Foundation as the
  * event's charity partner, whoever holes it. Every word of it lives here
@@ -33,7 +35,8 @@ export const ICONS_EVENT = {
   fanStake: 'holes it, you are in the draw for R1 million.',
   /** Small print under the prize card. */
   prizeTerms: 'T&Cs apply',
-  sponsorLine: 'Get Lucky is a proud sponsor of Icons Cup South Africa.',
+  /** The footer line. It goes back to naming Get Lucky as a sponsor once the organisers sign. */
+  sponsorLine: 'A Get Lucky fan pick for Icons Cup South Africa',
   hero: '/marketing/icons/launch.webp',
 } as const
 
