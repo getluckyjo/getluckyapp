@@ -35,7 +35,8 @@ with checks(n, name, applied) as (values
   ('031', 'golf_day_looks',       exists (select 1 from information_schema.columns where table_schema='public' and table_name='golf_days' and column_name='look')),
   ('032', 'admin_fixes',          to_regclass('public.admin_unmatched_payments') is not null),
   ('033', 'golf_day_trips',       exists (select 1 from information_schema.columns where table_schema='public' and table_name='golf_days' and column_name='ends_on')),
-  ('034', 'cape_town_par_3s',     exists (select 1 from public.courses where lower(name) = 'metropolitan golf club'))
+  ('034', 'cape_town_par_3s',     exists (select 1 from public.courses where lower(name) = 'metropolitan golf club')),
+  ('035', 'par_3_audit',          exists (select 1 from public.holes h join public.courses c on c.id = h.course_id where lower(c.name) = 'atlantic beach golf estate' and h.hole_number = 14))
 )
 select n, name, case when applied then 'applied' else 'MISSING' end as status
 from checks order by n;
