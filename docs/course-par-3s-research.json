@@ -1,0 +1,2558 @@
+[
+ {
+  "course": "Arabella Golf Club",
+  "app_par3s": {
+   "5": 153,
+   "7": 181,
+   "14": 170,
+   "17": 167
+  },
+  "verified_par3s": {
+   "5": 153,
+   "7": 181,
+   "14": 170,
+   "17": 167
+  },
+  "tee": "yellow (club men's, 6222 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://drsprnoe9nnhf.cloudfront.net/southernsun-04222022/cms/pressroom/arabella_golf_scorecard_11_1_2024.pdf",
+   "https://www.golfpass.com/courses/18109-arabella-golf-club/scorecard-and-layout",
+   "https://satop100courses.com/course/arabella/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match to the club (Southern Sun) scorecard dated Nov 2024, yellow tee. White tee: 5:147 7:170 14:130 17:159. GolfPass yards (167/198/186/183) convert to the same metres. satop100 notes holes 2 and 3 have since swapped par (2 now par 4, 3 par 5) - does not affect the par 3s."
+ },
+ {
+  "course": "Atlantic Beach Golf Estate",
+  "app_par3s": {
+   "5": 143,
+   "8": 168,
+   "12": 187,
+   "16": 155
+  },
+  "verified_par3s": {
+   "3": 156,
+   "8": 143,
+   "14": 162,
+   "16": 154
+  },
+  "tee": "yellow (club men's, 6203 m)",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://atlanticbeachestate.co.za/hole-by-hole/",
+   "https://www.golfpass.com/courses/18076-atlantic-beach-golf-club/scorecard-and-layout",
+   "https://satop100courses.com/course/atlantic-beach/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "WRONG HOLES: the club's own hole-by-hole page lists par 3s at 3, 8, 14 and 16 (holes 5 and 12 are par 4s); satop100 confirms the set 3-8-14-16. Distances converted from the GolfPass yardage table (yellow 171/156/177/168 yd); the GolfPass totals convert exactly to the club tee lengths (yellow 6203 m, white 5866 m), so the conversion is reliable. White tee: 3:141 8:129 14:156 16:150. App distances appear scrambled (143 = yellow 8th, 168 = yellow 16th in yards)."
+ },
+ {
+  "course": "Blair Atholl Golf & Equestrian Estate",
+  "app_par3s": {
+   "3": 183,
+   "6": 214,
+   "8": 188,
+   "11": 206,
+   "17": 175
+  },
+  "verified_par3s": {
+   "3": 172,
+   "6": 204,
+   "8": 190,
+   "11": 198,
+   "17": 174
+  },
+  "tee": "club website hole guide (metres; hole totals 6808 m, closest to gold tee 6752 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.blairatholl.co.za/golf/",
+   "https://www.golfpass.com/travel-advisor/courses/17877-blair-atholl",
+   "https://18birdies.com/golf-courses/club/bce55300-86ac-11e4-8c28-020000005b00/blair-atholl-golf-course",
+   "https://satop100courses.com/course/blair-atholl/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Five par 3s (3, 6, 8, 11, 17) confirmed by club site, GolfPass, 18birdies and satop100. The app's distances are exactly the GolfPass SILVER-tee YARDS (183/214/188/206/175) stored as metres; in metres the silver tee (6478 m) is 3:167 6:196 8:172 11:188 17:160. The club website's per-hole metres (172/204/190/198/174) are not labelled by tee but sum to ~gold (6752 m). Tee naming (black/gold/silver/bronze/white) should be confirmed with the club. Black tee: 188/221/215/212/179 m."
+ },
+ {
+  "course": "Bloemfontein Golf Club",
+  "app_par3s": {
+   "4": 171,
+   "8": 134,
+   "11": 134,
+   "16": 131
+  },
+  "verified_par3s": {
+   "4": 187,
+   "8": 147,
+   "11": 146,
+   "16": 143
+  },
+  "tee": "white (club men's, ~6228-6310 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/bloemfontein-golf-club",
+   "https://www.golfpass.com/travel-advisor/courses/17778-bloemfontein-golf-club",
+   "https://satop100courses.com/course/bloemfontein/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers (4, 8, 11, 16) confirmed by golfify and GolfPass. No scorecard on the club website (bloemgolf.co.za). Golfify 'Men' tee (metres, 6228 m) matches GolfPass white yards converted (205/161/160/156 yd). Yellow tee: 4:217 8:167 11:166 16:169. App distances (171/134/134/131) match no tee on either card and are 12-16 m shorter than white; blue converted would be 155/121/130/126."
+ },
+ {
+  "course": "Bosch Hoek Golf Estate",
+  "app_par3s": {
+   "5": 152,
+   "7": 130,
+   "14": 152,
+   "16": 130
+  },
+  "verified_par3s": {
+   "5": 152,
+   "7": 130,
+   "14": 150,
+   "16": 115
+  },
+  "tee": "white (only men's tee; 5870 m, 9 holes/18 tee boxes)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.boschhoek.co.za/play-golf/hole/5",
+   "https://www.boschhoek.co.za/play-golf/hole/7",
+   "https://18birdies.com/golf-courses/club/bd011860-86ac-11e4-8c28-020000005b00/bosch-hoek-golf-country-estate",
+   "https://www.golfpass.com/travel-advisor/courses/17939-bosch-hoek-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Nine-hole course with separate tee boxes for the second loop. Club hole pages give white-tee metres: 5th 152 / 14th 150 and 7th 130 / 16th 115. The app copied the front-nine values onto 14 and 16; 16 should be 115 m (15 m shorter). 18birdies white yards (166/142/164/125) convert to 152/130/150/114 and agree. Blue: 134/123/130/110."
+ },
+ {
+  "course": "Bryanston Country Club",
+  "app_par3s": {
+   "4": 184,
+   "9": 163,
+   "11": 210,
+   "14": 161
+  },
+  "verified_par3s": {
+   "4": 175,
+   "9": 170,
+   "11": 200,
+   "14": 155
+  },
+  "tee": "yellow (club men's, 6690 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.bryanstoncc.co.za/wp-content/uploads/2025/10/BCC-course-info-score-card-2025-scaled-1.png",
+   "https://www.bryanstoncc.co.za/course-info/",
+   "https://www.golfpass.com/courses/17863-bryanston-country-club/scorecard-and-layout",
+   "https://satop100courses.com/course/bryanston/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Holes 4, 9, 11, 14 confirmed on the club's 2025 scorecard (metres, rounded to 5 m). White tee: 4:170 9:140 11:190 14:150. The app's values are exactly the GolfPass WHITE-tee YARDS (184/163/210/161) stored as metres; 11th is 10 m over the yellow figure. Note: all 18 greens are being rebuilt from April 2026 to late 2026, so lengths may change slightly."
+ },
+ {
+  "course": "Centurion Country Club",
+  "app_par3s": {
+   "4": 160,
+   "8": 148,
+   "13": 175,
+   "16": 164
+  },
+  "verified_par3s": {
+   "3": 175,
+   "8": 163,
+   "11": 211,
+   "17": 153
+  },
+  "tee": "yellow (club card; white = 3:172 8:138 11:203 17:144)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://centuriongolfestate.online/wp-content/uploads/2021/11/Centurion-Country-Score-Card.pdf",
+   "https://centuriongolfestate.online/play-golf/",
+   "https://www.golfpass.com/travel-advisor/courses/17857-centurion-country-club",
+   "https://satop100courses.com/course/centurion/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "WRONG HOLES: the club's own scorecard PDF (metres) and GolfPass both have the par 3s at 3, 8, 11 and 17; app holes 4, 13 and 16 are par 4/5/4. Only hole 8 (the island green) is right, and its distance is off (163 yellow / 138 white vs app 148). Club site states men's club markers total 6373 m (card: yellow 6632, white 6339)."
+ },
+ {
+  "course": "Champagne Sports Resort",
+  "app_par3s": {
+   "4": 162,
+   "7": 160,
+   "12": 157,
+   "17": 195
+  },
+  "verified_par3s": {
+   "4": 148,
+   "7": 146,
+   "12": 144,
+   "16": 178
+  },
+  "tee": "white (club men's, 6203 m) - shown as 'Blue' on GolfPass",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/17911-champagne-sports-resort",
+   "https://www.hole19golf.com/courses/champagne-sports-resort-golf-course",
+   "https://satop100courses.com/course/champagne-sports-resort/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "WRONG HOLE: the par 3s are 4, 7, 12 and 16 (GolfPass and hole19 agree; satop100 reviews cite the '201 m 16th' and '16th longest par 3 at 180 m from club tees'); hole 17 is a par 4. No scorecard on the resort website. GolfPass tee names are shifted relative to the club's: GolfPass 'Blue' row (6783 yd = 6203 m) is the club's white tee; app values are that row's YARDS (162/160/157/195). Gold/championship (6694 m): 4:161 7:161 12:160 16:201. Blue (5632 m, hole19 metres): 4:133 7:133 12:129 16:164."
+ },
+ {
+  "course": "Clovelly Country Club",
+  "app_par3s": {
+   "6": 144,
+   "8": 156,
+   "11": 109,
+   "16": 148
+  },
+  "verified_par3s": {
+   "6": 144,
+   "8": 156,
+   "11": 109,
+   "16": 148
+  },
+  "tee": "white (middle men's tee, 5978 yd / ~5466 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://clovellygolfclub.co.za/course-layout/",
+   "https://www.golfpass.com/travel-advisor/courses/18103-clovelly-country-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match to the club's course-layout page (metres and yards listed per hole; three tees unlabelled there, GolfPass labels them yellow/white/red). Yellow tee: 6:160 8:177 11:116 16:172."
+ },
+ {
+  "course": "Cotswold Downs Golf Club",
+  "app_par3s": {
+   "5": 163,
+   "7": 161,
+   "14": 170,
+   "16": 160
+  },
+  "verified_par3s": {
+   "5": 163,
+   "7": 161,
+   "14": 170,
+   "16": 160
+  },
+  "tee": "white (club tee, 6193 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfpass.com/courses/17931-cotswold-downs/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/bd02ed20-86ac-11e4-8c28-020000005b00/cotswold-downs-golf-club",
+   "https://cotswolddowns.co.za/golf"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match to the GolfPass card in metres (white 6193 m, the length quoted on the club website). 18birdies confirms par 3s at 5, 7, 14, 16; its 'Black' back-tee figures (172/168/199/165) are metres mislabelled as yards (Facebook: 5th is 173 m from the back tee). Club website has no scorecard page."
+ },
+ {
+  "course": "Country Club Johannesburg – Rocklands",
+  "app_par3s": {
+   "4": 198,
+   "6": 212,
+   "15": 170,
+   "17": 189
+  },
+  "verified_par3s": {
+   "4": 191,
+   "6": 206,
+   "15": 164,
+   "17": 190
+  },
+  "tee": "white / 'Club' tee (club men's; club website hole pages match Golfify 'Club' column exactly)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://thecountryclub.co.za/rocklands-golf-course",
+   "https://www.golfify.io/courses/country-club-johannesburg-rocklands",
+   "https://www.golfpass.com/travel-advisor/courses/17815-country-club-johannesburg-rocklands-course"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. App values (198/212/170/189) are exactly the GolfPass WHITE-tee YARDS, i.e. yards stored as metres. Club site (metres) gives 191/206/164/190; all diffs under 10 m. Yellow/champ tee approx 212/221/180/220 m."
+ },
+ {
+  "course": "Country Club Johannesburg – Woodmead",
+  "app_par3s": {
+   "4": 167,
+   "8": 175,
+   "13": 175,
+   "15": 175
+  },
+  "verified_par3s": {
+   "4": 171,
+   "8": 170,
+   "13": 180,
+   "15": 160
+  },
+  "tee": "white / 'Club' tee (club men's; club website hole pages match Golfify 'Club' column exactly)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://thecountryclub.co.za/woodmead-golf-course",
+   "https://www.golfify.io/courses/country-club-johannesburg-woodmead",
+   "https://www.golfpass.com/travel-advisor/courses/17875-country-club-johannesburg-woodmead-course"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. App values are the GolfPass WHITE-tee YARDS (167/175/175/175) stored as metres. Club site metres: 171/170/180/160. Hole 15 differs by 15 m (app 175 vs card 160); others within 5 m. Yellow/champ approx 190/178/186/207 m."
+ },
+ {
+  "course": "Dainfern Golf & Country Club",
+  "app_par3s": {
+   "4": 170,
+   "8": 155,
+   "13": 183,
+   "17": 145
+  },
+  "verified_par3s": {
+   "4": 163,
+   "6": 159,
+   "11": 167,
+   "16": 182
+  },
+  "tee": "white (club men's, 6289 m; black/champ tee is 6682 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://dainfern.co.za/golf/interactive-golf-course/",
+   "https://www.golfpass.com/courses/17836-dainfern-country-club/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/bce971b0-86ac-11e4-8c28-020000005b00/dainfern-country-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG. Par 3s are 4, 6, 11 and 16 (not 4, 8, 13, 17). Holes 8, 13 and 17 are par 5, par 4 and par 4. Club interactive course (ecaddy) column sums match GolfPass tee lengths: Black 185/195/192/199 m, White 163/159/167/182 m. GolfPass and 18Birdies confirm par-3 holes 4/6/11/16."
+ },
+ {
+  "course": "De Zalze Golf Club",
+  "app_par3s": {
+   "3": 159,
+   "9": 146,
+   "12": 171,
+   "16": 201
+  },
+  "verified_par3s": {
+   "3": 159,
+   "9": 146,
+   "12": 171,
+   "16": 201
+  },
+  "tee": "yellow (championship men's tee, 6326 m, CR 72.9/133 - first men's row on the club scorecard; the app already uses this tee)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://dezalzegolf.com/wp-content/uploads/2022/06/DE-ZALZE-SCORECARD-.pdf",
+   "https://18birdies.com/golf-courses/club/bce35730-86ac-11e4-8c28-020000005b00/de-zalze-golf-club",
+   "https://www.golfpass.com/travel-advisor/courses/18131-de-zalze-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers and distances match the club scorecard PDF (front nine parsed as text; back nine via 18Birdies, which reproduces the club's metre card, and GolfPass yards converted). If the white club tee (5939 m, CR 71.0) is preferred instead: 3:145, 9:127, 12:153, 16:168."
+ },
+ {
+  "course": "Eagle Canyon Golf Club",
+  "app_par3s": {
+   "3": 185,
+   "7": 160,
+   "12": 173,
+   "15": 148
+  },
+  "verified_par3s": {
+   "4": 152,
+   "8": 165,
+   "11": 162,
+   "17": 144
+  },
+  "tee": "white (club men's, approx 6298 m; yellow/champ 6859 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "http://www.ecaddy.co.za/gcl/courses/eaglecanyon/",
+   "https://www.eaglecanyongolfestate.co.za/guide-to-the-course",
+   "https://18birdies.com/golf-courses/club/bce9bfd0-86ac-11e4-8c28-020000005b00/eagle-canyon-country-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG. Par 3s are 4, 8, 11 and 17 (not 3, 7, 12, 15); holes 3, 7, 12, 15 are all par 4s. Club guide and club ecaddy hole graphics confirm. Yellow/champ tee: 4:179, 8:225, 11:174, 17:170 m (ecaddy column sums match 18Birdies yellow 7502 yd)."
+ },
+ {
+  "course": "East London Golf Club",
+  "app_par3s": {
+   "2": 180,
+   "10": 175,
+   "17": 159
+  },
+  "verified_par3s": {
+   "2": 161,
+   "10": 166,
+   "17": 150
+  },
+  "tee": "white / 'Regular' club men's tee (6603 yd = 6038 m, equals Where2Golf 'club tees 6038 m'; SA Top 100 lists white 6070 m)",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfify.io/courses/east-london-golf-club",
+   "https://18birdies.com/golf-courses/club/bd7277d0-86ac-11e4-8c28-020000005b00/east-london-golf-club",
+   "https://www.golfpass.com/travel-advisor/courses/17749-east-london-golf-club",
+   "https://satop100courses.com/course/east-london/",
+   "https://www.where2golf.com/south-africa/east-london-golf-club/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Only 3 par 3s (par 73) and hole numbers 2/10/17 are correct. No scorecard on the club site (elgc.co.za). App values 180/175/159 are exactly GolfPass's older WHITE card in YARDS (5960 m card) = 165/160/145 m. The newer 6038 m card (18Birdies/Golfify, matches Where2Golf club-tee length) gives 176/182/164 yd = 161/166/150 m. Hole 2 differs from app by about 19 m; 10 and 17 by about 9 m."
+ },
+ {
+  "course": "Ebotse Golf & Country Estate",
+  "app_par3s": {
+   "2": 202,
+   "8": 150,
+   "11": 164,
+   "15": 149
+  },
+  "verified_par3s": {
+   "2": 185,
+   "8": 137,
+   "11": 150,
+   "15": 136
+  },
+  "tee": "white / 'Club' tee (club men's, 6372 m per SA Top 100 and Golfify)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/ebotse-golf-and-country-estate",
+   "https://www.golfpass.com/travel-advisor/courses/17830-ebotse-golf-and-country-estate",
+   "https://satop100courses.com/course/ebotse-links/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. App values are the GolfPass WHITE-tee YARDS stored as metres; converted they equal the Golfify metre card (185/137/150/136). All four diffs 13-17 m. Club website (ebotselinks.com) has no scorecard; SA Top 100 reviews independently cite 8th = 137 m and 11th = 150 m from white. Gold/champ: 219/152/187/152 m. Note: 12th and 17th were temporarily played as par 3s in 2020-21 during works but are back to par 5/par 4."
+ },
+ {
+  "course": "Elements Private Golf Reserve",
+  "app_par3s": {
+   "2": 202,
+   "9": 172,
+   "11": 188,
+   "15": 175
+  },
+  "verified_par3s": {
+   "2": 185,
+   "9": 157,
+   "11": 172,
+   "15": 160
+  },
+  "tee": "white / 'Club' tee (club men's; club hole guide quotes 9th as 157 m from the Club tee)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://elementsgolfreserve.co.za/golf-course/",
+   "https://www.golfify.io/courses/elements-private-golf-reserve",
+   "https://www.golfpass.com/courses/17970-elements-private-golf-reserve/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (club text confirms par 3s at 2, 9, 11, 15). App values are GolfPass WHITE-tee YARDS stored as metres; converted (185/157/172/160) they match the Golfify metre card and the club's own 157 m for hole 9. All diffs 15-17 m. Gold/champ: 2:225 (club text), 9:182-190, 11:206, 15:186-209 m depending on card."
+ },
+ {
+  "course": "Emfuleni Golf Estate",
+  "app_par3s": {
+   "4": 150,
+   "7": 125,
+   "12": 155,
+   "17": 145
+  },
+  "verified_par3s": {
+   "4": 164,
+   "7": 135,
+   "12": 167,
+   "17": 157
+  },
+  "tee": "yellow (club men's tee, 6615 m 'Men' card on Golfify/GolfPass; SA Top 100 reviews reference member play from yellow)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.emfulenigolfestate.com/explore-the-course/",
+   "https://www.golfify.io/courses/emfuleni-golf-and-country-club",
+   "https://www.golfpass.com/courses/17882-emfuleni-golf-and-country-club/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/bceb6d80-86ac-11e4-8c28-020000005b00/emfuleni-golf-and-country-club",
+   "https://satop100courses.com/course/emfuleni/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (club site confirms par 3s at 4, 7, 12, 17). No numeric scorecard on the club site. Three slightly different card versions exist: yellow 6615 m (Golfify/18Birdies: 164/135/167/157), GolfPass yellow 7091 yd (164/134/166/156 m), SA Top 100 yellow 6518 m. App values are closest to the WHITE tee from GolfPass yards converted (148/121/148/145 m). If white is the intended tee use those; yellow values differ from app by 10-14 m."
+ },
+ {
+  "course": "Erinvale Golf Club",
+  "app_par3s": {
+   "2": 154,
+   "8": 155,
+   "12": 166,
+   "14": 170
+  },
+  "verified_par3s": {
+   "2": 141,
+   "8": 142,
+   "12": 152,
+   "14": 155
+  },
+  "tee": "white (club men's, 6052 m, CR 72.2; yellow champ 6440 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.erinvale.com/_files/ugd/519ea2_203827bdda304200b4a30dd39e57daa3.pdf",
+   "https://www.erinvale.com/about-2",
+   "https://www.golfpass.com/courses/18086-erinvale-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. App values 154/155/166/170 are exactly the GolfPass WHITE-tee YARDS stored as metres; the club course-guide PDF (metres) gives white 141/142/152/155, all 13-15 m shorter than the app. Yellow tee: 2:172, 8:150, 12:162, 14:178 m."
+ },
+ {
+  "course": "Euphoria Golf Estate",
+  "app_par3s": {
+   "4": 188,
+   "8": 162,
+   "13": 173,
+   "17": 152
+  },
+  "verified_par3s": {
+   "6": 170,
+   "8": 195,
+   "15": 140,
+   "17": 185
+  },
+  "tee": "white (club men's, 6525 m, CR 72); gold/yellow championship 7040 m is 6:180 8:220 15:150 17:200",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/euphoria-golf-estate",
+   "https://www.golfpass.com/courses/32053-euphoria-golf-estate-hydro/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/bccfcf30-86ac-11e4-8c28-020000005b00/euphoria-golf-estate-hydro"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG. Three independent scorecards (golfify in metres; GolfPass and 18birdies in yards) all agree the par 3s are 6, 8, 15 and 17. App's hole 4 is a par 4 (SI 1, ~395 m) and hole 13 is a par 4 (SI 6, ~390 m). App distances do not match any tee. No scorecard on the club's own website (euphoriaestate.co.za), hence medium rather than high."
+ },
+ {
+  "course": "Eye of Africa Golf Estate",
+  "app_par3s": {
+   "5": 190,
+   "9": 207,
+   "12": 178,
+   "16": 168
+  },
+  "verified_par3s": {
+   "5": 194,
+   "9": 210,
+   "12": 180,
+   "16": 170
+  },
+  "tee": "yellow (CR 75.3/139, 6867 m) - the tee the app values correspond to; white (CR 72.0/132, 6266 m) is 5:155 9:166 12:144 16:153; black championship 5:214 9:210 12:180 16:192",
+  "units_in_source": "metres",
+  "sources": [
+   "https://eyeofafrica.co.za/wp-content/uploads/2025/08/ScoreCard.pdf",
+   "https://18birdies.com/golf-courses/club/bd169c30-86ac-11e4-8c28-020000005b00/eye-of-africa-golf-residential-estate"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club's own PDF scorecard (Aug 2025). Hole numbers correct; app distances within 2-4 m of the yellow tee. 18birdies confirms par 3s at 5, 9, 12, 16."
+ },
+ {
+  "course": "Fancourt – Montagu",
+  "app_par3s": {
+   "2": 192,
+   "8": 186,
+   "12": 189,
+   "17": 175
+  },
+  "verified_par3s": {
+   "2": 174,
+   "8": 163,
+   "12": 171,
+   "17": 155
+  },
+  "tee": "Springbok (green; men 0-9 / club men's tee, 6250 m, CR 72.7/131); Galjoen (men 10-17) is 2:154 8:139 12:142 17:142; Protea championship 2:174 8:178 12:188 17:185",
+  "units_in_source": "metres",
+  "sources": [
+   "https://fancourt.co.za/wp-content/uploads/2026/09/Montagu-Scorecard.pdf",
+   "https://www.golfpass.com/travel-advisor/courses/18085-fancourt-hotel-and-country-club-estate-the-montagu-course"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. App values are YARDS (they equal GolfPass's Springbok/yellow row in yards: 192/186/189/175 yd = 176/170/173/160 m). Club's Sept 2026 card (measured to FRONT of green) gives 174/163/171/155 m, i.e. 18-23 m shorter than the app. Fancourt card totals are shorter than older published 6324 m figure."
+ },
+ {
+  "course": "Fancourt – Outeniqua",
+  "app_par3s": {
+   "4": 197,
+   "7": 175,
+   "12": 175,
+   "15": 156
+  },
+  "verified_par3s": {
+   "4": 182,
+   "7": 160,
+   "12": 158,
+   "15": 138
+  },
+  "tee": "Springbok (green; men 0-9 / club men's tee, 5871 m, CR 71.0/128); Galjoen (men 10-17) is 4:160 7:132 12:155 15:125; Protea championship 4:179 7:165 12:168 15:145",
+  "units_in_source": "metres",
+  "sources": [
+   "https://fancourt.co.za/wp-content/uploads/2026/09/Outeniqua-Scorecard.pdf",
+   "https://www.golfpass.com/courses/18100-fancourt-hotel-and-country-club-estate-the-outeniqua-course/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. App values are YARDS (equal GolfPass's 'Animal'/Springbok row in yards: 197/175/175/156 yd = 180/160/160/143 m). Club's Sept 2026 card (to front of green) gives 182/160/158/138 m; holes 4, 7, 12, 15 differ from app by 15-18 m."
+ },
+ {
+  "course": "Fancourt – The Links",
+  "app_par3s": {
+   "2": 214,
+   "8": 156,
+   "11": 148,
+   "17": 163
+  },
+  "verified_par3s": {
+   "2": 196,
+   "8": 143,
+   "11": 135,
+   "17": 149
+  },
+  "tee": "yellow (standard men's tee, 6360 m, CR 74.1/141); white is 2:156 8:127 11:119 17:125; black championship 2:216 8:185 11:147 17:170",
+  "units_in_source": "metres",
+  "sources": [
+   "https://fancourt.co.za/wp-content/uploads/2026/09/The-Links_Scorecard.pdf",
+   "https://www.golfpass.com/courses/18117-fancourt-hotel-and-country-club-estate-the-links-course/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (par 73 course; par 3s at 2, 8, 11, 17). App values are YARDS (GolfPass yellow row 214/156/148/163 yd = 196/143/135/149 m, which matches the club card exactly). Club card is measured to front of green. All four app distances are 13-18 m too long."
+ },
+ {
+  "course": "George Golf Club",
+  "app_par3s": {
+   "6": 153,
+   "13": 150,
+   "15": 170,
+   "17": 189
+  },
+  "verified_par3s": {
+   "6": 140,
+   "13": 137,
+   "15": 155,
+   "17": 173
+  },
+  "tee": "white (men's club tee, 5862 m, CR 70); blue championship (6162 m) is 6:158 13:152 15:172 17:185",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/george-golf-club",
+   "https://www.golfpass.com/courses/18105-george-golf-club/scorecard-and-layout",
+   "https://www.georgegolfclub.co.za/index.php/the-course",
+   "https://18birdies.com/golf-courses/club/bcfe0b20-86ac-11e4-8c28-020000005b00/george-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club website hole guide confirms par 3s are 6 (only par 3 on front nine), 13, 15 and 17. App values are YARDS (equal GolfPass white row 153/150/170/189 yd); converted they match golfify's metres card exactly: 140/137/155/173 m. All four app distances are 13-16 m too long. Club site has no numeric scorecard."
+ },
+ {
+  "course": "Glendower Golf Club",
+  "app_par3s": {
+   "3": 208,
+   "6": 184,
+   "14": 153,
+   "17": 217
+  },
+  "verified_par3s": {
+   "3": 190,
+   "6": 168,
+   "14": 140,
+   "17": 198
+  },
+  "tee": "white (club men's tee, CR 73.3/140); yellow championship (6974 m) is 3:231 6:185 14:151 17:204",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/courses/17883-glendower-golf-club/scorecard-and-layout",
+   "https://www.thesocialgolfer.com/golf-courses/south-africa/edenvale/glendower-golf-club/scorecard/glendower-golf-club-white-tee-scorecard",
+   "https://18birdies.com/golf-courses/club/bcee2ca0-86ac-11e4-8c28-020000005b00/glendower-golf-club",
+   "https://satop100courses.com/course/glendower/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (3, 6, 14, 17; also confirmed by provisualizer and satop100 narrative). App values are YARDS (equal GolfPass/18birdies white row 208/184/153/217 yd). Converted = 190/168/140/198 m, which thesocialgolfer's white-tee card lists verbatim (its 'yards' column is actually metres). Caveat: satop100 lists the current white card at 6442 m vs 6559-6566 m in these sources, so individual holes could be a few metres off; club website shows only hole images. App distances are 13-19 m too long."
+ },
+ {
+  "course": "Glenvista Country Club",
+  "app_par3s": {
+   "4": 149,
+   "8": 160,
+   "13": 143,
+   "15": 155
+  },
+  "verified_par3s": {
+   "4": 149,
+   "8": 160,
+   "13": 143,
+   "15": 155
+  },
+  "tee": "Glenvista/white (club men's tee, 6182 m, CR 72/138); championship tee is 4:170 8:194 13:168 15:181",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/glenvista-country-club",
+   "https://glenvistacountryclub.co.za/course/",
+   "https://www.golfpass.com/courses/17805-glenvista/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match. Club website hole list confirms par 3s at 4, 8, 13, 15; golfify metres card matches app to the metre and GolfPass white yards (163/175/156/170) convert to the same values. satop100 notes the 18th was temporarily played as a par 3 during works on the hole - not a permanent par 3."
+ },
+ {
+  "course": "Goldfields West Golf Club",
+  "app_par3s": {
+   "5": 162,
+   "9": 147,
+   "14": 175,
+   "17": 158
+  },
+  "verified_par3s": {
+   "4": 187,
+   "6": 141,
+   "13": 169,
+   "17": 163
+  },
+  "tee": "white (club tee, which is also the back tee, 6399 m, CR 73.2/137); blue is 4:173 6:125 13:158 17:152",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/18022-goldfields-west-golf-club",
+   "https://www.golfify.io/courses/goldfields-west-golf-club",
+   "https://www.hole19golf.com/courses/goldfields-west-private-golf-club",
+   "https://satop100courses.com/course/goldfields-west/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG. GolfPass, golfify and Hole19 scorecards all show par 3s at 4, 6, 13 and 17; satop100 reviews describe the par-3 6th (141 m white, signature hole over water) and 13th (169 m), which match the converted GolfPass white values exactly. App's hole 5 is a par 5, hole 9 a par 4, hole 14 a par 4. golfify's card gives slightly different lengths (190/148/167/161 m). No scorecard on club website (goldfieldswest.co.za) - medium confidence on distances, high on hole numbers."
+ },
+ {
+  "course": "Goose Valley Golf Club",
+  "app_par3s": {
+   "2": 140,
+   "5": 116,
+   "11": 143,
+   "13": 145
+  },
+  "verified_par3s": {
+   "2": 172,
+   "5": 116,
+   "11": 143,
+   "13": 163
+  },
+  "tee": "white (club men's tee, 5743 m, CR 70.2/127); yellow (6013 m, CR 71.6) is 2:188 5:140 11:152 13:193; blue 2:158 5:116 11:135 13:144",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.goosevalleygolfclub.com/wp-content/uploads/2025/05/Goose-Valley-Scorecard-2025.pdf",
+   "https://www.golfpass.com/courses/18087-goose-valley-golf-club/scorecard-and-layout",
+   "https://satop100courses.com/course/goose-valley/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club's own 2025 PDF scorecard (metres to centre of green). Hole numbers correct (2, 5, 11, 13). Holes 5 and 11 match the white tee exactly; hole 2 app 140 vs card 172 (-32 m; 140 is actually the yellow-tee length of hole 5) and hole 13 app 145 vs card 163 (-18 m; matches no tee, blue is 144). GolfPass white yards convert to the same values."
+ },
+ {
+  "course": "Gowrie Farm Golf Course",
+  "app_par3s": {
+   "4": 148,
+   "6": 155,
+   "11": 139,
+   "15": 164
+  },
+  "verified_par3s": {
+   "2": 181,
+   "6": 152,
+   "12": 120,
+   "14": 164,
+   "17": 171
+  },
+  "tee": "white (club men's; course guide references the white tee as the standard tee). Yellow (championship) = 2:200, 6:165, 12:130, 14:180, 17:190",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.gowrie.co.za/wp-content/uploads/2024/05/Gowrie_Farm_Scorecard_2024_01.pdf",
+   "https://www.gowrie.co.za/the-course/",
+   "https://www.golfpass.com/courses/17942-gowrie-farm-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "App hole numbers are WRONG. The current 18-hole course (2024 scorecard, par 71) has FIVE par 3s: 2, 6, 12, 14, 17. The app's 4/6/11/15 appear to come from the old 9-hole layout (played twice) that pre-dates the 2024 18-hole course. Only hole 6 is a par 3 in both. GolfPass (yards) confirms the same five par-3 hole numbers."
+ },
+ {
+  "course": "Hermanus Golf Club",
+  "app_par3s": {
+   "4": 180,
+   "9": 155,
+   "13": 171,
+   "16": 165
+  },
+  "verified_par3s": {
+   "4": 169,
+   "9": 144,
+   "13": 158,
+   "16": 163
+  },
+  "tee": "yellow (men's competition tee, 72.7/129). White (71.3/124) = 4:146, 9:136, 13:150, 16:155. Black championship = 4:182, 9:151, 13:182, 16:187",
+  "units_in_source": "metres",
+  "sources": [
+   "https://hgc.co.za/course/",
+   "https://hgc.co.za/downloads/Hermanus_East_Course.pdf",
+   "https://www.golfpass.com/courses/28862-hermanus-golf-club-north-course/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hermanus is a 27-hole club. The app's holes 4/9/13/16 match the EAST COURSE (holes 1-18), which is the club's main 18 (club hole-by-hole page and Aug-2023 scorecard). Distances differ by 11-13 m on 4, 9 and 13 vs the yellow tee (app 180/155/171 vs card 169/144/158); hole 16 matches. CAUTION: the NORTH course (holes 19-27 + 1-9) has par 3s at 3, 6, 13, 18 and the South course (10-18 + 19-27) differs again; make sure the app is labelled as the East Course."
+ },
+ {
+  "course": "Highland Gate Golf & Trout Estate",
+  "app_par3s": {
+   "3": 167,
+   "7": 170,
+   "13": 148,
+   "15": 192,
+   "17": 163
+  },
+  "verified_par3s": {
+   "3": 153,
+   "7": 160,
+   "13": 135,
+   "15": 180,
+   "17": 149
+  },
+  "tee": "white (club men's, 6153 m / 69.9/138). Yellow championship = 3:177, 7:176, 13:165, 15:187, 17:164",
+  "units_in_source": "metres",
+  "sources": [
+   "http://www.ecaddy.co.za/gcl/courses/highlandsgate/",
+   "https://www.golfpass.com/travel-advisor/courses/34988-highland-gate-golf-course",
+   "https://highlandgate.co.za/golf/course-guide/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (five par 3s). The app's distances are the WHITE-tee YARDS from GolfPass (167/170/148/192/163 yd) stored as metres. Converted: 153/155/135/176/149 m; the eCaddy course guide (metres) gives 153/160/135/180/149. Use the metre values. Club's own course-guide page has no distances."
+ },
+ {
+  "course": "Houghton Golf Club",
+  "app_par3s": {
+   "7": 177,
+   "9": 178,
+   "14": 196,
+   "16": 230
+  },
+  "verified_par3s": {
+   "7": 162,
+   "9": 163,
+   "14": 179,
+   "16": 210
+  },
+  "tee": "yellow (men's championship/club tee, 74.9/145). White (73.3/142) = 7:155, 9:158, 14:149, 16:183",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.houghton.co.za/_files/ugd/260f98_25fbbb943c0942689d35ebb99a21499b.pdf",
+   "https://www.houghton.co.za/course-layout",
+   "https://www.golfpass.com/courses/17819-houghton-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. App distances are the yellow-tee YARDS (GolfPass 177/178/196/230 yd) stored as metres; the club's own scorecard (metres) gives 162/163/179/210 for yellow. Differences 15-20 m."
+ },
+ {
+  "course": "Humewood Golf Club",
+  "app_par3s": {
+   "3": 210,
+   "6": 131,
+   "12": 160,
+   "13": 153
+  },
+  "verified_par3s": {
+   "3": 192,
+   "6": 120,
+   "12": 146,
+   "14": 140
+  },
+  "tee": "white (club men's, 72.3/127). Yellow championship = 3:192, 6:125, 12:149, 14:143",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.humewoodgolf.co.za/the-course/hole-by-hole/",
+   "https://www.thesocialgolfer.com/golf-courses/south-africa/eastern-cape/humewood-golf-club/scorecard/humewood-golf-club-white-tee-scorecard",
+   "https://www.golfpass.com/courses/17725-humewood-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "App hole 13 is WRONG: hole 13 is the long par-4 signature hole; the 4th par 3 is hole 14 ('The Fort'). Par 3s are 3, 6, 12, 14 (club hole-by-hole page, GolfPass, Social Golfer all agree). App distances are white-tee YARDS (GolfPass 210/131/160/153 yd) stored as metres; metres are 192/120/146/140 (Social Golfer card is labelled yards but its 6077 total equals the white-tee metres; GolfPass yards convert to the same values)."
+ },
+ {
+  "course": "Irene Country Club",
+  "app_par3s": {
+   "5": 158,
+   "8": 142,
+   "14": 172,
+   "17": 163
+  },
+  "verified_par3s": {
+   "4": 208,
+   "7": 138,
+   "13": 171,
+   "16": 133
+  },
+  "tee": "men's tee on the club scorecard (single men's column, 6504 m total; corresponds to GolfPass 'Gentlemen'/yellow). GolfPass white tee (yards converted) = 4:193, 7:130, 13:159, 16:119",
+  "units_in_source": "metres",
+  "sources": [
+   "https://irenecc.co.za/wp-content/uploads/2017/06/ICC_Scorecard.pdf",
+   "https://www.golfpass.com/courses/17814-irene-country-club/scorecard-and-layout",
+   "https://satop100courses.com/course/irene/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "ALL FOUR app hole numbers are WRONG (each off by one). Par 3s are 4 ('The Long Short'), 7 ('The Pulpit'), 13 ('Paddocks'), 16 ('The Island'); holes 5, 8, 14, 17 are par 4/4/4/5. Club card, GolfPass and SA Top 100 ('135-metre seventh' pulpit hole) all agree. App distances also do not match (e.g. hole 4 is 208 m, hole 7 is 138 m). Club scorecard PDF is dated 2017 but routing matches current third-party cards."
+ },
+ {
+  "course": "Jackal Creek Golf Estate",
+  "app_par3s": {
+   "4": 160,
+   "7": 128,
+   "12": 150,
+   "15": 203
+  },
+  "verified_par3s": {
+   "3": 162,
+   "7": 128,
+   "12": 163,
+   "15": 203
+  },
+  "tee": "yellow (men's, 6470 m). White (club, 6101 m) = 3:162, 7:119, 12:141, 15:177",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/courses/26044-jackal-creek-golf-estate/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/bd7054f0-86ac-11e4-8c28-020000005b00/jackal-creek",
+   "https://satop100courses.com/course/jackal-creek/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": false,
+  "notes": "App hole 4 is WRONG: the par 3 is hole 3 (hole 4 is a par 4). Par 3s are 3, 7, 12, 15 - GolfPass and 18Birdies cards agree, and SA Top 100 confirms '128-metre par 3 (No 7)' and '203-metre par 3 (No 15)'. Club website's course layout is an embedded flipbook that could not be read, so distances are converted from yards (yellow 177/140/178/222 yd). App hole 12 = 150 m vs 163 m yellow / 141 m white (13 m off). Confidence medium only because no club-issued metre card was reachable."
+ },
+ {
+  "course": "Katberg Eco Golf Estate",
+  "app_par3s": {
+   "3": 139,
+   "7": 135,
+   "11": 120,
+   "18": 156
+  },
+  "verified_par3s": {
+   "3": 139,
+   "7": 135,
+   "11": 120,
+   "18": 156
+  },
+  "tee": "white (club men's, 5661 m / 70.1/135). Blue championship (6300 m) per GolfPass = 3:135, 7:130, 11:120, 18:156",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/courses/32085-katberg-eco-golf-course/scorecard-and-layout",
+   "https://golf4holland.nl/en/golf-locations/katberg-eco-golf-estate-561c0ea8.html",
+   "https://satop100courses.com/course/katberg/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers and distances match exactly (GolfPass white 152/148/131/171 yd = 139/135/120/156 m). Golf4Holland and SA Top 100 (par-3 18th) confirm the par-3 holes. No club-issued scorecard found online; the estate site (katleisure.co.za) has no card."
+ },
+ {
+  "course": "Killarney Country Club",
+  "app_par3s": {
+   "4": 198,
+   "6": 189,
+   "14": 187,
+   "17": 204
+  },
+  "verified_par3s": {
+   "4": 197,
+   "6": 188,
+   "14": 186,
+   "17": 203
+  },
+  "tee": "yellow (men's, 6380 m / 72.8/131). White (71.2/130) = 4:167, 6:174, 14:155, 17:175",
+  "units_in_source": "metres",
+  "sources": [
+   "https://18birdies.com/golf-courses/club/bd472210-86ac-11e4-8c28-020000005b00/killarney-country-club",
+   "https://www.golfpass.com/courses/17811-killarney-country-club/scorecard-and-layout",
+   "https://www.killarneycountryclub.co.za/golf-course/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct; distances within 1 m of the 18Birdies card (which is labelled yards but is actually metres: 6380 total = GolfPass 6977 yd). GolfPass yards convert to the same values. Club website's scorecard PDF link returns 404; club page confirms par 70, 6145 m for men."
+ },
+ {
+  "course": "King David Mowbray Golf Club",
+  "app_par3s": {
+   "4": 155,
+   "8": 150,
+   "13": 150,
+   "16": 130
+  },
+  "verified_par3s": {
+   "4": 160,
+   "8": 148,
+   "13": 149,
+   "16": 127
+  },
+  "tee": "white (club men's, 5570 m). Yellow/championship (GolfPass yards converted) = 4:170, 8:162, 13:162, 16:137",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/king-david-mowbray-golf-club",
+   "https://www.golfpass.com/travel-advisor/courses/18140-king-david-mowbray-golf-club",
+   "https://satop100courses.com/course/king-david-mowbray/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (4, 8, 13, 16); Golfify (metres), GolfPass (yards) and SA Top 100 ('par 3s 8 and 13 sit alongside each other') agree. App distances are within 5 m of the white-tee card. No club-issued scorecard found online."
+ },
+ {
+  "course": "Kingswood Golf Estate",
+  "app_par3s": {
+   "3": 130,
+   "5": 148,
+   "8": 150,
+   "17": 145
+  },
+  "verified_par3s": {
+   "1": 164,
+   "5": 154,
+   "11": 163,
+   "17": 159
+  },
+  "tee": "white (club men's); yellow championship = 1:190, 5:179, 11:173, 17:165",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.kingswood.co.za/wp-content/uploads/2026/09/Kingswood-Scorecard-New-2026_Jetline-NSC.pdf",
+   "https://www.golfpass.com/courses/18080-kingswood-golf-estate/scorecard-and-layout",
+   "https://satop100courses.com/course/kingswood/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG. Official 2026 club scorecard (metres) has par 3s at 1, 5, 11, 17 (course opens with a par 3; SA Top 100 confirms '190 m from yellow'). App's 3 and 8 are par 4s; 11 and 1 are missing. Golfify's card (par 3s at 2/6/12/18) is a stale rotated numbering and does not match the club card."
+ },
+ {
+  "course": "Knysna Golf Club",
+  "app_par3s": {
+   "3": 145,
+   "7": 162,
+   "12": 138,
+   "16": 170
+  },
+  "verified_par3s": {
+   "2": 161,
+   "8": 148,
+   "12": 175,
+   "14": 130
+  },
+  "tee": "white (club men's; only White/Blue/Red exist). Blue = 2:153, 8:132, 12:165, 14:123",
+  "units_in_source": "metres",
+  "sources": [
+   "https://knysnagolfclub.com/wp-content/uploads/2021/12/kgc-golf-card.jpg",
+   "https://knysnagolfclub.com/the-golf-course/",
+   "https://golftraxx.com/scorecard?course_name=Knysna+Golf+Club&zipcode=6570SA&static=true",
+   "https://www.golfpass.com/courses/18121-knysna-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG. Club scorecard (metres) has par 3s at 2, 8 (island green, 148 m), 12 and 14. App's 3, 7 and 16 are par 5/4/5. Only hole 12 is correct in the app, and its distance is 175 m not 138 m. GolfPass card is in yards; converted values agree with the club card."
+ },
+ {
+  "course": "Krugersdorp Golf Club",
+  "app_par3s": {
+   "3": 163,
+   "7": 149,
+   "12": 172,
+   "15": 155
+  },
+  "verified_par3s": {
+   "4": 159,
+   "6": 167,
+   "11": 154,
+   "14": 153
+  },
+  "tee": "white (club men's, 6477 m); yellow championship = 4:195, 6:172, 11:174, 14:176",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.krugersdorpgolfclub.co.za/course",
+   "https://www.golfpass.com/courses/17868-krugersdorp-golf-club/scorecard-and-layout",
+   "https://www.golfify.io/courses/krugersdorp-golf-club",
+   "https://satop100courses.com/course/krugersdorp/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG (app is off by one on every hole). Club website hole-by-hole lists par 3s at 4, 6 (signature, over water), 11 (~170 m) and 14; GolfPass and Golfify agree. Distances: GolfPass card is in yards (white total 7083 yd = 6477 m, matching SA Top 100's white length), converted here. Golfify (metres) gives 159/143/154/153 - only hole 6 differs (143 vs 167). Club says 6th is 185 m from the back tees."
+ },
+ {
+  "course": "Kyalami Country Club",
+  "app_par3s": {
+   "3": 178,
+   "6": 164,
+   "14": 148,
+   "17": 185
+  },
+  "verified_par3s": {
+   "3": 166,
+   "6": 167,
+   "14": 148,
+   "17": 189
+  },
+  "tee": "white (club men's); yellow championship = 3:186, 6:180, 14:154, 17:200",
+  "units_in_source": "metres",
+  "sources": [
+   "https://kyalamigolf.co.za/wp-content/uploads/2022/07/Kyalami-Golf-Score-Card2.jpg",
+   "https://kyalamigolf.co.za/score-card/",
+   "https://www.golfpass.com/courses/17861-kyalami-country-club/scorecard-and-layout",
+   "https://satop100courses.com/course/kyalami/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. Club scorecard image (metres, measured to middle of green) read via OCR: white 166/167/148/189, yellow 186/180/154/200 (SA Top 100 confirms 186 m 3rd and 200 m 17th from yellow). App's hole 3 (178) is 12 m longer than white; others within 4 m of white."
+ },
+ {
+  "course": "Leopard Creek Country Club",
+  "app_par3s": {
+   "5": 156,
+   "7": 172,
+   "12": 136,
+   "16": 183
+  },
+  "verified_par3s": {
+   "5": 143,
+   "7": 157,
+   "12": 124,
+   "16": 167
+  },
+  "tee": "white (club men's); gold championship = 5:148, 7:177, 12:142, 16:182; blue = 134/129/110/149",
+  "units_in_source": "metres",
+  "sources": [
+   "https://leopardcreek.co.za/wp-content/uploads/2024/12/Leopard-Creek-Course-Guide-2024.pdf",
+   "https://www.golfpass.com/courses/17994-leopard-creek-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct. Official 2024 course guide scorecard is in metres (Gold/White/Blue/Red). App distances are exactly the GolfPass WHITE values in YARDS (156/172/136/183 yd) mislabelled as metres; correct white metres are 143/157/124/167 (all >10 m shorter). Yardage-book pages note distances to front of green; scorecard page used here."
+ },
+ {
+  "course": "Maccauvlei Golf Club",
+  "app_par3s": {
+   "5": 197,
+   "8": 150,
+   "14": 149,
+   "16": 145
+  },
+  "verified_par3s": {
+   "5": 197,
+   "8": 150,
+   "14": 149,
+   "16": 145
+  },
+  "tee": "white (club men's); yellow = 5:219, 8:159, 14:169, 16:157",
+  "units_in_source": "metres",
+  "sources": [
+   "https://maccauvleigolfclub.co.za/course-details/",
+   "https://www.golfpass.com/travel-advisor/courses/17847-maccauvlei-golf-course"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match with the club's own course-details table (metres, white tee). GolfPass (yards) converts to the same values."
+ },
+ {
+  "course": "Magalies Park Golf Club",
+  "app_par3s": {
+   "5": 153,
+   "8": 137,
+   "9": 152,
+   "11": 158,
+   "14": 123
+  },
+  "verified_par3s": {
+   "5": 154,
+   "8": 146,
+   "9": 155,
+   "11": 168,
+   "14": 135
+  },
+  "tee": "white (club men's, back tee until new yellow tees open); yellow = 5:165, 8:155, 9:164, 11:177, 14:152",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/courses/17871-magalies-park-country-club/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/80f28e90-bc0f-11e6-b63c-0680a328ea36/magalies-park-golf-club",
+   "https://satop100courses.com/course/magalies-park/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Five par 3s (5, 8, 9, 11, 14) confirmed by GolfPass, 18Birdies and SA Top 100 (back-to-back 8 & 9, then 11; 14 has water in front). No club-hosted card found; GolfPass/18Birdies card is in yards (yellow 10th = 453 yd = 414 m, matching SA Top 100), converted here. App's 8 (137), 11 (158) and 14 (123) are 9-13 m shorter than white. Caveat: course being re-tee'd in 2025/26 (new 4th green, new yellow back tees, white to be shortened), so distances may change."
+ },
+ {
+  "course": "Metropolitan Golf Club",
+  "app_par3s": {
+   "6": 152,
+   "9": 168,
+   "15": 172,
+   "18": 148
+  },
+  "verified_par3s": {
+   "6": 166,
+   "9": 183,
+   "15": 193,
+   "18": 172
+  },
+  "tee": "white (club men's; CR 70.7 / slope 119 matches club website)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://18birdies.com/golf-courses/club/bd260580-86ac-11e4-8c28-020000005b00/metropolitan-golf-club",
+   "https://www.compleatgolfer.com/golf/course-of-the-month-metropolitan-golf-club/",
+   "https://www.metropolitangolfclub.co.za/the-course"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "9-hole Mouille Point course played as 18 with separate tees/14 greens. Par 3s are 6 and 9 and their second plays 15 and 18 (signature 18th over water). 18Birdies card (labelled yds but values are metres: 166/183/193/172, total 6304, par 71 after 11th became a par 5) matches Compleat Golfer's hole-by-hole (6th 166 m, 15th 193 m, 9th 183 m, 18th 172 m). App distances are 14-24 m short on every hole; app's 15:172 looks like the 18th's length. Golfify has an older/different card (178/168/152/148) - not used."
+ },
+ {
+  "course": "Milnerton Golf Club",
+  "app_par3s": {
+   "5": 137,
+   "7": 115,
+   "11": 147,
+   "14": 162
+  },
+  "verified_par3s": {
+   "5": 150,
+   "7": 116,
+   "11": 160,
+   "14": 155
+  },
+  "tee": "white (club men's); yellow championship = 5:180, 7:134, 11:170, 14:175",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.milnertongolf.co.za/holes-in-detail/",
+   "https://www.milnertongolf.co.za/wp-content/uploads/2016/07/MGC-Scorecard.pdf"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (club 'holes in detail' page, metres). App's 5 (137 vs 150) and 11 (147 vs 160) are 13 m short of current white; 14 is 7 m long. Older 2016 club PDF card had white 167/112/162/164, so the app values match neither card. Course is par 72 on competition days (6th a par 5), par 71 otherwise - no effect on par 3s."
+ },
+ {
+  "course": "Modderfontein Golf Club",
+  "app_par3s": {
+   "3": 178,
+   "9": 185,
+   "11": 178,
+   "14": 159
+  },
+  "verified_par3s": {
+   "3": 163,
+   "9": 169,
+   "11": 163,
+   "14": 145
+  },
+  "tee": "white (club men's); yellow championship (official tour card, metres) = 3:181, 9:183, 11:181, 14:177",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://modgolf.co.za/golf-courses-in-gauteng/",
+   "https://bigeasytour.co.za/tournament?id=224S&code=BE02",
+   "https://www.golfpass.com/travel-advisor/courses/17824-modderfontein-golf-club",
+   "https://www.golfify.io/courses/modderfontein-golf-club"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (club website hole-by-hole: par 3s at 3, 9, 11, 14). App distances are exactly the GolfPass WHITE values in YARDS (178/185/178/159) mislabelled as metres. White metres converted = 163/169/163/145. Yellow is verified in metres by the Sunshine/Big Easy Tour card (181/183/181/177, 6737 m). Golfify's 'Club' card (175/171/167/174, apparently yards) differs on 9 and 14, so white distances are medium confidence; no club-hosted metric card found."
+ },
+ {
+  "course": "Mossel Bay Golf Club",
+  "app_par3s": {
+   "4": 112,
+   "8": 122,
+   "12": 156,
+   "15": 108
+  },
+  "verified_par3s": {
+   "4": 141,
+   "8": 152,
+   "12": 192,
+   "15": 134
+  },
+  "tee": "yellow / championship (5880 m); white club tee = 4:123, 8:133, 12:171, 15:118",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/mossel-bay-golf-club",
+   "https://18birdies.com/golf-courses/club/bd2df4c0-86ac-11e4-8c28-020000005b00/mossel-bay-golf-club",
+   "https://www.golfpass.com/travel-advisor/courses/18090-mossel-bay-golf-club",
+   "https://mosselbaygolfclub.co.za/the-golf-course/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers 4, 8, 12, 15 confirmed by Golfify, 18Birdies and GolfPass (par 4-5-4-3-5-4-4-3-4 / 4-5-3-4-4-3-4-5-4). Club website has no scorecard online (only 'Length 5940m'). Golfify/18Birdies metres (5880 total) used; GolfPass yards convert to 145/154/189/148 (yellow) so sources agree within ~15 m. App distances are 20-40 m SHORT on every hole (closest to white club tee minus ~12 m); recommend updating to 141/152/192/134 (yellow) or 123/133/171/118 (white)."
+ },
+ {
+  "course": "Mount Edgecombe CC – Course One",
+  "app_par3s": {
+   "4": 165,
+   "7": 153,
+   "13": 171,
+   "16": 145
+  },
+  "verified_par3s": {
+   "3": 155,
+   "5": 176,
+   "9": 190,
+   "11": 193,
+   "15": 165
+  },
+  "tee": "yellow (6008 m); white = 3:140, 5:163, 9:168, 11:170, 15:151",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.mountedgecombe.com/wp-content/uploads/2025/09/Mount-Edgecombe-Score-Card-The-Woods-Course.pdf",
+   "https://www.mountedgecombe.com/golf/courses/",
+   "https://www.thesocialgolfer.com/golf-courses/south-africa/mount-edgecombe-country-club/scorecard/mount-edgecombe-woods-course-white-tee-scorecard"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "Course One = The Woods (club site: 'The Woods on Estate 1', Lakes on Estate 2). Club's own 2025 scorecard PDF (metres): par 70 with FIVE par 3s at 3, 5, 9, 11, 15. App holes 4, 7, 13, 16 are ALL par 4s on the card - app data is wrong. Social Golfer white-tee card agrees exactly."
+ },
+ {
+  "course": "Mount Edgecombe CC – Course Two",
+  "app_par3s": {
+   "3": 160,
+   "8": 148,
+   "12": 175,
+   "15": 153
+  },
+  "verified_par3s": {
+   "3": 170,
+   "7": 170,
+   "12": 149,
+   "17": 177
+  },
+  "tee": "yellow (6255 m); white = 3:157, 7:160, 12:140, 17:167",
+  "units_in_source": "metres",
+  "sources": [
+   "https://mountedgecombe.com/wp-content/uploads/2026/05/Mount-Edgecombe-Country-Club-The-Lakes-Scorecard.pdf",
+   "https://www.mountedgecombe.com/golf/courses/",
+   "https://www.golfpass.com/travel-advisor/courses/17937-mt-edgecombe-country-club-course-2"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "Course Two = The Lakes. Club's 2026 scorecard PDF (metres): par 72, par 3s at 3, 7, 12, 17. App holes 8 and 15 are par 5s on the card; correct par 3s are 7 and 17. App distances also mismatch (e.g. 12 is 149 m not 175; 3 is 170 not 160)."
+ },
+ {
+  "course": "Nelspruit Golf Club",
+  "app_par3s": {
+   "3": 168,
+   "7": 144,
+   "12": 159,
+   "16": 176
+  },
+  "verified_par3s": {
+   "3": 210,
+   "5": 140,
+   "13": 170,
+   "17": 120
+  },
+  "tee": "White Stinkwood (championship, CR 71.3/130); Blue Wood club tee = 3:160, 5:130, 13:150, 17:120; Red = 150/110/110/120",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.mbombelagolfclub.co.za/course-layout",
+   "https://www.golfpass.com/travel-advisor/courses/17981-mbombela-golf-club",
+   "https://golfrsa.com/mbombela-golf-club/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "Nelspruit GC is now Mbombela Golf Club (par 71). Club's own hole-by-hole page (metres) has par 3s at 3, 5, 13, 17; GolfPass and GolfRSA agree. App holes 7, 12, 16 are par 4s - wrong. Club tee probably Blue Wood (160/130/150/120) for a typical member; White values given as primary."
+ },
+ {
+  "course": "Olivewood Private Estate & Golf Club",
+  "app_par3s": {
+   "7": 150,
+   "11": 130,
+   "15": 128,
+   "17": 140
+  },
+  "verified_par3s": {
+   "7": 138,
+   "11": 142,
+   "15": 128,
+   "17": 141
+  },
+  "tee": "white / club tee (5682 m, club-rated 72.5/143); yellow championship = 7:185, 11:142, 15:142, 17:158",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.ecaddy.co.za/gcl/courses/olivewood/",
+   "https://www.golfpass.com/courses/36031-olivewood-golf-estate/scorecard-and-layout",
+   "https://www.top100golfcourses.com/golf-course/olivewood"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers 7, 11, 15, 17 confirmed (eCaddy GCL hole-by-hole guide in metres; GolfPass yards convert to exactly the same white-tee values 138/142/128/141). App hole 7 is 12 m long (150 vs 138) and hole 11 is 12 m short (130 vs 142); 15 and 17 fine."
+ },
+ {
+  "course": "Oubaai Golf Club",
+  "app_par3s": {
+   "3": 155,
+   "6": 160,
+   "11": 155,
+   "14": 180,
+   "17": 125
+  },
+  "verified_par3s": {
+   "3": 170,
+   "6": 189,
+   "11": 185,
+   "14": 207,
+   "17": 141
+  },
+  "tee": "yellow (6446 m, CR 75.0/140); white = 3:153, 6:181, 11:175, 14:186, 17:133",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.oubaaigolfclub.com/_files/ugd/83f667_29909b985bfd4b3e9dcb4aa5cde9d7e8.pdf",
+   "https://www.oubaaigolfclub.com/course-details",
+   "https://www.golfpass.com/travel-advisor/courses/18153-oubaai-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club's scorecard PDF (metres, measured to front of green): five par 3s at 3, 6, 11, 14, 17 - matches app. GolfPass yards convert to the same values. App distances are short on 6 (160 vs 189/181), 11 (155 vs 185/175), 14 (180 vs 207/186) and 17 (125 vs 141/133); hole 3 (155) matches white."
+ },
+ {
+  "course": "Paarl Golf Club (Boschenmeer)",
+  "app_par3s": {
+   "2": 159,
+   "5": 172,
+   "12": 148,
+   "15": 165
+  },
+  "verified_par3s": {
+   "2": 145,
+   "5": 169,
+   "13": 190,
+   "16": 163
+  },
+  "tee": "yellow; white = 2:145, 5:157, 13:170, 16:155",
+  "units_in_source": "metres",
+  "sources": [
+   "https://paarlgolfclub.co.za/wp-content/uploads/2022/12/PGC-Scorecard-2022.pdf",
+   "https://paarlgolfclub.co.za/the-course/",
+   "http://www.ecaddy.co.za/gcl/courses/paarl",
+   "https://www.golfpass.com/travel-advisor/courses/32292-paarl-golf-club-boschenmeer-nine-course"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": false,
+  "notes": "27-hole club: River nine (1-9, par 3s at 4 & 7: 190/163 m), Paarl nine (10-18, par 3s at 14 & 17: 118/155 m), Boschenmeer nine (19-27, par 3s at 20 & 23: 145/169 m). Club card names the 'Boschenmeer Course' = Boschenmeer nine + River nine, giving par 3s at 2, 5, 13, 16 (reported). No combination gives par 3s at 12 and 15 - app's 12/15 are wrong for every routing. App's 159/172 are GolfPass WHITE-tee YARDS for holes 2/5 (=145/157 m), so app values are in yards. If the app instead means the main 'Old Course' (River+Paarl, holes 1-18), par 3s are 4:190, 7:163, 14:118, 17:155 (yellow). Caveat: scorecard PDF dated 2022."
+ },
+ {
+  "course": "Parkview Golf Club",
+  "app_par3s": {
+   "3": 156,
+   "5": 175,
+   "15": 180
+  },
+  "verified_par3s": {
+   "3": 158,
+   "5": 175,
+   "15": 185
+  },
+  "tee": "yellow (6545 m); white = 3:147, 5:156, 15:165",
+  "units_in_source": "metres",
+  "sources": [
+   "https://parkviewgolf.co.za/downloads/assets/Parkview-Golf-Club-ScoreCard.pdf",
+   "https://parkviewgolf.co.za/course-guide/",
+   "https://www.golfpass.com/courses/17816-parkview-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club scorecard PDF (metres, to centre of green): only three par 3s, at 3, 5, 15 - matches app. All app distances within 10 m of yellow tee. (Club course-guide text says hole 3 'plays 170 m from yellow' but the card says 158.)"
+ },
+ {
+  "course": "Parys Golf & Country Estate",
+  "app_par3s": {
+   "4": 165,
+   "8": 173,
+   "12": 200,
+   "16": 167
+  },
+  "verified_par3s": {
+   "5": 194,
+   "8": 191,
+   "12": 215,
+   "16": 153
+  },
+  "tee": "yellow (6906 m); white (GolfPass yards converted) = 5:173, 8:176, 12:203, 16:150",
+  "units_in_source": "metres",
+  "sources": [
+   "https://18birdies.com/golf-courses/club/bccb3b50-86ac-11e4-8c28-020000005b00/parys-golf-and-country-estate",
+   "https://www.golfpass.com/travel-advisor/courses/17761-parys-golf-club",
+   "https://www.provisualizer.com/courses/parys.php",
+   "https://www.golfingrecord.com/golf-scorecard/5e3326e8-d9d1-44d3-95b2-d67ce2d881ec",
+   "https://parysgolfandcountryestate.co.za/golf/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": false,
+  "notes": "App hole 4 is WRONG - hole 4 is a par 5 (stroke 15/17); the par 3 is hole 5. Par 3s at 5, 8, 12, 16 confirmed by four independent sources (18Birdies, GolfPass, ProVisualizer, GolfingRecord). Club website only has hole images (not scrapeable), so no club card read directly. 18Birdies values are labelled yds but are the club metres (they equal GolfPass yards x 0.9144 exactly). App's 16:167 is ~15 m long vs yellow 153 / white 150."
+ },
+ {
+  "course": "Pearl Valley Golf Club",
+  "app_par3s": {
+   "3": 145,
+   "6": 152,
+   "13": 140,
+   "17": 183
+  },
+  "verified_par3s": {
+   "3": 160,
+   "6": 161,
+   "13": 160,
+   "17": 193
+  },
+  "tee": "yellow (6162 m, CR 73.5/144); blue 'club tee' (5878 m) = 3:145, 6:152, 13:140, 17:183 - identical to app; championship black = 180/185/185/205",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.pearlvalley.co.za/course-layout/",
+   "https://www.golfpass.com/courses/18143-pearl-valley-golf-country-estate/scorecard-and-layout",
+   "https://www.top100golfcourses.com/golf-course/pearl-valley"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club's hole-by-hole page (metres) confirms par 3s at 3, 6, 13, 17. App distances match the club's blue 'club tee' column exactly, so no change needed if the app standardises on the member/club tee; yellow values reported for consistency with the other courses. GolfPass yards convert to the same figures."
+ },
+ {
+  "course": "Pecanwood Golf & Country Club",
+  "app_par3s": {
+   "3": 150,
+   "8": 191,
+   "13": 171,
+   "17": 178
+  },
+  "verified_par3s": {
+   "3": 137,
+   "8": 175,
+   "13": 156,
+   "17": 163
+  },
+  "tee": "white (men's club tee; GolfPass white row converted from yards)",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/courses/18018-pecanwood-golf-and-country-club/scorecard-and-layout",
+   "https://www.hole19golf.com/courses/pecanwood-golf-country-club",
+   "https://18birdies.com/golf-courses/club/bd2a9960-86ac-11e4-8c28-020000005b00/pecanwood-golf-and-country-club",
+   "https://www.where2golf.com/south-africa/pecanwood-golf-country-club/",
+   "https://pecanwood.co.za/golf-club/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 3, 8, 13, 17 (confirmed by GolfPass, Hole19 and 18Birdies; club site names the 13th as the signature par 3). The app's numbers (150/191/171/178) are exactly the GolfPass WHITE row in YARDS, i.e. yards stored as metres; converted: 137/175/156/163. Blue (forward) tee in metres from Hole19: 3:129, 8:155, 13:149, 17:155. Green/championship tee (yards->m): 162/215/187/207. Club website has no scorecard; no direct metres card for the white tee found, so medium confidence."
+ },
+ {
+  "course": "Pezula Championship Course",
+  "app_par3s": {
+   "3": 167,
+   "5": 191,
+   "11": 156,
+   "15": 152
+  },
+  "verified_par3s": {
+   "3": 153,
+   "5": 175,
+   "11": 143,
+   "15": 139
+  },
+  "tee": "yellow (club tee; GolfPass yellow row converted from yards)",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.pezulagolfestate.com/golf-course/",
+   "https://www.golfpass.com/courses/18149-pezula-championship-course/scorecard-and-layout",
+   "https://www.hole19golf.com/courses/pezula-championship-course",
+   "https://satop100courses.com/course/pezula/",
+   "https://18birdies.com/golf-courses/club/bd31ec60-86ac-11e4-8c28-020000005b00/pezula-championship-course"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Club website confirms par 3s at 3, 5, 11, 15 (hole numbers match). The app's values (167/191/156/152) are exactly the GolfPass YELLOW row in YARDS (yards stored as metres). Yellow converted: 153/175/143/139. Black/championship tee in METRES per Hole19 (total 6308 m, matches SA Top 100): 3:167, 5:192, 11:168, 15:168. White tee (yards->m): 131/171/129/131. GolfPass yellow total (5935 m) is ~80 m longer than the current SA Top 100 yellow length (5851 m), so tees have moved slightly; club site says hole 15 plays 105-143 m. No club scorecard in metres found online."
+ },
+ {
+  "course": "Pinnacle Point Golf Club",
+  "app_par3s": {
+   "7": 121,
+   "9": 165,
+   "13": 136,
+   "17": 185
+  },
+  "verified_par3s": {
+   "7": 111,
+   "9": 156,
+   "13": 125,
+   "17": 188
+  },
+  "tee": "club course-overview page (tee not stated; 7 and 13 match the white tee)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://pinnaclepointestate.co.za/course-overview-2/",
+   "https://www.golfpass.com/travel-advisor/courses/18074-pinnacle-point-golf-club",
+   "https://homeofgolf.africa/pinnacle-point/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 7, 9, 13, 17 (club page + GolfPass). The app's values (121/165/136/185) are the GolfPass WHITE row in YARDS. Club page metres: 7:111, 9:156, 13:125, 17:188. GolfPass white converted to metres: 7:111, 9:151, 13:124, 17:169; yellow converted: 129/170/128/207 (five tees: black 6460 m, yellow 6094 m, white 5639 m). Club page agrees with white on 7 and 13 but differs on 9 and 17, so distances for 9/17 are uncertain by ~10-20 m."
+ },
+ {
+  "course": "Plettenberg Bay Country Club",
+  "app_par3s": {
+   "6": 163,
+   "8": 191,
+   "11": 128,
+   "13": 174
+  },
+  "verified_par3s": {
+   "6": 156,
+   "8": 180,
+   "11": 117,
+   "13": 160
+  },
+  "tee": "white (men's club tee; yellow is the back tee)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://plettcountryclub.co.za/golf/",
+   "https://www.golfpass.com/travel-advisor/courses/18075-plettenberg-bay-country-club",
+   "https://www.hole19golf.com/courses/plettenberg-bay-country-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club website scorecard (metres): par 3s 6, 8, 11, 13. White 156/180/117/160; Yellow (back) 166/182/122/175; Blue 144/168/107/156. The app's values (163/191/128/174) are the GolfPass WHITE row in YARDS. Distance differences vs club white: 8 (191 vs 180) and 13 (174 vs 160) exceed 10 m."
+ },
+ {
+  "course": "Port Elizabeth Golf Club",
+  "app_par3s": {
+   "2": 119,
+   "5": 172,
+   "14": 130,
+   "17": 141
+  },
+  "verified_par3s": {
+   "2": 130,
+   "5": 172,
+   "14": 140,
+   "17": 148
+  },
+  "tee": "white (men's; only men's tee, 6029 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://pegc.co.za/course/",
+   "https://www.golfpass.com/travel-advisor/courses/17719-port-elizabeth-golf-club",
+   "https://www.hole19golf.com/courses/port-elizabeth-golf-club",
+   "https://satop100courses.com/course/port-elizabeth-golf-club/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club hole-by-hole page (metres): 2: white 130/blue 127/red 123; 5: 172/166/112; 14: 140/140/140; 17: 148/129/101. GolfPass white yards convert to the same values. App differs by ~10 m on 2 (119 vs 130), 14 (130 vs 140) and 7 m on 17."
+ },
+ {
+  "course": "Pretoria Country Club",
+  "app_par3s": {
+   "5": 162,
+   "8": 116,
+   "14": 136,
+   "16": 173
+  },
+  "verified_par3s": {
+   "5": 178,
+   "8": 128,
+   "14": 141,
+   "16": 202
+  },
+  "tee": "white (men's club/back tee, 6398 m; blue is the forward tee)",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/17822-pretoria-country-club/scorecard-and-layout",
+   "https://satop100courses.com/course/pretoria-country-club/",
+   "https://www.hole19golf.com/courses/pretoria-country-club",
+   "https://ptacc.co.za/golf-course/overview/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 5, 8, 14, 16 (GolfPass, Hole19). The app's values (162/116/136/173) are the GolfPass BLUE (forward) row in YARDS. White tee converted from GolfPass yards: 178/128/141/202 - corroborated by SA Top 100 text (8th 128 m, 14th 141 m, 16th 202 m from white). Blue tee in metres (Hole19): 5:148, 8:106, 14:124, 16:158. Club site scorecard is an image popup that could not be read."
+ },
+ {
+  "course": "Prince's Grant Coastal Golf Estate",
+  "app_par3s": {
+   "3": 166,
+   "8": 161,
+   "11": 175,
+   "17": 198
+  },
+  "verified_par3s": {
+   "3": 152,
+   "8": 147,
+   "11": 160,
+   "17": 181
+  },
+  "tee": "white (standard/general play; yellow is championship)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.princesgrant.co.za/wp-content/uploads/2026/07/Prince_s_Grant_Flipbook.pdf",
+   "https://www.princesgrant.co.za/golf/",
+   "https://www.golfpass.com/travel-advisor/courses/17954-princes-grant-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club flipbook scorecard (metres): par 3s 3, 8, 11, 17. White 152/147/160/181; Yellow 177/174/171/189; Blue 130/133/135/152. The app's values (166/161/175/198) are the GolfPass WHITE row in YARDS (yards stored as metres). Course was rebuilt by Matkovich in Nov 2020; flipbook is dated 2026."
+ },
+ {
+  "course": "Randpark Golf Club – Bushwillow",
+  "app_par3s": {
+   "6": 156,
+   "8": 162,
+   "13": 182,
+   "15": 154
+  },
+  "verified_par3s": {
+   "6": 156,
+   "8": 162,
+   "13": 182,
+   "15": 154
+  },
+  "tee": "white (men's club tee, 6330 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://randpark.co.za/bushwillow-golf-course/",
+   "https://www.golfpass.com/travel-advisor/courses/17856-randpark-club-bushwillow-course/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match. Club website hole-by-hole (men's club tees, metres): 6:156, 8:162, 13:182, 15:154. GolfPass white yards convert to the same. Yellow (championship) converted: 162/174/194/164."
+ },
+ {
+  "course": "Randpark Golf Club – Firethorn",
+  "app_par3s": {
+   "5": 167,
+   "8": 191,
+   "15": 173,
+   "17": 205
+  },
+  "verified_par3s": {
+   "5": 158,
+   "8": 170,
+   "15": 164,
+   "17": 192
+  },
+  "tee": "white (men's club tee, 6421 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://randpark.co.za/firethorn-golf-course/",
+   "https://randpark.co.za/wp-content/uploads/2024/03/2024-Firethorn-Scorecard-March-2024.pdf",
+   "https://www.golfpass.com/travel-advisor/courses/17852-randpark-club-firethorn-course",
+   "https://www.hole19golf.com/courses/randpark-golf-club-firethorn"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers correct (5, 8, 15, 17). Club website (men's club tees, metres): 5:158, 8:170, 15:164, 17:192; club PDF card confirms white 158/170 and yellow 166/190 on the front nine. The app's values (167/191/173/205) correspond to the YELLOW championship tee in metres (GolfPass yellow yards -> 166/190/172/204). If the app should use the club (white) tee, distances differ by 9-13 m."
+ },
+ {
+  "course": "Reading Country Club",
+  "app_par3s": {
+   "5": 145,
+   "9": 163,
+   "14": 178,
+   "17": 152
+  },
+  "verified_par3s": {
+   "5": 153,
+   "7": 157,
+   "11": 177,
+   "15": 135
+  },
+  "tee": "white (club tee, 6221 m; yellow is championship)",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/17880-reading-country-club/scorecard-and-layout",
+   "https://satop100courses.com/course/reading-country-club/",
+   "https://www.hole19golf.com/courses/reading-country-club-alberton-za"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG: the par 3s are 5, 7, 11 and 15 (par 71 course: 11 par 4s, 3 par 5s). App lists 9, 14, 17, which are all par 4s. Confirmed by GolfPass par row, Hole19 par row and SA Top 100 reviews (5th and 7th par 3s, 11th 185 m par 3). White tee converted from GolfPass yards: 5:153, 7:157, 11:177, 15:135; yellow: 175/164/185/167 (GolfPass totals match SA Top 100 metres exactly). SA Top 100 quotes the 5th at 134 m, which does not match either row, so hole 5 distance is uncertain. Club site (readingcc.co.za) has no scorecard; readingcountryclub.com is a different club in Pennsylvania."
+ },
+ {
+  "course": "Royal Cape Golf Club",
+  "app_par3s": {
+   "4": 127,
+   "8": 163,
+   "13": 165,
+   "15": 148
+  },
+  "verified_par3s": {
+   "4": 127,
+   "8": 163,
+   "13": 165,
+   "15": 148
+  },
+  "tee": "yellow (club's back/men's championship tee, 6065 m); white club tee is 4:114 8:148 13:152 15:132",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.royalcapegolf.co.za/course",
+   "https://www.golfpass.com/courses/18156-royal-cape-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match with the club's own hole-by-hole guide (yellow column, metres). GolfPass yellow in yards (139/178/180/162) converts to the same figures. Par 3s are 4, 8, 13, 15."
+ },
+ {
+  "course": "Royal Johannesburg & Kensington – East",
+  "app_par3s": {
+   "2": 211,
+   "5": 139,
+   "12": 168,
+   "16": 152
+  },
+  "verified_par3s": {
+   "2": 211,
+   "5": 139,
+   "12": 168,
+   "16": 152
+  },
+  "tee": "Club tee (yellow, 6465 m); Championship tee is 2:231 5:162 12:181 16:190",
+  "units_in_source": "metres",
+  "sources": [
+   "https://royaljk.co.za/wp-content/uploads/2024/02/East-Course-Score-card.pdf",
+   "https://www.golfpass.com/travel-advisor/courses/17848-royal-johannesburg-kensington-golf-club-east-course"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match with the club's 2024 East scorecard PDF (Club tee row, metres). GolfPass yellow yards (231/152/184/166) convert to the same. Par 3s are 2, 5, 12, 16; East course plays par 37/35."
+ },
+ {
+  "course": "Royal Johannesburg & Kensington – West",
+  "app_par3s": {
+   "4": 178,
+   "7": 144,
+   "14": 105,
+   "17": 185
+  },
+  "verified_par3s": {
+   "4": 178,
+   "7": 144,
+   "14": 105,
+   "17": 185
+  },
+  "tee": "yellow (club men's, 6255 m); white is 4:170 7:127 14:95 17:161",
+  "units_in_source": "metres",
+  "sources": [
+   "https://royaljk.co.za/wp-content/uploads/2024/02/West-Course-New-Score-Card.pdf",
+   "https://www.golfpass.com/courses/17851-royal-johannesburg-kensington-golf-club-west-course/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match with the club's 2024 West scorecard PDF (yellow row, metres). GolfPass yellow yards (195/157/115/202) convert to the same. Par 3s are 4, 7, 14, 17."
+ },
+ {
+  "course": "Royal Port Alfred Golf Club",
+  "app_par3s": {
+   "6": 126,
+   "8": 144,
+   "11": 168,
+   "13": 172
+  },
+  "verified_par3s": {
+   "6": 126,
+   "8": 144,
+   "11": 168,
+   "13": 172
+  },
+  "tee": "Men's tee (only men's tee on the card, 5739 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://18birdies.com/golf-courses/club/bd410790-86ac-11e4-8c28-020000005b00/royal-port-alfred-golf-club",
+   "https://www.golfpass.com/courses/17718-royal-port-alfred-golf-club/scorecard-and-layout",
+   "https://rpagc.co.za/golf-course/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "18Birdies 'Men 5739 yds' is actually metres (club site states course is 5739 m) and matches the app exactly. GolfPass white in yards (138/152/184/188) converts to 126/139/168/172 – hole 8 differs by 5 m between sources. Club website card is an image only (not machine-readable). Par 3s are 6, 8, 11, 13."
+ },
+ {
+  "course": "Ruimsig Country Club",
+  "app_par3s": {
+   "4": 155,
+   "7": 168,
+   "13": 145,
+   "16": 178
+  },
+  "verified_par3s": {
+   "5": 151,
+   "7": 195,
+   "11": 169,
+   "17": 198
+  },
+  "tee": "white / Club tee (6486 m on 2021 PDF card); yellow/championship is 5:165 7:211 11:189 17:220",
+  "units_in_source": "metres",
+  "sources": [
+   "https://ruimsigcc.co.za/wp-content/uploads/2021/09/ruimsig-scorecard.pdf",
+   "https://ruimsigcc.co.za/wp-content/uploads/2021/07/scorecard.jpg.webp",
+   "https://www.golfpass.com/courses/17828-ruimsig-country-club/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/0d844330-04df-11e8-a757-0680a328ea36/ruimsig-country-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG: card has par 3s at 5, 7, 11, 17 (4 is a par 5, 13 and 16 are par 4s) – confirmed by club PDF, club scorecard image, GolfPass and 18Birdies. Distances also differ: club tee is 151/195/169/198 m (club PDF front nine: 5:151, 7:195; club image card back nine: 11:169, 17:198; older image card has 5:157). GolfPass white yards 172/213/185/217 convert to 157/195/169/198."
+ },
+ {
+  "course": "San Lameer Country Club",
+  "app_par3s": {
+   "4": 147,
+   "7": 165,
+   "12": 158,
+   "16": 142
+  },
+  "verified_par3s": {
+   "4": 140,
+   "9": 182,
+   "14": 148,
+   "16": 172
+  },
+  "tee": "Club / Buffalo white tee (5834 m); Championship / Lion red tee is 4:150 9:199 14:162 16:188",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.sanlameer.co.za/wp-content/uploads/2022/08/San-Lameer-Scorecards-2022-PRINT-READY.pdf",
+   "https://www.golfpass.com/courses/17938-san-lameer-country-club/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/bd0c14e0-86ac-11e4-8c28-020000005b00/san-lameer-estate"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG: card has par 3s at 4, 9, 14, 16 (7 and 12 are par 4s). Club 2022 scorecard PDF (metres) and GolfPass (white yards 153/199/162/188 = 140/182/148/172 m) agree. App's 16:142 is ~30 m short of both club (172) and championship (188) tees."
+ },
+ {
+  "course": "Schoeman Park Golf Club",
+  "app_par3s": {
+   "6": 152,
+   "8": 126,
+   "14": 188,
+   "17": 204
+  },
+  "verified_par3s": {
+   "6": 152,
+   "8": 127,
+   "14": 189,
+   "17": 208
+  },
+  "tee": "white / Champion tee (6363 m on Golfify); 'Men' tee on Golfify is 6:147 8:120 14:183 17:202",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/schoeman-park-golf-club",
+   "https://18birdies.com/golf-courses/club/bd33e830-86ac-11e4-8c28-020000005b00/schoemanpark-golf-club"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "No scorecard on the club site (schoemies.co.za). Golfify (metres, Champion tee) and 18Birdies (white tee in yards 166/138/206/227 = 152/126/188/208 m) agree. App matches within 4 m. Par 3s are 6, 8, 14, 17."
+ },
+ {
+  "course": "Serengeti Golf & Wildlife Estate",
+  "app_par3s": {
+   "5": 122,
+   "9": 133,
+   "12": 161,
+   "15": 122
+  },
+  "verified_par3s": {
+   "5": 150,
+   "9": 176,
+   "12": 175,
+   "15": 135
+  },
+  "tee": "white (club men's, 6246 m); yellow championship is 5:187 9:210 12:206 15:167; blue is 5:122 9:133 12:161 15:122",
+  "units_in_source": "metres",
+  "sources": [
+   "https://serengeti-estates.co.za/signature-course-layout/",
+   "https://18birdies.com/golf-courses/club/bcc520d0-86ac-11e4-8c28-020000005b00/serengeti-golf-and-wildlife-estate"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Masai Mara (signature 18) course. Hole numbers correct. App distances are exactly the BLUE (third/forward men's) tee on the club's hole-by-hole page; the club men's white tee is 150/176/175/135 m (all differ from app by 14-43 m). 18Birdies yellow yards (205/230/225/183) convert to the club's yellow metres, confirming tee mapping."
+ },
+ {
+  "course": "Simola Golf Estate",
+  "app_par3s": {
+   "6": 200,
+   "9": 171,
+   "11": 191,
+   "14": 166,
+   "17": 160
+  },
+  "verified_par3s": {
+   "6": 183,
+   "9": 156,
+   "11": 175,
+   "14": 152,
+   "17": 146
+  },
+  "tee": "white (Club tees per card, 5943 m); yellow back tees are 6:203 9:197 11:201 14:182 17:157",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.simola.co.za/wp-content/uploads/2019/09/Scorecard_combined.pdf",
+   "https://www.golfpass.com/courses/18093-simola-golf-and-country-estate/scorecard-and-layout",
+   "https://18birdies.com/golf-courses/club/bd39dba0-86ac-11e4-8c28-020000005b00/simola-golf-and-country-estate"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Five par 3s at 6, 9, 11, 14, 17 – hole numbers correct. App distances (200/171/191/166/160) are exactly the white-tee YARDS from GolfPass stored as metres; true white-tee metres on the club card are 183/156/175/152/146 (all 14-17 m shorter). 18Birdies back-nine figures are out of date."
+ },
+ {
+  "course": "Sishen Golf Club",
+  "app_par3s": {
+   "4": 192,
+   "8": 150,
+   "13": 200,
+   "17": 159
+  },
+  "verified_par3s": {
+   "4": 198,
+   "8": 150,
+   "13": 210,
+   "17": 165
+  },
+  "tee": "Men's / white tee (6401 m; only men's tee listed)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/sishen-golf-club",
+   "https://www.golfpass.com/travel-advisor/courses/18048-sishen-golf-club"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "No scorecard on the club/Kalahari CC site. Golfify (metres) and GolfPass (white yards 216/164/229/180 = 198/150/209/165 m) agree. App is 6-10 m short on holes 4, 13 and 17 (hole 13: 200 vs 210). Par 3s are 4, 8, 13, 17."
+ },
+ {
+  "course": "Southbroom Golf Club",
+  "app_par3s": {
+   "4": 113,
+   "8": 159,
+   "11": 150,
+   "14": 186
+  },
+  "verified_par3s": {
+   "4": 113,
+   "8": 159,
+   "11": 150,
+   "14": 186
+  },
+  "tee": "white (club men's, 5571 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.southbroomgolfclub.co.za/course-layout-and-scorecard/",
+   "https://www.golfpass.com/travel-advisor/courses/17948-southbroom-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club's own scorecard (metres) matches the app exactly. GolfPass yards (124/174/164/203) convert to 113/159/150/186 m, confirming. Ladies red tee: 109/125/115/148."
+ },
+ {
+  "course": "St Francis Bay Golf Club",
+  "app_par3s": {
+   "3": 185,
+   "8": 130,
+   "10": 155,
+   "14": 160,
+   "17": 138
+  },
+  "verified_par3s": {
+   "3": 170,
+   "8": 130,
+   "10": 156,
+   "14": 163,
+   "17": 136
+  },
+  "tee": "white (club men's; first distance column on club hole guide, = 18Birdies White tee)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://stfrancisgolf.co.za/course-per-hole/",
+   "https://18birdies.com/golf-courses/club/0ec16c40-068e-11e8-a757-0680a328ea36/st-francis-bay-golf-club",
+   "https://www.golfpass.com/travel-advisor/courses/17723-st-francis-bay-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Five par 3s (3, 8, 10, 14, 17), par 71 - hole numbers correct. Hole 3 in app (185) is the YARDS figure (18Birdies white 185 yd = 169 m); club guide says 170 m. Other holes within 5 m. Club guide columns (white/blue/red): 3: 170/150/140, 8: 130/123/92, 10: 156/150/140, 14: 163/156/152, 17: 136/128/118."
+ },
+ {
+  "course": "St Francis Links",
+  "app_par3s": {
+   "4": 137,
+   "7": 164,
+   "14": 143,
+   "17": 179
+  },
+  "verified_par3s": {
+   "4": 134,
+   "7": 138,
+   "14": 135,
+   "17": 169
+  },
+  "tee": "white (club men's, 5945-5979 m, CR 73.0/141); gold championship tee: 4:153, 7:166, 14:160, 17:190",
+  "units_in_source": "metres",
+  "sources": [
+   "https://stfrancislinks.com/hole-1/",
+   "https://www.golfpass.com/courses/17709-st-francis-links/scorecard-and-layout",
+   "https://satop100courses.com/course/st-francis-links/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 4, 7, 14, 17 - hole numbers correct. Club's own eCaddy hole guide (metres, 4 tees gold/white/blue/red): 4: 153/134/103/97, 7: 166/138/138/105, 14: 160/135/124/105, 17: 190/169/131/123. App values are a mix of tees (7 and 17 close to gold, 4 and 14 near white). White is the club tee per SA Top 100. 4th has two greens (upper/lower); 17th plays 125-190 m depending on tee."
+ },
+ {
+  "course": "Steenberg Golf Club",
+  "app_par3s": {
+   "2": 167,
+   "7": 148,
+   "14": 184,
+   "17": 162
+  },
+  "verified_par3s": {
+   "2": 157,
+   "7": 140,
+   "14": 166,
+   "17": 139
+  },
+  "tee": "white (club website hole lengths, 5844 m); yellow tee (6166 m): 2:167, 7:148, 14:184, 17:162",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.steenberggolfclub.co.za/golf-course",
+   "https://www.golfpass.com/courses/18139-steenberg-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 2, 7, 14, 17 - hole numbers correct (3, 6, 11 are par 4s, so switching them off is fine). App distances equal the YELLOW tee exactly (GolfPass yellow 183/162/201/177 yd = 167/148/184/162 m). Club website lists white-tee lengths 157/140/166/139 m. Not an error, a tee choice; keep yellow if that is the app's standard. 14th green is 76 m long, hole plays 100-220 m."
+ },
+ {
+  "course": "Stellenbosch Golf Club",
+  "app_par3s": {
+   "7": 139,
+   "9": 148,
+   "13": 151,
+   "15": 185
+  },
+  "verified_par3s": {
+   "7": 139,
+   "9": 148,
+   "13": 151,
+   "15": 185
+  },
+  "tee": "yellow (club men's, 6388 m, CR 73.4/129); white tee: 7:128, 9:134, 13:143, 15:172",
+  "units_in_source": "metres",
+  "sources": [
+   "https://stellenboschgolfclub.com/wp-content/uploads/2025/02/SGC-SCORE-CARD-2024-Print.pdf",
+   "https://www.golfpass.com/courses/18096-stellenbosch-golf-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Club's 2024 printed scorecard PDF (metres) matches app exactly on the yellow tee. Par 3s are 7, 9, 13, 15. Holes 4 (par 4) and 12 (par 5) are not par 3s, so switching them off is fine."
+ },
+ {
+  "course": "Sun City – Gary Player CC",
+  "app_par3s": {
+   "4": 199,
+   "7": 210,
+   "12": 205,
+   "16": 178
+  },
+  "verified_par3s": {
+   "4": 182,
+   "7": 192,
+   "12": 187,
+   "16": 163
+  },
+  "tee": "club tee (Dark Green, 6550 m); championship tee (Burgundy, 7105 m): 4:195, 7:206, 12:200, 16:193",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/courses/18021-gary-player-country-club/scorecard-and-layout",
+   "https://www.golfball.co.za/gary-player-country-club.html",
+   "https://satop100courses.com/course/gary-player-cc/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 4, 7, 12, 16 - hole numbers correct. App values 199/210/205/178 are the club (Dark Green) tee in YARDS from GolfPass, stored as metres; converted they are 182/192/187/163 m (15-18 m shorter). golfball.co.za metres 195/206/200/193 correspond to the championship tee (Burgundy 213/225/219/211 yd). SA Top 100 confirms shortest par 3 is 16th at 193 m from the back."
+ },
+ {
+  "course": "Sun City – The Lost City",
+  "app_par3s": {
+   "5": 168,
+   "8": 155,
+   "12": 182,
+   "16": 195
+  },
+  "verified_par3s": {
+   "3": 161,
+   "8": 159,
+   "13": 157,
+   "15": 142
+  },
+  "tee": "white (club men's rating tee per SA Top 100, ~6075-6192 m); yellow/dark tee (6531 m): 3:174, 8:167, 13:179, 15:159",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/18019-lost-city-golf-club",
+   "https://18birdies.com/golf-courses/club/bd28ebb0-86ac-11e4-8c28-020000005b00/lost-city-golf-course",
+   "https://www.golfball.co.za/lost-city-country-club.html",
+   "https://satop100courses.com/course/lost-city/",
+   "https://www.top100golfcourses.com/golf-course/lost-city"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "HOLE NUMBERS WRONG. Par 3s at Lost City are 3, 8, 13 (crocodile hole, Africa-shaped green) and 15 - confirmed by five sources. App's 5, 12 and 16 are par 4s; only 8 is right. Distances: GolfPass/18Birdies white 176/174/172/155 yd = 161/159/157/142 m; yellow 190/183/196/174 yd = 174/167/179/159 m; golfball.co.za (back tees, rounded) 180/175/180/180 m; 2026 SA Top 100 review quotes 8th ~165 m and 13th ~160 m off white. Hole numbers high confidence, distances medium (tee naming inconsistent across sources)."
+ },
+ {
+  "course": "The Club at Steyn City",
+  "app_par3s": {
+   "5": 203,
+   "9": 184,
+   "12": 174,
+   "14": 201
+  },
+  "verified_par3s": {
+   "5": 186,
+   "9": 168,
+   "12": 159,
+   "14": 184
+  },
+  "tee": "white (club men's, 6636 m, CR 73.7/149); black championship (7054 m): 5:202, 9:186, 12:183, 14:213",
+  "units_in_source": "metres",
+  "sources": [
+   "http://www.ecaddy.co.za/gcl/courses/steyncity/",
+   "https://www.golfpass.com/travel-advisor/courses/35063-the-club-at-steyn-city",
+   "https://18birdies.com/golf-courses/club/04fd47a0-16ba-11ee-ac93-06780482e2ce/the-club-at-steyn-city"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 5, 9, 12, 14 - hole numbers correct. App values 203/184/174/201 are the white (club) tee in YARDS (GolfPass), stored as metres; club's eCaddy hole guide (metres, black/white/blue/red) gives 5: 202/186/171/138, 9: 186/168/151/135, 12: 183/159/145/121, 14: 213/184/159/127. Caveat: the LIV Golf South Africa 2026 tournament map PDF on steyncity.co.za shows a renumbered par-71 tournament routing (par 3s at 3, 6, 8, 17) - ignore, not the member card."
+ },
+ {
+  "course": "The Els Club – Copperleaf",
+  "app_par3s": {
+   "3": 210,
+   "5": 174,
+   "14": 179,
+   "17": 151
+  },
+  "verified_par3s": {
+   "3": 239,
+   "5": 171,
+   "14": 185,
+   "17": 147
+  },
+  "tee": "club men's tee (6616 m, CR 72/134); black championship (7360 m): 3:256, 5:197, 14:205, 17:181",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.golfify.io/courses/the-els-club-at-copperleaf",
+   "https://www.compleatgolfer.com/courses/course-of-the-month-the-els-club-copperleaf/",
+   "https://www.golfpass.com/courses/17842-copperleaf-golf-country-estate-els-club/scorecard-and-layout"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 3, 5, 14, 17 - hole numbers correct. Golfify (metres) and Compleat Golfer (club tees 6616 m: 3rd 240 m, 5th 170 m, 14th 185 m, 17th 150 m) agree. App values 210/174/179/151 equal GolfPass's 'White' row in YARDS (a shorter ~6305 m tee), so hole 3 is understated by ~29 m (it is a notorious 240 m par 3 off the club tee); 5, 14, 17 within 6 m. Blue tee: 187/149/165/122."
+ },
+ {
+  "course": "Umdoni Park Golf Club",
+  "app_par3s": {
+   "3": 116,
+   "7": 155,
+   "12": 110,
+   "16": 185
+  },
+  "verified_par3s": {
+   "3": 116,
+   "7": 155,
+   "12": 110,
+   "16": 185
+  },
+  "tee": "white (club men's, 5572-5592 m)",
+  "units_in_source": "metres",
+  "sources": [
+   "https://18birdies.com/golf-courses/club/bd103390-86ac-11e4-8c28-020000005b00/umdoni-park",
+   "https://www.golfpass.com/travel-advisor/courses/17949-umdoni-park-golf-club",
+   "https://satop100courses.com/course/umdoni-park/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Par 3s are 3, 7, 12 (Majuba, 110 m, uphill) and 16 (elevated tee) - hole numbers correct and distances match exactly. 18Birdies card is labelled 'yds' but its figures are actually metres (total 5572 = SA Top 100's 5592 m white); GolfPass yards 127/170/120/202 convert to 116/155/110/185 m. Club website has no scorecard."
+ },
+ {
+  "course": "Umhlali Country Club",
+  "app_par3s": {
+   "5": 155,
+   "9": 170,
+   "14": 148,
+   "17": 162
+  },
+  "verified_par3s": {
+   "4": 170,
+   "6": 132,
+   "11": 162,
+   "18": 161
+  },
+  "tee": "white (club men's tee, 5696-5709 m); championship/yellow = 4:181 6:139 11:172 18:182",
+  "units_in_source": "metres (golfify.io, thesocialgolfer) cross-checked with yards (GolfPass, 18Birdies, converted)",
+  "sources": [
+   "https://www.golfify.io/courses/umhlali-country-club",
+   "https://www.thesocialgolfer.com/golf-courses/south-africa/kwazulu-natal/umhlali-country-club/scorecard/umhlali-country-club-white-tee-scorecard",
+   "https://www.golfpass.com/travel-advisor/courses/17916-umhlali-country-club",
+   "https://18birdies.com/golf-courses/club/bd1081b0-86ac-11e4-8c28-020000005b00/umhlali-country-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "APP HOLE NUMBERS ARE WRONG. Four independent scorecards all agree the par 3s are holes 4, 6, 11 and 18 (par 71: out 35 / in 36). App's 5, 9, 14 and 17 are a par 5, par 4, par 4 and par 4. Club website (umhlaliclub.co.za) has no scorecard online."
+ },
+ {
+  "course": "Victoria Country Club",
+  "app_par3s": {
+   "6": 164,
+   "8": 148,
+   "13": 137,
+   "17": 157
+  },
+  "verified_par3s": {
+   "6": 150,
+   "8": 135,
+   "13": 125,
+   "17": 144
+  },
+  "tee": "white (club men's, 5872-5942 m); yellow/championship (6156-6183 m) = 6:171 8:155 13:130 17:158",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/17919-victoria-country-club",
+   "https://satop100courses.com/course/victoria/",
+   "https://18birdies.com/golf-courses/club/bcf5a6b0-86ac-11e4-8c28-020000005b00/victoria-country-club",
+   "https://www.victoria.co.za/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers 6, 8, 13, 17 confirmed (GolfPass card + SA Top 100 reviewers naming 6-8-13-17 as the par 3s). App distances 164/148/137/157 are exactly the GolfPass WHITE tee YARDS stored as metres; true white metres are ~150/135/125/144 (a 2026 SA Top 100 review quotes white as 150/139/125/135). Club website has no online scorecard; distances medium confidence, ~10 m uncertainty on 8 and 17."
+ },
+ {
+  "course": "Wanderers Golf Club",
+  "app_par3s": {
+   "4": 179,
+   "8": 157,
+   "13": 168,
+   "16": 142
+  },
+  "verified_par3s": {
+   "6": 145,
+   "12": 150,
+   "15": 175,
+   "17": 145
+  },
+  "tee": "white (club men's, 6150-6168 m); yellow/championship = 6:167 12:162 15:180 17:150",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.wanderersgolfclub.com/wgc/6th-hole",
+   "https://www.wanderersgolfclub.com/wgc/12th-hole",
+   "https://www.wanderersgolfclub.com/wgc/15th-hole",
+   "https://www.wanderersgolfclub.com/wgc/17th-hole",
+   "https://kellysgolfbooker.com/courses/wanderers",
+   "https://satop100courses.com/course/wanderers/",
+   "https://www.golfpass.com/travel-advisor/courses/17817-wanderers-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "APP HOLE NUMBERS ARE WRONG. Club's own hole-by-hole pages (metres, Red/Blue/White/Yellow) show the par 3s are 6, 12, 15 and 17 (one on the front nine, three on the back); confirmed by GolfPass and SA Top 100 ('6, then 12-15-17'). App's 4, 8, 13, 16 are par 4, par 4, par 5, par 4. Note: the par-3 6th was rebuilt with a new dam in 2023-24 and a Matkovich redesign of 8/9 is planned for 2026+."
+ },
+ {
+  "course": "Waterkloof Golf Club",
+  "app_par3s": {
+   "6": 155,
+   "8": 119,
+   "15": 141,
+   "17": 167
+  },
+  "verified_par3s": {
+   "6": 182,
+   "8": 130,
+   "15": 168,
+   "17": 184
+  },
+  "tee": "white (club men's, 6297-6305 m); yellow/gold (6677-6759 m) = 6:208 8:146 15:183 17:210; blue = 6:151 8:112 15:133 17:169",
+  "units_in_source": "yards (converted) from GolfPass; golfify.io in metres as cross-check",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/17835-waterkloof-golf-club",
+   "https://www.golfify.io/courses/waterkloof-golf-club",
+   "https://satop100courses.com/course/waterkloof-golf-club/"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers 6, 8, 15, 17 confirmed by three sources (SA Top 100 reviewers explicitly list '6-8-15-17'). App distances do not match any tee cleanly (closest to blue tee in metres, all >10 m off white). GolfPass white converted (182/130/168/184) matches SA Top 100 hole references (e.g. 9th 432 m, 5th 374 m off club tee); golfify's white card differs on 6 (170) and 15 (154). Club website has no scorecard online. 17th also has an alternate short tee (~122 m) over the water."
+ },
+ {
+  "course": "Wedgewood Golf & Country Estate",
+  "app_par3s": {
+   "3": 172,
+   "7": 139,
+   "12": 155,
+   "14": 145
+  },
+  "verified_par3s": {
+   "3": 180,
+   "7": 154,
+   "12": 162,
+   "14": 168
+  },
+  "tee": "men's/club tee (golfify 'Men' 6415 m; GolfPass longest row converts to 3:179 7:151 12:158 14:167)",
+  "units_in_source": "metres (golfify) cross-checked with yards (GolfPass, 18Birdies, converted)",
+  "sources": [
+   "https://www.golfify.io/courses/wedgewood-golf-and-country-estate",
+   "https://www.golfpass.com/travel-advisor/courses/17711-wedgewood-park-country-club",
+   "https://18birdies.com/golf-courses/club/5a6d5030-6d89-11e7-932b-0680a328ea36/wedgewood-golf-and-country-estate"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers 3, 7, 12, 14 agree across all three sources (par 72, 36/36). Distances disagree between sources/vintages: 18Birdies yellow converts to 172/139/151/155 (which is where the app's 3 and 7 came from), while GolfPass and golfify agree at ~180/152/160/168. Club website (wedgewoodvillage.co.za) is down (HTTP 500), so no official card. Holes 12 and 14 differ from app by 7-23 m."
+ },
+ {
+  "course": "Westlake Golf Club",
+  "app_par3s": {
+   "3": 146,
+   "6": 169,
+   "15": 133,
+   "17": 161
+  },
+  "verified_par3s": {
+   "3": 146,
+   "6": 169,
+   "15": 133,
+   "17": 161
+  },
+  "tee": "yellow / tee 1 (longest men's tee, 5867 m, CR 71.2/123); tee 2 'club' (5558 m, 69.5/120) = 3:136 6:146 15:125 17:140; tee 3 = 3:120 6:130 15:102 17:128",
+  "units_in_source": "metres",
+  "sources": [
+   "https://westlakegolfclub.co.za/wp-content/uploads/2025/04/WESTLAKE-SCORECARD-FEB-2025.pdf",
+   "https://westlakegolfclub.co.za/the-course/",
+   "https://18birdies.com/golf-courses/club/bd496c00-86ac-11e4-8c28-020000005b00/westlake-golf-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match to the club's own Feb-2025 scorecard PDF ('all distances in metres to centre of green'), longest men's tee. Par 3s are 3, 6, 15, 17 (par 72). If the app should use the shorter club tee, values are 136/146/125/140."
+ },
+ {
+  "course": "Wild Coast Sun Country Club",
+  "app_par3s": {
+   "4": 98,
+   "6": 171,
+   "8": 151,
+   "11": 176,
+   "13": 160,
+   "17": 159
+  },
+  "verified_par3s": {
+   "4": 90,
+   "6": 156,
+   "8": 138,
+   "11": 161,
+   "13": 146,
+   "17": 145
+  },
+  "tee": "white (club men's, 5329-5351 m); yellow/championship (5807-5849 m) = 4:110 6:176 8:169 11:188 13:168 17:162",
+  "units_in_source": "metres (golfify.io) cross-checked with yards (GolfPass, converted)",
+  "sources": [
+   "https://www.golfify.io/courses/wild-coast-sun-country-club",
+   "https://www.golfpass.com/travel-advisor/courses/17892-wild-coast-sun-country-club",
+   "https://satop100courses.com/course/wild-coast/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Six par 3s at 4, 6, 8, 11, 13, 17 confirmed (par 70). App distances are exactly the GolfPass WHITE tee YARDS stored as metres; true white metres are 90/156/138/161/146/145 (golfify metres card agrees exactly with the conversion). SA Top 100 confirms 110 m 4th, 188 m 11th, 168 m 13th from the back tees."
+ },
+ {
+  "course": "Wingate Park Country Club",
+  "app_par3s": {
+   "5": 140,
+   "8": 136,
+   "14": 175,
+   "16": 142
+  },
+  "verified_par3s": {
+   "5": 148,
+   "8": 150,
+   "14": 179,
+   "16": 151
+  },
+  "tee": "green (club men's, 6413 m); black/championship (6740 m) = 5:155 8:168 14:203 16:172; blue (5826 m) = 5:128 8:124 14:160 16:130",
+  "units_in_source": "yards (converted)",
+  "sources": [
+   "https://www.golfpass.com/travel-advisor/courses/17812-wingate-park-country-club",
+   "https://www.grassy.golf/courses/wingate-park-country-club-za-gt/scorecard",
+   "https://satop100courses.com/course/wingate-park/",
+   "https://www.golfify.io/courses/wingate-park-country-club"
+  ],
+  "confidence": "medium",
+  "hole_numbers_match": true,
+  "notes": "Hole numbers 5, 8, 14, 16 confirmed (par 72, 35/37; SA Top 100 reviewer names '5-8-16' as the short-iron par 3s and 14 as the long one). App distances are exactly the GolfPass BLUE tee YARDS stored as metres. Green tee totals match SA Top 100's current rating lengths and a reviewer's '9th 348 m off club tee'. An older club card on golfify (6514 m 'Men') gives 147/168/206/136, so 8, 14 and 16 carry some uncertainty. Club website has no online scorecard."
+ },
+ {
+  "course": "Woodhill Country Club",
+  "app_par3s": {
+   "3": 175,
+   "8": 162,
+   "12": 188,
+   "16": 150
+  },
+  "verified_par3s": {
+   "2": 192,
+   "7": 184,
+   "12": 154,
+   "16": 169
+  },
+  "tee": "white (club tee, 6297 m) per club website; championship/yellow (GolfPass yards converted) = 2:201 7:192 12:194 16:181",
+  "units_in_source": "metres",
+  "sources": [
+   "https://woodhillestate.co.za/golf-course-info/",
+   "https://www.golfpass.com/travel-advisor/courses/17876-woodhill-country-club"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "APP HOLE NUMBERS PARTLY WRONG. Club's own hole-by-hole guide (club tee distances in metres) and GolfPass both show the par 3s are 2, 7, 12 and 16; holes 3 and 8 are a par 5 and par 4. App's 12:188 is also ~34 m too long (club tee 154 m; even championship is 194 m) and 16:150 is 19 m short."
+ },
+ {
+  "course": "Zebula Country Club & Spa",
+  "app_par3s": {
+   "3": 172,
+   "8": 145,
+   "13": 160,
+   "17": 185
+  },
+  "verified_par3s": {
+   "4": 199,
+   "8": 124,
+   "13": 154,
+   "17": 190
+  },
+  "tee": "Rhino (second-longest men's tee, 6445 m); Elephant/championship (6829 m) = 4:215 8:137 13:170 17:219; Leopard (6023 m) = 4:173 8:97 13:133 17:175",
+  "units_in_source": "metres",
+  "sources": [
+   "https://zebulagolfestate.co.za/wp-content/uploads/2017/09/Scorecards-2014-2.pdf",
+   "https://www.golfify.io/courses/zebula-golf-estate-spa",
+   "https://zebulagolfestate.co.za/golf/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": false,
+  "notes": "APP HOLE 3 IS WRONG: the club's own scorecard PDF (metres, 2014 card still linked from the club site) and golfify show par 3s at 4, 8, 13, 17; hole 3 is a 314-330 m par 4. App distances do not match any single tee (8:145 is 8 m longer than even the Elephant tee's 137 m); Rhino tee reported as the usual men's tee. Course length 6829 m from the longest tee confirmed on the club site."
+ },
+ {
+  "course": "Zimbali Country Club",
+  "app_par3s": {
+   "5": 167,
+   "9": 193,
+   "11": 167,
+   "14": 135
+  },
+  "verified_par3s": {
+   "5": 167,
+   "9": 193,
+   "11": 167,
+   "14": 135
+  },
+  "tee": "white (club men's, 6052 m); championship/gold (6524 m) = 5:191 9:219 11:191 14:159",
+  "units_in_source": "metres",
+  "sources": [
+   "https://www.allsquaregolf.com/golf-courses/south-africa/zimbali-country-club",
+   "https://www.golfify.io/courses/zimbali-country-club",
+   "https://zimbali.com/country-club/"
+  ],
+  "confidence": "high",
+  "hole_numbers_match": true,
+  "notes": "Exact match. Par 3s 5, 9, 11, 14 confirmed by two scorecards in metres (totals match the club website's published course lengths: Championship 6524 m, Club 6052 m) and by the club's own hole-by-hole descriptions (5 'first par three', 9 'lengthy par three', 17 'shortest par 5'). Club scorecard PDF is an image and could not be text-parsed."
+ }
+]
