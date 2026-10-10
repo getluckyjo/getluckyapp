@@ -38,6 +38,10 @@ Vercel attaches. The sweep:
 - removes the footage of every `miss` declared more than `RETENTION_DAYS`
   ago (default 90, minimum 7) and stamps the bet; `video_sha256` and
   `video_bytes` stay as the record that footage existed;
+- removes the footage of every bet still `active` whose play window closed
+  more than `RETENTION_DAYS` ago: recorded, perhaps, never declared, and
+  nothing can be declared on it now (the state machine refuses after
+  `expires_at`);
 - removes the certificate, affidavit and footage of every `rejected`
   claim reviewed more than `RETENTION_DAYS` ago and stamps both rows;
 - never touches `verified` or `paid` bets;
@@ -47,6 +51,16 @@ Vercel attaches. The sweep:
 
 Without `CRON_SECRET` the route answers 503 and logs
 `retention.misconfigured` rather than run for whoever finds the URL.
+
+The same cron then closes claims nobody can review
+(`src/lib/claims/triage.ts`): a claim still `pending` or
+`documents_received` a week after it was made, whose bet never had footage
+sealed and whose play window has passed, is rejected with a note saying
+exactly that. A claim marked `under_review` is a person's, and is left.
+
+Not purged, on purpose: location and hashed addresses on approved claims.
+They are the insurer's record of a payout; the window for them is Indwe's
+to set, not ours.
 
 **Privacy page** rewritten to say what the code does: what is collected
 (including that claim documents carry other people's details), why, who

@@ -57,6 +57,23 @@ describe('runRetention', () => {
     ])
   })
 
+  it('purges footage of bets never declared once the window has been closed for the retention period', async () => {
+    const stale = bet({ status: 'active', expires_at: daysAgo(91), video_url: `${USER_A.id}/stale/shot.mp4`, video_sha256: 'st' })
+    const staleNoFootage = bet({ status: 'active', expires_at: daysAgo(200), video_url: null })
+    const recentlyClosed = bet({ status: 'active', expires_at: daysAgo(10), video_url: `${USER_A.id}/recent/shot.mp4` })
+    const open = bet({ status: 'active', expires_at: new Date(NOW.getTime() + 3_600_000).toISOString(), video_url: `${USER_A.id}/open/shot.mp4` })
+    for (const b of [stale, recentlyClosed, open]) db.putObject('shot-videos', b.video_url as string)
+
+    const result = await runRetention(admin(), { now: NOW })
+
+    expect(result).toMatchObject({ misses: 0, undeclared: 2, rejectedClaims: 0, objectsRemoved: 1, errors: 0 })
+    expect(stale).toMatchObject({ video_url: null, footage_purged_at: NOW.toISOString(), video_sha256: 'st' })
+    expect(staleNoFootage.footage_purged_at).toBe(NOW.toISOString())
+    expect(recentlyClosed.footage_purged_at).toBeUndefined()
+    expect(open.footage_purged_at).toBeUndefined()
+    expect(db.objectPaths('shot-videos')).toEqual([`${USER_A.id}/open/shot.mp4`, `${USER_A.id}/recent/shot.mp4`])
+  })
+
   it('purges documents and footage of rejected claims older than the window', async () => {
     const b = bet({ status: 'claimed', video_url: `${USER_A.id}/b/shot.mp4` })
     const v = db.seed('verifications', {

@@ -8,6 +8,14 @@
  *
  * Nothing here blocks. Every rule has an innocent explanation; the flags
  * exist so the reviewer hears it. Thresholds live in ./thresholds.ts.
+ *
+ * Free swings, promo swings and golf days are read with their own context:
+ * a free swing is by design an account's first bet, a golf day's partners
+ * all hold accounts, and a golf day's chosen par 3 draws many claims in a
+ * week. Those rules fire on paid claims as before and stay quiet, or
+ * drop to low, where the pattern is the product working. (The audit of
+ * 10 October: every free-swing claim and every golf-day partner tripped a
+ * flag, and a reviewer at ten minutes a claim could not keep up.)
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
@@ -26,10 +34,13 @@ export interface RiskResult {
 
 type Admin = SupabaseClient<Database>
 const CLAIM_STATES = ['claimed', 'verified', 'payout_approved', 'paid'] as const
+/** Tiers with no stake: the account's first bet is the point, not a signal. */
+const NO_STAKE_TIERS = ['tier_free', 'tier_promo', 'tier_golf_day'] as const
 const days = (n: number) => n * 86_400_000
 
 interface BetRow {
   id: string; user_id: string; hole_id: string; status: string; created_at: string
+  tier: string; golf_day_id: string | null
   video_sha256: string | null; video_uploaded_at: string | null
   capture_ended_at: string | null; capture_lat: number | null; capture_distance_m: number | null
   created_ip_hash: string | null; claim_ip_hash: string | null; claim_ua_hash: string | null
@@ -39,7 +50,7 @@ interface BetRow {
 export async function evaluateClaimRisk(admin: Admin, betId: string, now: Date = new Date()): Promise<RiskResult | null> {
   const { data: bet, error } = await admin
     .from('bets')
-    .select('id, user_id, hole_id, status, created_at, video_sha256, video_uploaded_at, capture_ended_at, capture_lat, capture_distance_m, created_ip_hash, claim_ip_hash, claim_ua_hash, risk_flags, risk_score')
+    .select('id, user_id, hole_id, status, created_at, tier, golf_day_id, video_sha256, video_uploaded_at, capture_ended_at, capture_lat, capture_distance_m, created_ip_hash, claim_ip_hash, claim_ua_hash, risk_flags, risk_score')
     .eq('id', betId)
     .maybeSingle()
   if (error) throw error
@@ -60,6 +71,8 @@ export async function evaluateClaimRisk(admin: Admin, betId: string, now: Date =
   const flags: RiskFlag[] = []
   const push = (rule: RiskFlag['rule'], severity: RiskFlag['severity'], detail: RiskFlag['detail']) => flags.push({ rule, severity, detail })
   const betAt = Date.parse(b.created_at)
+  const noStake = (NO_STAKE_TIERS as readonly string[]).includes(b.tier)
+  const golfDay = b.tier === 'tier_golf_day' || !!b.golf_day_id
 
   // repeat_claimant
   const otherClaims = userBets.filter(x => x.id !== b.id && (CLAIM_STATES as readonly string[]).includes(x.status) && Date.parse(x.created_at) >= now.getTime() - days(T.repeatClaimWindowDays))
@@ -71,10 +84,14 @@ export async function evaluateClaimRisk(admin: Admin, betId: string, now: Date =
   }
   if (otherClaims.length > 0 || rejected > 0) push('repeat_claimant', 'high', { other_claims: otherClaims.length, rejected })
 
-  // first_bet_win
+  // first_bet_win. A free, promo or golf-day swing is an account's first bet
+  // by design, so there only a brand-new account is worth a word, and a quiet one.
   const accountAgeHours = profile?.created_at ? Math.round((betAt - Date.parse(profile.created_at)) / 3_600_000) : null
-  if (userBets.length <= 1) push('first_bet_win', 'medium', { first_bet: true, account_age_hours: accountAgeHours })
-  else if (accountAgeHours !== null && accountAgeHours < T.newAccountHours) push('first_bet_win', 'medium', { first_bet: false, account_age_hours: accountAgeHours })
+  const newAccount = accountAgeHours !== null && accountAgeHours < T.newAccountHours
+  if (noStake) {
+    if (newAccount) push('first_bet_win', 'low', { first_bet: userBets.length <= 1, account_age_hours: accountAgeHours, no_stake: true })
+  } else if (userBets.length <= 1) push('first_bet_win', 'medium', { first_bet: true, account_age_hours: accountAgeHours })
+  else if (newAccount) push('first_bet_win', 'medium', { first_bet: false, account_age_hours: accountAgeHours })
 
   // shared_ip / shared_device
   const ipHashes = [b.claim_ip_hash, b.created_ip_hash].filter((h): h is string => !!h)
@@ -121,21 +138,30 @@ export async function evaluateClaimRisk(admin: Admin, betId: string, now: Date =
     if (matches.size > 0) push('duplicate_media', 'high', { footage: false, matches: matches.size })
   }
 
-  // witness_overlap
+  // witness_overlap. On a golf day every partner is a player with an
+  // account, and the same four-ball witnesses each other's swings: only a
+  // witness named on a claim outside this golf day counts there.
   if (witnessEmails.length > 0) {
     const [holders, elsewhere] = await Promise.all([
-      admin.from('profiles').select('id').in('email', witnessEmails),
+      golfDay ? Promise.resolve({ data: [] as { id: string }[] }) : admin.from('profiles').select('id').in('email', witnessEmails),
       admin.from('claim_witnesses').select('bet_id').in('email', witnessEmails).neq('bet_id', b.id),
     ])
     const accountHolders = holders.data?.length ?? 0
-    const otherClaimCount = new Set((elsewhere.data ?? []).map(w => w.bet_id)).size
+    let otherBetIds = [...new Set((elsewhere.data ?? []).map(w => w.bet_id))]
+    if (golfDay && otherBetIds.length > 0) {
+      const { data: sameDay } = await admin.from('bets').select('id').in('id', otherBetIds).eq('golf_day_id', b.golf_day_id as string)
+      const same = new Set((sameDay ?? []).map(x => x.id))
+      otherBetIds = otherBetIds.filter(id => !same.has(id))
+    }
+    const otherClaimCount = otherBetIds.length
     if (accountHolders > 0 || otherClaimCount > 0) push('witness_overlap', 'high', { account_holders: accountHolders, other_claims: otherClaimCount })
   }
 
-  // hole_cluster
-  {
+  // hole_cluster. A golf day's par 3 is meant to draw claims, so golf-day
+  // swings neither trip the rule nor count towards it.
+  if (!golfDay) {
     const since = new Date(now.getTime() - days(T.holeClusterWindowDays)).toISOString()
-    const { data } = await admin.from('bets').select('id').eq('hole_id', b.hole_id).in('status', [...CLAIM_STATES]).gte('created_at', since)
+    const { data } = await admin.from('bets').select('id').eq('hole_id', b.hole_id).in('status', [...CLAIM_STATES]).is('golf_day_id', null).gte('created_at', since)
     const claims = data?.length ?? 0
     if (claims >= T.holeClusterCount) push('hole_cluster', 'medium', { claims, window_days: T.holeClusterWindowDays })
   }

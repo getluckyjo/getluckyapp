@@ -140,6 +140,45 @@ describe('evaluateClaimRisk', () => {
     expect(r?.flags.find(f => f.rule === 'witness_overlap')?.detail).toEqual({ account_holders: 1, other_claims: 1 })
   })
 
+  it('a free swing is a first bet by design: quiet on an established account, low on a brand-new one', async () => {
+    const free = bet(USER_A.id, { tier: 'tier_free', stake_pence: 0 })
+    expect(rules(await evaluateClaimRisk(admin(), free.id as string, NOW))).toEqual([])
+
+    db.find('profiles', p => p.id === USER_A.id)!.created_at = ago(3 * H)
+    const r = await evaluateClaimRisk(admin(), free.id as string, NOW)
+    expect(rules(r)).toEqual(['first_bet_win'])
+    expect(r?.flags[0]).toMatchObject({ severity: 'low', detail: { first_bet: true, no_stake: true, account_age_hours: 1 } })
+    expect(r?.score).toBe(1)
+    expect(describeFlag(r!.flags[0])).toBe('Free swing on an account 1 h old')
+  })
+
+  it('on a golf day, partners with accounts and the same four-ball are not witness overlap; a claim elsewhere still is', async () => {
+    const GOLF_DAY = '77777777-7777-4777-8777-777777777777'
+    bet(USER_A.id, { status: 'miss', created_at: ago(10 * D) })
+    const partner = bet(USER_C.id, { tier: 'tier_golf_day', golf_day_id: GOLF_DAY, stake_pence: 0 })
+    db.seed('claim_witnesses', { bet_id: partner.id, role: 'witness', name: 'Bob', email: USER_B.email })
+    const b = bet(USER_A.id, { tier: 'tier_golf_day', golf_day_id: GOLF_DAY, stake_pence: 0 })
+    db.seed('claim_witnesses', { bet_id: b.id, role: 'witness', name: 'Bob', email: USER_B.email })
+    expect(rules(await evaluateClaimRisk(admin(), b.id as string, NOW))).toEqual([])
+
+    // The same witness also signed a paid claim at another course last week.
+    const elsewhere = bet(USER_C.id, { hole_id: HOLE_2, created_at: ago(6 * D) })
+    db.seed('claim_witnesses', { bet_id: elsewhere.id, role: 'witness', name: 'Bob', email: USER_B.email })
+    const r = await evaluateClaimRisk(admin(), b.id as string, NOW)
+    expect(rules(r)).toEqual(['witness_overlap'])
+    expect(r?.flags[0].detail).toEqual({ account_holders: 0, other_claims: 1 })
+  })
+
+  it('golf-day swings neither trip hole_cluster nor count towards it', async () => {
+    const GOLF_DAY = '77777777-7777-4777-8777-777777777777'
+    bet(USER_A.id, { status: 'miss', created_at: ago(10 * D) })
+    for (const user of [USER_B.id, USER_C.id, USER_C.id]) bet(user, { tier: 'tier_golf_day', golf_day_id: GOLF_DAY, stake_pence: 0, created_at: ago(D) })
+    const paid = bet(USER_A.id)
+    expect(rules(await evaluateClaimRisk(admin(), paid.id as string, NOW))).toEqual([])
+    const golfDay = bet(USER_A.id, { tier: 'tier_golf_day', golf_day_id: GOLF_DAY, stake_pence: 0 })
+    expect(rules(await evaluateClaimRisk(admin(), golfDay.id as string, NOW))).not.toContain('hole_cluster')
+  })
+
   it('hole_cluster at the threshold within the window, not at another hole', async () => {
     bet(USER_A.id, { status: 'miss', created_at: ago(10 * D) })
     bet(USER_B.id, { created_at: ago(D) }); bet(USER_C.id, { status: 'verified', created_at: ago(3 * D) })

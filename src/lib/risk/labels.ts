@@ -30,7 +30,7 @@ export function describeFlag(flag: RiskFlag): string {
   const d = flag.detail
   switch (flag.rule) {
     case 'repeat_claimant':  return `${d.other_claims ?? 0} other claim(s) in the last year${d.rejected ? `, ${d.rejected} rejected` : ''}`
-    case 'first_bet_win':    return d.first_bet ? 'This is the account\'s first bet' : `Account was ${d.account_age_hours} h old at the time of the bet`
+    case 'first_bet_win':    return d.no_stake ? `Free swing on an account ${d.account_age_hours} h old` : d.first_bet ? 'This is the account\'s first bet' : `Account was ${d.account_age_hours} h old at the time of the bet`
     case 'shared_ip':        return `${d.accounts} other account(s) from the same address in ${d.window_days} days`
     case 'shared_device':    return `${d.accounts} other account(s) claimed from the same device and address`
     case 'upload_lag':       return d.after_recording_s != null ? `Sealed ${Math.round(Number(d.after_recording_s) / 60)} min after recording ended` : `Sealed ${d.after_bet_hours} h after the bet was placed`

@@ -46,7 +46,7 @@ Preview:
 - [ ] `RESEND_API_KEY`, `RESEND_FROM_ADDRESS` (a verified domain), `SEND_EMAIL_HOOK_SECRET`.
 - [ ] `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`.
 - [ ] `OPS_ALERT_EMAIL` (defaults to Johannes).
-- [ ] `CRON_SECRET` (long random string). Settings → Cron Jobs shows `/api/cron/outbox` every minute and `/api/cron/retention` nightly. After the first deploy, Sentry → Crons lists both as monitors (`docs/stage-2-safety-net.md` §4).
+- [ ] `CRON_SECRET` (long random string). Settings → Cron Jobs shows `/api/cron/outbox` every minute, `/api/cron/reconcile` every ten minutes and `/api/cron/retention` nightly. After the first deploy, Sentry → Crons lists all three as monitors (`docs/stage-2-safety-net.md` §4).
 - [ ] `RISK_HASH_SALT` (16+ random characters). Pick once; rotating orphans every hash.
 - [ ] `RETENTION_DAYS`, `BET_WINDOW_HOURS` only if you want other than 90 and 24.
 - [ ] `BETA_GATE` unset. `NEXT_PUBLIC_FEEDBACK=on` only if you want the floating feedback button for the first group; it emails you what they were doing, on which screen and build.
