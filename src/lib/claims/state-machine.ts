@@ -21,6 +21,7 @@
  * Writes use the service-role client (migration 006 removed client writes)
  * and always set `updated_by`, which the claim_events trigger records as the
  * actor. Callers do the ownership check first with the user's own client.
+ * An approval is one database transaction (approve_claim, migration 041).
  */
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -191,12 +192,43 @@ export interface Review {
   extra?: Record<string, unknown>
 }
 
+/** The codes approve_claim() (migration 041) raises, and the HTTP status each one carries. */
+const APPROVAL_CODES: Record<string, { code: ClaimErrorCode; status: number }> = {
+  VERIFICATION_NOT_FOUND: { code: 'VERIFICATION_NOT_FOUND', status: 404 },
+  BET_NOT_FOUND: { code: 'BET_NOT_FOUND', status: 404 },
+  INVALID_TRANSITION: { code: 'INVALID_TRANSITION', status: 409 },
+}
+
+/** A refusal from approve_claim() as the ClaimError the two-write path used to throw; anything else is passed through. */
+function approvalError(error: { message?: string; hint?: string | null; details?: string | null }): unknown {
+  const known = error.message ? APPROVAL_CODES[error.message.trim()] : undefined
+  if (!known) return error
+  return new ClaimError(known.code, error.hint || error.details || error.message || known.code, known.status)
+}
+
 /**
  * Admin review. Checks the verification transition, and for an approval also
- * that the bet is still `claimed`, then applies verification and bet updates
- * (verification first, conditionally; then the bet). Returns the bet id.
+ * that the bet is still `claimed`, then applies the change. Returns the bet id.
+ *
+ * An approval is one transaction in the database (approve_claim, migration
+ * 041): both rows locked, both states checked, verification to `approved`
+ * and bet from `claimed` to `verified` together, or nothing. The two-write
+ * path this replaced could leave an approved claim on a `claimed` bet when
+ * the second write failed. The other transitions touch one row.
  */
 export async function reviewVerification(admin: SupabaseClient, r: Review): Promise<{ betId: string }> {
+  if (r.to === 'approved') {
+    const { data, error } = await admin.rpc('approve_claim', {
+      p_verification_id: r.verificationId,
+      p_actor_id: r.actorId,
+      p_notes: r.notes ?? null,
+      p_checklist: (r.extra?.review_checklist as Record<string, unknown> | undefined) ?? null,
+    })
+    if (error) throw approvalError(error)
+    if (typeof data !== 'string' || !data) throw new Error('approve_claim returned no bet id')
+    return { betId: data }
+  }
+
   const { data: v } = await admin
     .from('verifications')
     .select('id, status, bet_id')
@@ -209,21 +241,11 @@ export async function reviewVerification(admin: SupabaseClient, r: Review): Prom
     throw new ClaimError('INVALID_TRANSITION', `Cannot move a verification from ${v.status} to ${r.to}.`, 409)
   }
 
-  if (r.to === 'approved') {
-    const { data: bet } = await admin.from('bets').select('id, status').eq('id', v.bet_id).maybeSingle()
-    if (!bet) throw new ClaimError('BET_NOT_FOUND', 'Bet not found', 404)
-    if (bet.status !== 'claimed') {
-      throw new ClaimError('INVALID_TRANSITION', `Cannot approve: the bet is ${bet.status}, not claimed.`, 409)
-    }
-  }
-
-  const now = new Date().toISOString()
   const updates: Record<string, unknown> = {
     status: r.to,
     reviewed_by: r.actorId,
     updated_by: r.actorId,
     ...(r.notes !== undefined ? { reviewer_notes: r.notes } : {}),
-    ...(r.to === 'approved' ? { verified_at: now } : {}),
     ...(r.extra ?? {}),
   }
 
@@ -236,10 +258,6 @@ export async function reviewVerification(admin: SupabaseClient, r: Review): Prom
   if (error) throw error
   if (!updated || updated.length === 0) {
     throw new ClaimError('CONFLICT', 'The verification changed before this request was applied.', 409)
-  }
-
-  if (r.to === 'approved') {
-    await transitionBet(admin, { betId: v.bet_id as string, from: 'claimed', to: 'verified', actor: 'review', actorId: r.actorId })
   }
 
   return { betId: v.bet_id as string }

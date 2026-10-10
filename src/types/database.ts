@@ -901,6 +901,10 @@ export interface Database {
     Functions: {
       increment_attempts: { Args: { user_id: string }; Returns: undefined }
       beta_check: { Args: { p_email: string | null; p_code: string | null }; Returns: boolean }
+      approve_claim: {
+        Args: { p_verification_id: string; p_actor_id: string; p_notes: string | null; p_checklist: Json | null }
+        Returns: string
+      }
       rate_limit_hit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }
         Returns: { allowed: boolean; remaining: number; reset_at: string }[]

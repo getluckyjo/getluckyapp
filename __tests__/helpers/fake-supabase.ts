@@ -478,6 +478,24 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
         const p = db.find('profiles', r => r.id === user_id)
         if (p) p.total_attempts = Number(p.total_attempts ?? 0) + 1
       }
+      // Mirrors migration 041: both rows checked and written together, or a
+      // refusal whose message is the code and whose hint is the sentence.
+      if (fn === 'approve_claim') {
+        const a = args as { p_verification_id: string; p_actor_id: string; p_notes: string | null; p_checklist: unknown }
+        const refuse = (message: string, hint: string): Result => ({ data: null, error: { code: 'P0001', message, hint, details: '', name: 'PostgrestError' } as PostgrestError })
+        const v = db.find('verifications', r => r.id === a.p_verification_id)
+        if (!v) return refuse('VERIFICATION_NOT_FOUND', 'Verification not found')
+        if (!['pending', 'documents_received', 'under_review'].includes(String(v.status))) {
+          return refuse('INVALID_TRANSITION', `Cannot move a verification from ${v.status} to approved.`)
+        }
+        const bet = db.find('bets', r => r.id === v.bet_id)
+        if (!bet) return refuse('BET_NOT_FOUND', 'Bet not found')
+        if (bet.status !== 'claimed') return refuse('INVALID_TRANSITION', `Cannot approve: the bet is ${bet.status}, not claimed.`)
+        const now = new Date().toISOString()
+        Object.assign(v, { status: 'approved', reviewed_by: a.p_actor_id, updated_by: a.p_actor_id, reviewer_notes: a.p_notes ?? v.reviewer_notes ?? null, verified_at: now, review_checklist: a.p_checklist ?? v.review_checklist ?? null, updated_at: now })
+        Object.assign(bet, { status: 'verified', updated_by: a.p_actor_id, updated_at: now })
+        return { data: v.bet_id, error: null }
+      }
       if (fn === 'admin_totals') {
         const bets = db.rows('bets')
         return { data: {
