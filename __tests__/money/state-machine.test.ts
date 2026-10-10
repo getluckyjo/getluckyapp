@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   BET_STATUSES, VERIFICATION_STATUSES, canTransitionBet, canTransitionVerification,
-  betWindowHours, computeExpiresAt, isExpired, assertOpen, ClaimError, transitionBet,
+  betWindowHours, computeExpiresAt, isExpired, assertOpen, ClaimError, transitionBet, reviewVerification,
   CLAIMED_BET_STATUSES, OWED_BET_STATUSES, WON_BET_STATUSES, SECOND_APPROVER_MESSAGE,
   type BetStatus, type VerificationStatus,
 } from '@/lib/claims/state-machine'
@@ -94,6 +94,56 @@ describe('transitionBet: two signatures on a payout', () => {
     await expect(transitionBet(admin(), { betId: bet.id as string, from: 'verified', to: 'paid', actor: 'admin', actorId: USER_A.id }))
       .rejects.toMatchObject({ code: 'INVALID_TRANSITION', status: 409 })
     expect(bet.status).toBe('verified')
+  })
+})
+
+describe('reviewVerification: approval is one transaction', () => {
+  let db: FakeDb
+  const admin = () => createFakeClient(db) as never
+  beforeEach(() => {
+    db = new FakeDb()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it('approving goes through approve_claim (migration 041) and moves both rows together', async () => {
+    const [bet] = db.seed('bets', { user_id: 'golfer', status: 'claimed' })
+    const [v] = db.seed('verifications', { bet_id: bet.id, status: 'under_review' })
+    const client = createFakeClient(db)
+    const checklist = { footage_reviewed: true, completed_by: USER_A.id }
+    const res = await reviewVerification(client as never, { verificationId: v.id as string, to: 'approved', actorId: USER_A.id, notes: 'Footage and certificate check out.', extra: { review_checklist: checklist } })
+    expect(res).toEqual({ betId: bet.id })
+    expect(client.rpcCalls).toEqual([{ fn: 'approve_claim', args: { p_verification_id: v.id, p_actor_id: USER_A.id, p_notes: 'Footage and certificate check out.', p_checklist: checklist } }])
+    expect(v).toMatchObject({ status: 'approved', reviewed_by: USER_A.id, updated_by: USER_A.id, reviewer_notes: 'Footage and certificate check out.', review_checklist: checklist })
+    expect(typeof v.verified_at).toBe('string')
+    expect(bet).toMatchObject({ status: 'verified', updated_by: USER_A.id })
+  })
+
+  it("the function's refusals come back as the same ClaimErrors, and nothing is written", async () => {
+    await expect(reviewVerification(admin(), { verificationId: '00000000-0000-4000-8000-000000000000', to: 'approved', actorId: USER_A.id }))
+      .rejects.toMatchObject({ code: 'VERIFICATION_NOT_FOUND', status: 404 })
+
+    const [paid] = db.seed('bets', { user_id: 'golfer', status: 'paid' })
+    const [v1] = db.seed('verifications', { bet_id: paid.id, status: 'pending' })
+    await expect(reviewVerification(admin(), { verificationId: v1.id as string, to: 'approved', actorId: USER_A.id }))
+      .rejects.toMatchObject({ code: 'INVALID_TRANSITION', status: 409, message: 'Cannot approve: the bet is paid, not claimed.' })
+    expect(v1.status).toBe('pending')
+
+    const [bet] = db.seed('bets', { user_id: 'golfer', status: 'claimed' })
+    const [v2] = db.seed('verifications', { bet_id: bet.id, status: 'rejected' })
+    await expect(reviewVerification(admin(), { verificationId: v2.id as string, to: 'approved', actorId: USER_A.id }))
+      .rejects.toMatchObject({ code: 'INVALID_TRANSITION', status: 409 })
+    expect(bet.status).toBe('claimed')
+  })
+
+  it('a rejection is still one conditional update on the verification alone', async () => {
+    const [bet] = db.seed('bets', { user_id: 'golfer', status: 'claimed' })
+    const [v] = db.seed('verifications', { bet_id: bet.id, status: 'pending' })
+    const client = createFakeClient(db)
+    await reviewVerification(client as never, { verificationId: v.id as string, to: 'rejected', actorId: USER_A.id, notes: 'Ball never went in.' })
+    expect(client.rpcCalls).toEqual([])
+    expect(v).toMatchObject({ status: 'rejected', reviewer_notes: 'Ball never went in.' })
+    expect(bet.status).toBe('claimed')
   })
 })
 
