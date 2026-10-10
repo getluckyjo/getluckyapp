@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError, parseBody } from '@/lib/api/http'
 import { RULES, enforceRateLimit, clientIp } from '@/lib/rate-limit'
 import { BETA_COOKIE, BETA_COOKIE_MAX_AGE, betaAllowed, normaliseCode } from '@/lib/beta'
@@ -24,8 +24,7 @@ export async function POST(request: Request) {
   if (!body.ok) return body.response
 
   try {
-    const supabase = await createClient()
-    const ok = await betaAllowed(supabase, { code: body.data.code })
+    const ok = await betaAllowed(createAdminClient(), { code: body.data.code })
     if (!ok) {
       log.warn('beta.redeem_rejected', { ip: clientIp(request) })
       return NextResponse.json({ error: 'That code is not on the list. Check it and try again.', code: 'BETA_CODE_INVALID' }, { status: 403 })

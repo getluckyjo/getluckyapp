@@ -107,6 +107,24 @@ hide it instead.
 Terms: section 5 of `/terms` describes the draw as above. It still needs
 the lawyer's read on the launch checklist.
 
+## The QR code and the in-app browser
+
+The broadcast and the Instagram link point at one address:
+
+    https://www.getluckyholeinone.com/icons
+
+Nothing else. Not the home page, not `/auth`: `/icons` shows the field
+signed out, and the sign-in button carries `next=/icons`, so a fan is back
+on the pick after the email code. Print the QR code from that URL and
+test it with a phone before the broadcast.
+
+Most fans arrive inside Instagram, Facebook, WhatsApp or the Gmail app,
+whose embedded browsers Google refuses to sign in from. The sign-in
+screen detects that (`src/lib/in-app-browser.ts`), hides the Google tile
+and says to use the email code or open the page in Safari or Chrome. The
+install sheet never shows on `/icons`: a fan has come to pick, in an ad
+break, and the embedded browsers cannot install anyway.
+
 ## Apply order
 
 1. Migration 018 on production (`supabase/migrations/018_icons.sql`).

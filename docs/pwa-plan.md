@@ -79,7 +79,7 @@ Keep the five the designer drew: **Home, Winners, Play, Club, Account.** They ar
 
 ### Beta gate
 
-Off by default (`BETA_GATE` env unset). When `BETA_GATE=on`, the proxy checks every non-public page route: the signed-in user's email must be on the `beta_access` table, or the request must carry a cookie set by redeeming an invite code at `/beta`. Both lists are rows in one table (`kind = email | code`), edited from `/admin/beta` without a deploy. The check is one `security definer` function call so nothing about the list is readable through the public API.
+Off by default (`BETA_GATE` env unset). When `BETA_GATE=on`, the proxy checks every non-public page route: the signed-in user's email must be on the `beta_access` table, or the request must carry a cookie set by redeeming an invite code at `/beta`. Both lists are rows in one table (`kind = email | code`), edited from `/admin/beta` without a deploy. The check is one `security definer` function call, made with the service role (migration 040 closed it to the public key), so nothing about the list is readable or probeable through the public API.
 
 ### Feedback
 

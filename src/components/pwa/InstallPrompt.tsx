@@ -20,9 +20,13 @@ const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000
 const SHOW_DELAY_MS = 1500
 
 /** Screens where a prompt would interrupt something that matters. Never here. */
-const QUIET_PATHS = ['/', '/splash', '/onboarding', '/auth', '/age-check', '/welcome', '/select-course', '/choose-stake', '/payment-return', '/record', '/confirm', '/result', '/admin', '/witness', '/~offline', '/beta', '/terms', '/privacy', '/responsible-play', '/install', '/golf-day']
+const QUIET_PATHS = ['/', '/splash', '/onboarding', '/auth', '/age-check', '/welcome', '/select-course', '/choose-stake', '/payment-return', '/record', '/confirm', '/result', '/admin', '/witness', '/~offline', '/beta', '/terms', '/privacy', '/responsible-play', '/install', '/golf-day',
+  // Where the broadcast QR code lands. A fan has come to back an Icon, in
+  // the ad break, mostly inside Instagram or WhatsApp where installing is
+  // impossible anyway; the sheet would only stand between them and the pick.
+  '/icons']
 /** One visit to any of these counts as a meaningful interaction on its own. */
-const ENGAGED_PATHS = ['/leaderboard', '/history', '/verify', '/icons']
+const ENGAGED_PATHS = ['/leaderboard', '/history', '/verify']
 /** Otherwise, this many distinct screens in one session. */
 const ENGAGED_DISTINCT = 3
 
