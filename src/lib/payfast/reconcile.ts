@@ -22,7 +22,7 @@ import { grantBetForPayment } from '@/lib/claims/grant'
 import { verifyPaymentAmount } from '@/lib/payments'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
-import { queryTransaction, type ApiConfig } from '@/lib/payfast/api'
+import { listTransactions, queryTransaction, type ApiConfig } from '@/lib/payfast/api'
 import type { Json } from '@/types/database'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,5 +129,105 @@ export async function reconcileUnknownPayments(admin: Admin, config: ApiConfig, 
   }
 
   if (result.checked > 0) log.info('payfast.reconcile.run', { ...result })
+  return result
+}
+
+// ── The ledger against PayFast's history ─────────────────────────────────
+
+/** How far back the sweep reads. PayFast retries a failed ITN for about a day; a day's margin on top. */
+export const SWEEP_DAYS = 2
+/** A payment younger than this may still get its ITN; leave it to that. */
+export const SWEEP_AFTER_MS = 15 * 60_000
+
+export interface SweepResult {
+  /** Credits in the window that carry one of our references. */
+  seen: number
+  /** Ledger rows written for payments PayFast had and we did not. */
+  recorded: number
+  /** Of those, recorded as amount_mismatch (no bet). */
+  mismatched: number
+  /** Bets granted for the rows written. */
+  granted: number
+  errors: number
+}
+
+/**
+ * A payment whose ITN never reached us has no ledger row at all: the golfer
+ * paid, nothing was granted, and nothing in the app knows. Every ten
+ * minutes this reads PayFast's history for the last two days, and for each
+ * credit with one of our references and no ledger row, writes the row the
+ * ITN would have written (user, course, hole and tier ride in the custom
+ * fields) and grants the bet on the usual rules. The ITN handler's own
+ * insert is keyed on the reference, so a late ITN finds the row and is a
+ * no-op. Ops hears about every row written: an ITN that goes missing is a
+ * notify-URL or firewall problem worth a look.
+ */
+export async function reconcileMissingPayments(admin: Admin, config: ApiConfig, opts: { now?: Date } = {}): Promise<SweepResult> {
+  const now = opts.now ?? new Date()
+  const result: SweepResult = { seen: 0, recorded: 0, mismatched: 0, granted: 0, errors: 0 }
+  const day = (d: Date) => d.toISOString().slice(0, 10)
+  const rows = await listTransactions(config, { from: day(new Date(now.getTime() - SWEEP_DAYS * 86_400_000)), to: day(new Date(now.getTime() + 86_400_000)) })
+
+  const ours = rows.filter(r => r.mPaymentId.startsWith('gl_') && r.type.toUpperCase() !== 'FUNDS_PAID' && !r.type.toUpperCase().includes('REFUND'))
+  result.seen = ours.length
+  if (ours.length === 0) return result
+
+  const refs = [...new Set(ours.map(r => r.mPaymentId))]
+  const { data: known, error } = await admin.from('payfast_payments').select('m_payment_id, created_at').in('m_payment_id', refs)
+  if (error) throw error
+  const have = new Set((known ?? []).map((k: { m_payment_id: string }) => k.m_payment_id))
+
+  const written: { m_payment_id: string; user_id: string | null; amount_cents: number; status: string }[] = []
+  for (const row of ours) {
+    if (have.has(row.mPaymentId)) continue
+    have.add(row.mPaymentId)
+    // The history's own date is the only clock we have for a row we never saw.
+    const paidAt = Date.parse(row.date.replace(' ', 'T') + (row.date.includes('+') ? '' : '+02:00'))
+    if (Number.isFinite(paidAt) && now.getTime() - paidAt < SWEEP_AFTER_MS) continue
+
+    const check = verifyPaymentAmount(row.custom.str4 ?? '', row.amountCents)
+    const status = check.ok ? 'complete' : 'amount_mismatch'
+    const { error: insErr } = await admin.from('payfast_payments').insert({
+      m_payment_id: row.mPaymentId,
+      pf_payment_id: row.pfPaymentId,
+      user_id: row.custom.str1,
+      course_id: row.custom.str2,
+      hole_id: row.custom.str3,
+      tier: check.ok ? check.tier : null,
+      amount_cents: row.amountCents,
+      status,
+      raw_payload: { source: 'reconcile_history', reconciled_at: now.toISOString(), transaction: { pf_payment_id: row.pfPaymentId, amount_cents: row.amountCents, type: row.type, date: row.date } } as Json,
+    })
+    if (insErr) {
+      // A race with the ITN landing this second is the usual cause; it wrote the row.
+      result.errors++
+      log.warn('payfast.sweep.write_failed', { m_payment_id: row.mPaymentId, error: insErr.message })
+      continue
+    }
+    result.recorded++
+    if (!check.ok) result.mismatched++
+    written.push({ m_payment_id: row.mPaymentId, user_id: row.custom.str1, amount_cents: row.amountCents, status })
+    log.info('payfast.sweep.recorded', { m_payment_id: row.mPaymentId, user_id: row.custom.str1, pf_payment_id: row.pfPaymentId, amount_cents: row.amountCents, status })
+
+    if (!check.ok) continue
+    try {
+      const granted = await grantBetForPayment(admin, row.mPaymentId, { source: 'reconcile', createdIpHash: null })
+      if (granted.ok) result.granted++
+      else log.info('payfast.sweep.bet_not_granted', { m_payment_id: row.mPaymentId, user_id: row.custom.str1, reason: granted.reason })
+    } catch (grantErr) {
+      result.errors++
+      log.error('payfast.sweep.grant_failed', grantErr, { path: 'payfast_itn', m_payment_id: row.mPaymentId })
+    }
+  }
+
+  if (written.length > 0) {
+    await alertOps({
+      event: 'payfast.sweep.itn_missed',
+      path: 'payfast_itn',
+      summary: `${written.length} payment(s) found in PayFast's history with no ledger row: the ITN never reached us. Rows written and bets granted where the amount matched. Check the notify URL and Vercel's firewall.`,
+      details: { payments: written },
+    })
+  }
+  log.info('payfast.sweep.run', { ...result })
   return result
 }

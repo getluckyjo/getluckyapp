@@ -3,6 +3,9 @@
  * purpose (AUDIT.md B.10, docs/batch-8-popia.md).
  *
  *   miss      footage removed RETENTION_DAYS after the miss was declared
+ *   expired   a bet that was never declared (recorded, perhaps, then the
+ *             play window closed): footage removed RETENTION_DAYS after
+ *             the window closed. Nothing can be declared on it any more.
  *   rejected  documents and footage removed RETENTION_DAYS after the review
  *   verified / payout_approved / paid
  *             never touched here: the insurer's record of a payout
@@ -30,6 +33,8 @@ export interface RetentionResult {
   days: number
   /** Misses whose footage (if any) was removed and marked. */
   misses: number
+  /** Bets never declared, past their window, whose footage (if any) was removed and marked. */
+  undeclared: number
   /** Rejected claims whose documents and footage were removed and marked. */
   rejectedClaims: number
   objectsRemoved: number
@@ -50,7 +55,7 @@ export async function runRetention(admin: Admin, opts: RetentionOptions = {}): P
   const days = opts.days ?? retentionDays()
   const limit = opts.limit ?? 200
   const cutoff = new Date(now.getTime() - days * 86_400_000).toISOString()
-  const result: RetentionResult = { cutoff, days, misses: 0, rejectedClaims: 0, objectsRemoved: 0, errors: 0 }
+  const result: RetentionResult = { cutoff, days, misses: 0, undeclared: 0, rejectedClaims: 0, objectsRemoved: 0, errors: 0 }
 
   // 1. Misses past the window.
   const { data: misses, error: missErr } = await admin
@@ -69,6 +74,28 @@ export async function runRetention(admin: Admin, opts: RetentionOptions = {}): P
     } catch (err) {
       result.errors++
       log.error('retention.miss_failed', err, { bet_id: bet.id })
+    }
+  }
+
+  // 1b. Never declared: still 'active' long after the window closed. The
+  // state machine refuses any declaration once expires_at has passed, so
+  // the footage has no purpose left.
+  const { data: undeclared, error: undErr } = await admin
+    .from('bets')
+    .select('id, video_url')
+    .eq('status', 'active')
+    .is('footage_purged_at', null)
+    .lte('expires_at', cutoff)
+    .limit(limit)
+  if (undErr) throw undErr
+
+  for (const bet of undeclared ?? []) {
+    try {
+      result.objectsRemoved += await purgeFootage(admin, bet, now)
+      result.undeclared++
+    } catch (err) {
+      result.errors++
+      log.error('retention.undeclared_failed', err, { bet_id: bet.id })
     }
   }
 

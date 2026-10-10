@@ -159,7 +159,37 @@ export async function queryTransaction(config: ApiConfig, mPaymentId: string, op
   const now = opts.now ?? new Date()
   const from = isoDate(new Date(opts.chargedAt.getTime() - 86_400_000))
   const to = isoDate(new Date(now.getTime() + 86_400_000))
-  const res = await send(config, 'GET', '/transactions/history', {}, { from, to })
+  const rows = await listTransactions(config, { from, to })
+  const row = rows.find(r => r.mPaymentId === mPaymentId)
+  if (row) {
+    const lookup: TransactionLookup = { found: true, pfPaymentId: row.pfPaymentId, amountCents: row.amountCents, type: row.type, date: row.date }
+    log.info('payfast.transaction.found', { m_payment_id: mPaymentId, pf_payment_id: row.pfPaymentId, amount_cents: row.amountCents, type: row.type })
+    return lookup
+  }
+  log.info('payfast.transaction.not_found', { m_payment_id: mPaymentId, from, to, rows: rows.length })
+  return { found: false }
+}
+
+/** One line of PayFast's transaction history, as far as the ledger cares. */
+export interface HistoryRow {
+  mPaymentId: string
+  pfPaymentId: string | null
+  amountCents: number
+  type: string
+  date: string
+  /** custom_str1..4 as the checkout sent them: user id, course id, hole id, tier. */
+  custom: { str1: string | null; str2: string | null; str3: string | null; str4: string | null }
+}
+
+/**
+ * Every transaction PayFast has for us between two dates (YYYY-MM-DD,
+ * inclusive), newest or oldest first as PayFast chooses. Anything that is
+ * not the transaction CSV (an error body, an empty answer, an HTTP failure)
+ * throws, so a caller can never read "PayFast did not reply properly" as
+ * "nothing happened".
+ */
+export async function listTransactions(config: ApiConfig, range: { from: string; to: string }): Promise<HistoryRow[]> {
+  const res = await send(config, 'GET', '/transactions/history', {}, { from: range.from, to: range.to })
   const text = await res.text()
   if (!res.ok) throw new Error(`transactions/history answered ${res.status}`)
 
@@ -179,25 +209,26 @@ export async function queryTransaction(config: ApiConfig, mPaymentId: string, op
   const header = lines.length ? parseCsvLine(lines[0]).map(h => h.trim().toLowerCase()) : []
   const col = (name: string) => header.indexOf(name)
   const iRef = col('m payment id'), iPf = col('pf payment id'), iType = col('type'), iGross = col('gross'), iDate = col('date')
+  const iStr = [1, 2, 3, 4].map(n => col(`custom str${n}`))
   if (iRef === -1 || iGross === -1) throw new Error('transactions/history answered something other than the transaction CSV')
 
+  const cell = (cells: string[], i: number) => (i === -1 ? '' : (cells[i] ?? '').trim())
+  const rows: HistoryRow[] = []
   for (const line of lines.slice(1)) {
     const cells = parseCsvLine(line)
-    if ((cells[iRef] ?? '').trim() !== mPaymentId) continue
-    const gross = parseFloat((cells[iGross] ?? '').replace(/,/g, ''))
-    const amountCents = Number.isFinite(gross) ? Math.round(Math.abs(gross) * 100) : NaN
-    const lookup: TransactionLookup = {
-      found: true,
-      pfPaymentId: iPf === -1 ? null : (cells[iPf] ?? '').trim() || null,
-      amountCents,
-      type: iType === -1 ? '' : (cells[iType] ?? '').trim(),
-      date: iDate === -1 ? '' : (cells[iDate] ?? '').trim(),
-    }
-    log.info('payfast.transaction.found', { m_payment_id: mPaymentId, pf_payment_id: lookup.pfPaymentId, amount_cents: amountCents, type: lookup.type })
-    return lookup
+    const mPaymentId = cell(cells, iRef)
+    if (!mPaymentId) continue
+    const gross = parseFloat(cell(cells, iGross).replace(/,/g, ''))
+    rows.push({
+      mPaymentId,
+      pfPaymentId: cell(cells, iPf) || null,
+      amountCents: Number.isFinite(gross) ? Math.round(Math.abs(gross) * 100) : NaN,
+      type: cell(cells, iType),
+      date: cell(cells, iDate),
+      custom: { str1: cell(cells, iStr[0]) || null, str2: cell(cells, iStr[1]) || null, str3: cell(cells, iStr[2]) || null, str4: cell(cells, iStr[3]) || null },
+    })
   }
-  log.info('payfast.transaction.not_found', { m_payment_id: mPaymentId, from, to, rows: Math.max(0, lines.length - 1) })
-  return { found: false }
+  return rows
 }
 
 // ── Refunds ───────────────────────────────────────────────────────────────

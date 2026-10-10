@@ -189,6 +189,24 @@ Watch for `payfast.charge.unknown` (one per unanswered charge) and
 until it is back). The admin Payments page lists `Unknown (confirming)` as a
 status.
 
+## Payments whose ITN never arrived
+
+A hosted-checkout payment gets its ledger row from the ITN. When the ITN
+never reaches us (a notify URL that is wrong, a firewall rule, a PayFast
+retry window that expired) the golfer has paid and nothing in the app knows:
+no row, no bet, nothing on Home. `reconcileMissingPayments` in
+`src/lib/payfast/reconcile.ts` runs every ten minutes from
+`/api/cron/reconcile` (`vercel.json`). It reads the last two days of
+`GET /transactions/history`, and for every credit carrying one of our
+`gl_` references with no ledger row, older than fifteen minutes, it writes
+the row the ITN would have written (user, course, hole and tier come back
+in PayFast's custom fields) and grants the bet on the usual rules. A row
+that exists is never touched, the insert is keyed on the reference so a
+late ITN finds it, and a wrong amount lands as `amount_mismatch` with no
+bet. Every row written raises one `payfast.sweep.itn_missed` ops alert,
+because a missing ITN is a configuration problem to look at, not a thing
+to keep quietly patching.
+
 ## Refunds
 
 An admin refunds a payment from the Payments page (Refund button on a row
