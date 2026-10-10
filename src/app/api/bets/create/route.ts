@@ -96,6 +96,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    if (payment.status === 'pending' || payment.status === 'unknown') {
+      // A saved-card charge still in flight, or one PayFast has not answered
+      // for: the ITN or the reconciliation cron settles it. Not yet, not no.
+      return NextResponse.json(
+        { error: 'Waiting for payment confirmation', code: 'PAYMENT_PENDING' },
+        { status: 202 },
+      )
+    }
+
     if (payment.status !== 'complete') {
       log.warn('bets.create.refused_payment_status', { user_id: user.id, m_payment_id: paymentIntentId, status: payment.status })
       return NextResponse.json(

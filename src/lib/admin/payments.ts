@@ -7,10 +7,10 @@
  * for it — so both the payments list and the bet screen surface it plainly.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { AdminPaymentRecord, BetTier } from '@/types/admin'
+import type { AdminPaymentRecord, BetTier, PaymentStatus } from '@/types/admin'
 
 export const PAYMENT_SELECT =
-  'm_payment_id, pf_payment_id, user_id, course_id, hole_id, tier, amount_cents, status, bet_id, raw_payload, created_at'
+  'm_payment_id, pf_payment_id, user_id, course_id, hole_id, tier, amount_cents, status, bet_id, raw_payload, refunded_at, created_at'
 
 export interface PaymentRowLike {
   m_payment_id: string
@@ -20,9 +20,11 @@ export interface PaymentRowLike {
   hole_id: string | null
   tier: BetTier | null
   amount_cents: number
-  status: 'complete' | 'amount_mismatch' | 'pending' | 'failed'
+  status: PaymentStatus
   bet_id: string | null
   raw_payload: unknown
+  /** Absent on rows read before migration 037 was applied. */
+  refunded_at?: string | null
   created_at: string
 }
 
@@ -75,6 +77,7 @@ export function toPaymentRecord(r: PaymentRowLike, names: PaymentNames): AdminPa
     status: r.status,
     betId: r.bet_id,
     source: sourceOf(r.raw_payload),
+    refundedAt: r.refunded_at ?? null,
     createdAt: r.created_at,
   }
 }

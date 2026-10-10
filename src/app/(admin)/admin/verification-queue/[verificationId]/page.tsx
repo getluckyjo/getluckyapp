@@ -31,6 +31,7 @@ const PAYMENT_PILL: Record<NonNullable<VerificationReview['payment']>['status'],
   complete: { label: 'Paid', pill: 'adm-pill adm-pill--lime' },
   pending: { label: 'Pending', pill: 'adm-pill adm-pill--amber' },
   failed: { label: 'Failed', pill: 'adm-pill adm-pill--red' },
+  unknown: { label: 'Unconfirmed charge', pill: 'adm-pill adm-pill--amber' },
   amount_mismatch: { label: 'Amount mismatch', pill: 'adm-pill adm-pill--red' },
   missing: { label: 'No payment found', pill: 'adm-pill adm-pill--red' },
 }

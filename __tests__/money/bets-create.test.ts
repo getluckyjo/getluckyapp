@@ -105,6 +105,17 @@ describe('proof of payment', () => {
     expect(db.rows('bets')).toHaveLength(0)
   })
 
+  it('202 PAYMENT_PENDING, not 402, while a saved-card charge is pending or unknown: the return page keeps polling', async () => {
+    for (const status of ['pending', 'unknown']) {
+      db.rows('payfast_payments').length = 0
+      ledgerRow({ status, pf_payment_id: null, raw_payload: { source: 'saved_card' } })
+      const res = await post(body())
+      expect(res.status).toBe(202)
+      expect((await res.json()).code).toBe('PAYMENT_PENDING')
+    }
+    expect(db.rows('bets')).toHaveLength(0)
+  })
+
   it('402 when the ledger row is amount_mismatch', async () => {
     ledgerRow({ status: 'amount_mismatch', tier: null })
     const res = await post(body())

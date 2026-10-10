@@ -191,6 +191,15 @@ export class FakeDb {
   }
 }
 
+/** `raw_payload->>source` on a row: the key's value as text, or null (PostgREST's `->>`). */
+function jsonText(row: Row, path: string): string | null {
+  const [col, key] = path.split('->>')
+  const obj = row[col]
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
+  const v = (obj as Record<string, unknown>)[key]
+  return v == null ? null : typeof v === 'string' ? v : JSON.stringify(v)
+}
+
 export class Builder implements PromiseLike<Result> {
   private filters: Filter[] = []
   private op: 'select' | 'insert' | 'update' | 'upsert' | 'delete' = 'select'
@@ -224,8 +233,10 @@ export class Builder implements PromiseLike<Result> {
   delete() { this.op = 'delete'; return this }
 
   // A filter on an embedded resource ('holes.is_active') shapes the child
-  // rows, not the parent's.
+  // rows, not the parent's. A JSON path ('raw_payload->>source') reads the
+  // key out of the column, as text, the way PostgREST does.
   eq(col: string, val: unknown) {
+    if (col.includes('->>')) { this.filters.push(r => jsonText(r, col) === val); return this }
     const dot = col.indexOf('.')
     if (dot === -1) this.filters.push(r => r[col] === val)
     else {

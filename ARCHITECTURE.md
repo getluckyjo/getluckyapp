@@ -115,6 +115,17 @@ never rewritten, so bet creation for a payment is idempotent. Footage and
 documents are write-once (hash stands, bucket policy forbids overwrite).
 Witness tokens work once. Outbox handlers are safe to run twice.
 
+**The ledger's own states** (`payfast_payments.status`, migrations 005,
+021, 037): `complete`, `amount_mismatch`, `pending` (a saved-card charge
+in flight), `failed` (declined), `unknown` (charge sent, no answer). An
+unanswered charge is never marked failed, because the money may have
+moved: the ITN or the reconciliation in `payfast/reconcile.ts` (inside the
+outbox cron, after two minutes, from PayFast's transaction history) moves
+it to `complete`, `amount_mismatch` or `failed`, each write conditional on
+the row still being `unknown`. A refund is a `refunds` row (one per
+payment, `requested → sent | failed`, append-only otherwise) and
+`refunded_at` on the payment; the bet's status is never changed by it.
+
 ## 5. The fraud controls, and why each exists
 
 Nothing here decides a claim. A person does, with more in front of them.
@@ -134,6 +145,7 @@ Nothing here decides a claim. A person does, with more in front of them.
 | Suspension and blocked deletion | `profiles.suspended_at`, `account/delete.ts` | A fraud review cannot be ended by deleting the evidence |
 | Deleted-account memory | `deleted_accounts`, `deleted_and_back` rule | Deletion is not a reset |
 | Rate limits, Postgres-backed | `rate-limit.ts`, migration 009 | The old in-memory limiter limited nothing on Vercel |
+| Saved-card bounds: stakes to R250, R2,500 per golfer per rolling 24 h | `payfast/saved-card.ts`, charge route | A token charge has no 3-D Secure; a hijacked session could one-tap R1,000 ten times in ten minutes. Bigger stakes go through the hosted checkout |
 | Evidence pack with its own hash | `evidence-pack/route.ts` | One file per claim the insurer can verify with `sha256sum` |
 
 Retention is the other half of "what we keep": footage of misses and the
@@ -148,7 +160,9 @@ days (`retention.ts`, nightly). Approved and paid claims are kept.
 - `/api/cron/outbox`, every minute: drains `outbox`. Jobs today:
   `witness_request`, `welcome_email`. Claim = conditional update on
   `next_attempt_at` (also the 5-minute lease). Backoff 1 m, 5 m, 30 m,
-  2 h, 12 h; sixth failure is a dead letter with one ops alert.
+  2 h, 12 h; sixth failure is a dead letter with one ops alert. Then
+  `reconcileUnknownPayments` settles saved-card charges PayFast never
+  answered for (section 4); it cannot fail the drain.
 - `/api/cron/retention`, 02:00 UTC: the purge, 200 rows per scan, each on
   its own, stamped only after the object is gone.
 
