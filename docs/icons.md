@@ -2,7 +2,7 @@
 
 The Icons tab (it replaced Club, which is parked until the membership
 product is ready) lets a golfer pick which Icon they think holes it at
-Icons Cup South Africa. One pick per golfer, changeable until the event.
+Icons Cup South Africa. One pick per golfer, changeable until first tee.
 
 ## What the app states, and what it does not
 
@@ -65,8 +65,53 @@ RLS: `icons` is readable by everyone; `icon_votes` is readable only by its
 owner; neither is writable by the anon or authenticated role. The public
 route counts with the service role.
 
+## The fan prize: cut-off, freeze, draw (migration 036)
+
+Three R1m prizes go to fans who backed the Icon who holes it. The ace
+itself is confirmed by the live broadcast and the organisers' result, not
+through the app. What the app has to prove is who had backed that Icon
+when the ball dropped, and that the three names came from that list by a
+method anyone can re-run. `src/lib/fan-prize.ts` holds the rules; the
+panel at the top of `/admin/icons` runs them.
+
+1. **First tee.** `icon_events.first_tee_at` (seeded 07:00 SAST on
+   11 December as a placeholder; set the real tee time in the admin). From
+   that moment `POST /api/icons/vote` answers 409 `PICKS_CLOSED`, and a
+   trigger on `icon_votes` refuses the write whatever route tries. The
+   Icons tab shows "Picks close at first tee, Fri 11 Dec, 07:00" and locks
+   the cards afterwards. Removals still go through, so deleting an account
+   still cascades.
+2. **Freeze** (`POST /api/admin/icons/event/freeze`, once). Every pick is
+   copied to `icon_vote_snapshot` with the golfer's email and eligibility
+   (18+ verified, not an admin, not suspended, profile exists), and the
+   SHA-256 of the sorted `user_id:icon_id` lines goes on the event. Picks
+   close at once if first tee has not passed. **Publish the hash before
+   the shot is played** (a tweet, the Icons tab, an email to Indwe).
+3. **Draw** (`POST /api/admin/icons/event/draw`, once). Enter the Icon who
+   holed it and a seed nobody could have known at the freeze: the JSE All
+   Share close on the day, the evening's lottery numbers, a number read
+   out on air. Each eligible backer of that Icon is ranked by
+   HMAC-SHA256(seed, user_id); the lowest three win. The winners, their
+   ranks, the seed and a hash over the whole draw are written and cannot
+   be edited (`fan_prize_winners`, append-only).
+4. **Record** (`GET /api/admin/icons/event/record`). A JSON file with the
+   frozen list (ids only, no names or emails), both hashes recomputed
+   from the stored rows, the seed and the winners, and the method in
+   words. Send it to Indwe with the broadcast evidence.
+
+Every pick, change and removal is also logged in `icon_vote_events`
+(append-only), so the snapshot can be checked against the history. An
+Icon with picks can no longer be deleted (the foreign key restricts);
+hide it instead.
+
+Terms: section 5 of `/terms` describes the draw as above. It still needs
+the lawyer's read on the launch checklist.
+
 ## Apply order
 
 1. Migration 018 on production (`supabase/migrations/018_icons.sql`).
 2. Deploy.
 3. The seeded field shows at once; add newly announced Icons at `/admin/icons`.
+4. Migration 036 (`supabase/migrations/036_icons_fan_prize.sql`) before
+   the deploy that carries the fan prize panel; then set first tee at
+   `/admin/icons`.

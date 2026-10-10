@@ -105,7 +105,7 @@ export default function AgeCheckPage() {
               <span className="ac-blocked-badge" aria-hidden>18+</span>
               <h1 className="v2-title">{'You must be\n18 or older.'}</h1>
               <p className="v2-sub">
-                Get Lucky Golf is a real-money challenge for South African residents aged 18 and over. You&apos;ve been signed out.
+                Get Lucky Golf is for people aged 18 and over. You&apos;ve been signed out.
               </p>
               <p className="v2-legal" style={{ margin: 0 }}>
                 <a href="https://www.responsiblegambling.org.za" target="_blank" rel="noopener noreferrer">
@@ -126,7 +126,7 @@ export default function AgeCheckPage() {
 
         <form className="vf-scroll ac-form" onSubmit={handleConfirm} noValidate>
           <h1 className="v2-title" style={{ marginBottom: 8 }}>{'One quick\ncheck.'}</h1>
-          <p className="vf-sub">You must be 18+ and a South African resident to play for real money.</p>
+          <p className="vf-sub">You must be 18 or older to play. Paid entries are open to South African residents.</p>
 
           {error && <div className="auth-error" role="alert">{error}</div>}
 
@@ -152,7 +152,7 @@ export default function AgeCheckPage() {
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
             </span>
             <span className="ac-consent-text">
-              I confirm I am 18 or older and a South African resident, and I agree to the{' '}
+              I confirm I am 18 or older, and I agree to the{' '}
               <a href="/terms" target="_blank" rel="noopener noreferrer">Terms</a>,{' '}
               <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a> and{' '}
               <a href="/responsible-play" target="_blank" rel="noopener noreferrer">Responsible Play</a> guidelines.

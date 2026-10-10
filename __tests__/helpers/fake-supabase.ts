@@ -66,6 +66,9 @@ const UNIQUE: Record<string, (string | string[])[]> = {
   golf_days: ['slug'],
   golf_day_holes: [['golf_day_id', 'hole_id']],
   golf_day_players: [['golf_day_id', 'user_id']],
+  icon_events: ['slug'],
+  icon_vote_snapshot: [['event_id', 'user_id']],
+  fan_prize_winners: [['event_id', 'position'], ['event_id', 'user_id']],
 }
 
 /** Midnight at the start of a golf day in South Africa (+02:00), as migration 029 reads plays_on. */
@@ -81,8 +84,17 @@ type Trigger = (db: FakeDb, row: Row) => PostgrestError | null
 const refuse = (message: string): PostgrestError => ({ code: 'P0001', message })
 
 /** BEFORE INSERT triggers, per table. */
+// Mirrors enforce_icon_picks_open() in migration 036: no new or changed pick
+// once the event is frozen or first tee has passed.
+const iconPicksOpenTrigger: Trigger = db => {
+  const closed = db.rows('icon_events').some(e =>
+    e.frozen_at != null || (e.first_tee_at != null && Date.now() >= Date.parse(String(e.first_tee_at))))
+  return closed ? refuse('ICON_PICKS_CLOSED') : null
+}
+
 const BEFORE_INSERT: Record<string, Trigger> = {
   bets: (db, row) => golfDaySwingTrigger(db, row) ?? promoCodeTrigger(db, row),
+  icon_votes: iconPicksOpenTrigger,
   // Mirrors enforce_golf_day_join() in migration 033.
   golf_day_players: (db, row) => {
     const day = db.find('golf_days', d => d.id === row.golf_day_id)
@@ -128,6 +140,12 @@ function promoCodeTrigger(db: FakeDb, row: Row): PostgrestError | null {
 
 /** Read-only views, read like tables. */
 const VIEWS: Record<string, (db: FakeDb) => Row[]> = {
+  // Mirrors icon_vote_counts in migration 036: backers per Icon.
+  icon_vote_counts: db => {
+    const counts = new Map<string, number>()
+    for (const v of db.rows('icon_votes')) counts.set(String(v.icon_id), (counts.get(String(v.icon_id)) ?? 0) + 1)
+    return [...counts].map(([icon_id, votes]) => ({ icon_id, votes }))
+  },
   // Mirrors admin_unmatched_payments in migration 032: took money, no bet_id, and no bet carrying the reference.
   admin_unmatched_payments: db => db.rows('payfast_payments').filter(p =>
     (p.status === 'complete' || p.status === 'amount_mismatch') &&
@@ -219,7 +237,15 @@ export class Builder implements PromiseLike<Result> {
   neq(col: string, val: unknown) { this.filters.push(r => r[col] !== val); return this }
   in(col: string, vals: unknown[]) { this.filters.push(r => vals.includes(r[col])); return this }
   is(col: string, val: unknown) { this.filters.push(r => (val === null ? r[col] == null : r[col] === val)); return this }
-  not(col: string, _op: string, val: unknown) { this.filters.push(r => (val === null ? r[col] != null : r[col] !== val)); return this }
+  not(col: string, op: string, val: unknown) {
+    if (op === 'in') {
+      const set = new Set(String(val).replace(/^\(|\)$/g, '').split(',').map(v => v.trim()))
+      this.filters.push(r => !set.has(String(r[col])))
+    } else {
+      this.filters.push(r => (val === null ? r[col] != null : r[col] !== val))
+    }
+    return this
+  }
   gte(col: string, val: string) { this.filters.push(r => String(r[col]) >= val); return this }
   lte(col: string, val: string) { this.filters.push(r => String(r[col]) <= val); return this }
   ilike(col: string, val: string) {
@@ -350,6 +376,9 @@ export class Builder implements PromiseLike<Result> {
         const p = this.payload as Row
         const key = this.onConflict!
         const existing = p[key] != null ? this.db.rows(this.table).find(r => r[key] === p[key]) : undefined
+        // A before-insert trigger in Postgres also fires on the update leg of an upsert.
+        const refused = BEFORE_INSERT[this.table]?.(this.db, { ...(existing ?? {}), ...p })
+        if (refused) return { data: null, error: refused }
         if (existing) {
           Object.assign(existing, p)
           return this.returning ? this.shape([existing]) : { data: null, error: null }

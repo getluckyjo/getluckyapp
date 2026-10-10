@@ -15,6 +15,7 @@ type Mode = 'idle' | 'email' | 'sent'
 const ERROR_COPY: Record<string, string> = {
   oauth_error: 'Sign-in didn’t complete. Please try again.',
   link_expired: 'That sign-in link has expired or was already used. Ask for a new one.',
+  rate_limited: 'A lot of people are signing in right now. Give it a minute, then try again.',
   link_invalid: 'That sign-in link is incomplete. Ask for a new one.',
   no_session: 'We couldn’t start your session. Please sign in again.',
 }

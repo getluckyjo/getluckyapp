@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Check, Eye, EyeOff, Pencil, Trash2, X } from 'lucide-react'
 import ConfirmModal from '@/components/admin/ConfirmModal'
+import FanPrizePanel from '@/components/admin/FanPrizePanel'
 import LoadError from '@/components/admin/LoadError'
 
 interface Row { id: string; name: string; team: 'rsa' | 'world'; is_captain: boolean; tagline: string | null; photo_url: string | null; sort_order: number; is_active: boolean; created_at: string; votes: number }
@@ -12,7 +13,9 @@ const OFFLINE = 'Could not reach the server. Check your connection and try again
 /**
  * The field for Back an Icon. Add a name, a one-line tagline and an optional
  * photo URL; order controls the list; hidden Icons stay in the table with
- * their picks but disappear from the app. Deleting removes the picks too.
+ * their picks but disappear from the app. An Icon nobody has backed can be
+ * deleted; one with picks stays on record. The fan prize panel above the
+ * field runs the cut-off, the freeze and the draw.
  */
 export default function AdminIconsPage() {
   const [rows, setRows] = useState<Row[]>([])
@@ -152,6 +155,8 @@ export default function AdminIconsPage() {
         </div>
         <span className="adm-pill">{total.toLocaleString('en-ZA')} pick{total === 1 ? '' : 's'}</span>
       </div>
+
+      <FanPrizePanel icons={rows.filter(r => r.is_active).map(r => ({ id: r.id, name: r.name }))} onChanged={() => setRefresh(n => n + 1)} />
 
       <form onSubmit={add} className="adm-card adm-card--form adm-row" style={{ marginBottom: 16 }}>
         <label className="adm-field" style={{ flex: '1 1 200px' }}>
@@ -304,9 +309,9 @@ export default function AdminIconsPage() {
       <ConfirmModal
         open={deleting !== null}
         title={`Delete ${deleting?.name ?? ''}?`}
-        message={deleting
-          ? `${deleting.votes.toLocaleString('en-ZA')} pick${deleting.votes === 1 ? '' : 's'} will be deleted with it. Hiding it (the eye) keeps them.`
-          : ''}
+        message={deleting && deleting.votes > 0
+          ? `${deleting.votes.toLocaleString('en-ZA')} golfer${deleting.votes === 1 ? ' has' : 's have'} backed ${deleting.name}, so the server will refuse this. Hide it (the eye) instead.`
+          : 'Nobody has backed this Icon yet, so it can go.'}
         confirmLabel="Delete Icon"
         onConfirm={remove}
         onCancel={() => setDeleting(null)}

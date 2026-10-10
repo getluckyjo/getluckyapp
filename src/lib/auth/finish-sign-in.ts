@@ -5,7 +5,7 @@ import { sendWelcomeEmail } from '@/lib/email/welcome'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { enqueue } from '@/lib/outbox'
 
-import { isGolfDayPath, safeNext } from './next-path'
+import { safeNext } from './next-path'
 
 export { SAFE_NEXT_PATHS, safeNext } from './next-path'
 
@@ -63,10 +63,11 @@ export async function finishSignIn(
   }
 
   if (!profile?.age_verified_at) {
-    // A golf day's link survives the 18+ check, so its player comes back to
-    // join. Everything else lands on /welcome (All set) afterwards, as before.
+    // Where they were going survives the 18+ check: a golf day's player comes
+    // back to join, a viewer sent to the Icons tab comes back to Ernie. Only
+    // the default (/welcome, All set) carries nothing.
     const safe = safeNext(next)
-    const after = isGolfDayPath(safe) ? `?next=${encodeURIComponent(safe)}` : ''
+    const after = safe !== '/welcome' ? `?next=${encodeURIComponent(safe)}` : ''
     return NextResponse.redirect(`${origin}/age-check${after}`)
   }
 

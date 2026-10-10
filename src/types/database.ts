@@ -32,6 +32,7 @@ export type VerificationStatus = 'pending' | 'documents_received' | 'under_revie
 export type LeadLane = 'partner' | 'investor'
 export type IconTeam = 'rsa' | 'world'
 export type BetaAccessKind = 'email' | 'code'
+export type IneligibleReason = 'under_18' | 'staff' | 'suspended' | 'no_profile'
 
 export interface Database {
   public: {
@@ -594,6 +595,59 @@ export interface Database {
         Update: { icon_id?: string; updated_at?: string }
         Relationships: []
       }
+      icon_events: {
+        Row: {
+          id: string
+          slug: string
+          name: string
+          first_tee_at: string | null
+          winners_count: number
+          frozen_at: string | null
+          frozen_by: string | null
+          snapshot_sha256: string | null
+          snapshot_count: number | null
+          winning_icon_id: string | null
+          draw_seed: string | null
+          draw_sha256: string | null
+          drawn_at: string | null
+          drawn_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: { slug: string; name: string; first_tee_at?: string | null; winners_count?: number }
+        Update: {
+          first_tee_at?: string | null
+          frozen_at?: string | null
+          frozen_by?: string | null
+          snapshot_sha256?: string | null
+          snapshot_count?: number | null
+          winning_icon_id?: string | null
+          draw_seed?: string | null
+          draw_sha256?: string | null
+          drawn_at?: string | null
+          drawn_by?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      icon_vote_events: {
+        Row: { id: number; user_id: string; from_icon_id: string | null; to_icon_id: string | null; action: 'pick' | 'change' | 'remove'; actor_id: string | null; actor_role: string; created_at: string }
+        Insert: never
+        Update: never
+        Relationships: []
+      }
+      icon_vote_snapshot: {
+        Row: { event_id: string; user_id: string; icon_id: string; email: string | null; eligible: boolean; ineligible_reason: IneligibleReason | null; picked_at: string; created_at: string }
+        Insert: { event_id: string; user_id: string; icon_id: string; email?: string | null; eligible: boolean; ineligible_reason?: IneligibleReason | null; picked_at: string }
+        Update: never
+        Relationships: []
+      }
+      fan_prize_winners: {
+        Row: { event_id: string; position: number; user_id: string; icon_id: string; email: string | null; draw_rank: string; created_at: string }
+        Insert: { event_id: string; position: number; user_id: string; icon_id: string; email?: string | null; draw_rank: string }
+        Update: never
+        Relationships: []
+      }
       beta_access: {
         Row: { id: number; kind: BetaAccessKind; value: string; note: string | null; added_by: string | null; created_at: string }
         Insert: { kind: BetaAccessKind; value: string; note?: string | null; added_by?: string | null }
@@ -776,7 +830,12 @@ export interface Database {
         Relationships: []
       }
     }
-    Views: Record<string, never>
+    Views: {
+      icon_vote_counts: {
+        Row: { icon_id: string; votes: number }
+        Relationships: []
+      }
+    }
     Functions: {
       increment_attempts: { Args: { user_id: string }; Returns: undefined }
       beta_check: { Args: { p_email: string | null; p_code: string | null }; Returns: boolean }

@@ -5,7 +5,7 @@
  * could point at any address (AUDIT.md B.8). Now it is a function called
  * from the sign-in completion with the session's own email.
  */
-import { resend } from '@/lib/resend'
+import { sendEmailWithRetry } from '@/lib/email/send'
 import { emailShell, headline, paragraph, ctaButton, divider, escapeHtml, siteUrl } from '@/lib/email/layout'
 import { FROM_ADDRESS } from '@/lib/email/from'
 
@@ -28,7 +28,7 @@ export type SendResult = { ok: true; id: string | null } | { ok: false; error: s
 
 export async function sendWelcomeEmail({ email, name }: WelcomeInput): Promise<SendResult> {
   const firstName = typeof name === 'string' && name.trim() ? name.trim().split(' ')[0] : 'Golfer'
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await sendEmailWithRetry({
     from: FROM_ADDRESS,
     to: email,
     subject: 'Welcome to Get Lucky. One shot, R1 million.',

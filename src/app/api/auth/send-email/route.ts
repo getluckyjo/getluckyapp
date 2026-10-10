@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { resend } from '@/lib/resend'
+import { sendEmailWithRetry } from '@/lib/email/send'
 import { renderAuthEmail } from '@/lib/email/auth-emails'
 import { verifyStandardWebhook } from '@/lib/email/standard-webhooks'
 import { log } from '@/lib/observability/log'
@@ -23,6 +23,10 @@ import { FROM_ADDRESS } from '@/lib/email/from'
  *
  * Every request is signature-checked; an unsigned or stale request is refused
  * and nothing is sent. Supabase expects a 200 with an empty JSON object.
+ *
+ * Resend's rate limit (10 a second) is retried a few times inside Supabase's
+ * hook timeout (src/lib/email/send.ts), so a busy minute costs a golfer a
+ * second or two, not their sign-in.
  */
 export async function POST(request: NextRequest) {
   const secret = (process.env.SEND_EMAIL_HOOK_SECRET ?? '').trim()
@@ -69,21 +73,21 @@ export async function POST(request: NextRequest) {
     tokenHashNew: data.token_hash_new || undefined,
   })
 
-  const { data: sent, error } = await resend.emails.send({
+  const { data: sent, error, tries } = await sendEmailWithRetry({
     from: FROM_ADDRESS,
     to,
     subject: email.subject,
     html: email.html,
     text: email.text,
     headers: { 'X-Entity-Ref-ID': data.token_hash.slice(0, 32) },
-  })
+  }, { attempts: 4, baseDelayMs: 300 })
 
   if (error) {
     await alertOps({ event: 'auth.email_hook.send_failed', path: 'auth', summary: 'Resend refused an auth email; sign-ins are failing.', details: { action: data.email_action_type }, err: error })
     return hookError(500, 'Email provider refused the message')
   }
 
-  log.info('auth.email_hook.sent', { action: data.email_action_type, resend_id: sent?.id ?? null })
+  log.info('auth.email_hook.sent', { action: data.email_action_type, resend_id: sent?.id ?? null, tries })
   return NextResponse.json({})
 }
 
