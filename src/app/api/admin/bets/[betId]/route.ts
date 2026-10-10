@@ -63,6 +63,9 @@ export async function GET(_request: Request, { params }: Params) {
       ...toAdminBetRecord(bet, names),
       expiresAt: bet.expires_at,
       payoutReference: bet.payout_reference ?? null,
+      payoutApprovedBy: bet.payout_approved_by ?? null,
+      payoutApprovedAt: bet.payout_approved_at ?? null,
+      payoutApprovedByViewer: !!bet.payout_approved_by && bet.payout_approved_by === auth.user.id,
       videoSignedUrl,
       videoSha256: bet.video_sha256,
       videoBytes: bet.video_bytes,
@@ -90,14 +93,18 @@ export async function GET(_request: Request, { params }: Params) {
 
 const Body = z.object({
   status: z.enum(BET_STATUSES),
-  /** The bank or PayFast reference. Required when confirming a payout. */
+  /** The bank or PayFast reference. Required when marking a payout paid. */
   payoutReference: z.string().trim().max(120).optional(),
 })
 
 /**
- * The only direct admin change to a bet is confirming a payout
- * (verified → paid). Results are declared by the player, approval goes
- * through the verification queue; both land in claim_events with the actor.
+ * The only direct admin changes to a bet are the two signatures on a payout:
+ * approving it (verified → payout_approved, which records the approver) and
+ * marking it paid (payout_approved → paid, with the bank reference, by a
+ * different admin: the state machine answers 409 SECOND_APPROVER_REQUIRED
+ * to the approver). Results are declared by the player, approval of the
+ * claim goes through the verification queue; everything lands in
+ * claim_events with the actor.
  */
 export async function PATCH(request: Request, { params }: Params) {
   const auth = await requireAdmin()
@@ -113,7 +120,7 @@ export async function PATCH(request: Request, { params }: Params) {
     if (!bet) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     if (!isBetStatus(bet.status) || !canTransitionBet('admin', bet.status, body.data.status)) {
       return NextResponse.json(
-        { error: `An admin cannot move a bet from ${bet.status} to ${body.data.status}. Results are declared by the player; approval goes through the verification queue.`, code: 'INVALID_TRANSITION' },
+        { error: `An admin cannot move a bet from ${bet.status} to ${body.data.status}. Results are declared by the player; approval goes through the verification queue; a payout is approved before it is marked paid.`, code: 'INVALID_TRANSITION' },
         { status: 409 },
       )
     }

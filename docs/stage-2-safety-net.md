@@ -184,6 +184,38 @@ lands even before Sentry is configured. It fires on:
 | `claim.submit_failed` / `claim.declare_failed` | A hole-in-one claim or result could not be saved. |
 | `auth.email_hook.send_failed` | Resend refused an auth email: nobody can sign in. |
 
+**Cron monitors.** `next.config.ts` sets `automaticVercelMonitors: true`
+and `_experimental.vercelCronsMonitoring: true`, so a build on Vercel
+reads `vercel.json` and the server SDK sends a check-in at the start and
+end of every run of `/api/cron/outbox` (every minute) and
+`/api/cron/retention` (02:00 UTC). The first flag is the webpack-era
+switch; `next build` uses Turbopack, where the SDK does it with spans
+instead, which the second flag turns on. The cron routes need nothing
+special: an App Router `GET` that Vercel calls with its `vercel-cron`
+user agent. What they do need is a trace, so `sentry.server.config.ts`
+samples every `/api/cron/*` request at 100% (an unsampled run would show
+as a missed one).
+
+*How to see them:* Sentry → Crons. Each monitor is named after its path
+(`/api/cron/outbox`, `/api/cron/retention`) and shows the last check-ins,
+the schedule read from `vercel.json`, and missed or failed runs. The
+monitors are created by the first check-in after a deploy with
+`SENTRY_DSN` set; there is nothing to create by hand. Add an alert rule
+on each (Crons → the monitor → Alerts) to the ops email: a missed
+`/api/cron/outbox` run means welcome emails and witness requests are not
+going out; a missed `/api/cron/retention` run means footage is kept
+longer than the privacy page says.
+
+**Health endpoint.** `GET /api/health` is public, never cached, and rate
+limited per IP (60 in ten minutes). It answers 200 `{ ok: true, db: 'ok',
+outbox: 'ok' | 'idle', outboxBacklog, lastDrainAt }` when the database
+answers and no outbox job is more than ten minutes overdue, and 503
+`{ ok: false, failing: ['db' | 'outbox'] }` otherwise. `idle` means
+nothing was drained in the last hour, which on a quiet night is normal.
+It never carries the reason; that is in the log and in Sentry under
+`health.db_unreachable`, `health.outbox_unreadable`, `health.outbox_backlog`.
+Point an uptime monitor at it once a minute and alert on anything but 200.
+
 **Set-up (~15 minutes).**
 1. sentry.io → create project "get-lucky-golf" (platform Next.js). Copy the
    DSN. Create an auth token (Settings → Auth Tokens, scope `project:releases`

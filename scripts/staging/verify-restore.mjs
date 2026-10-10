@@ -49,7 +49,7 @@ console.table(await q(`
        and not exists (select 1 from public.payfast_payments p where p.m_payment_id = b.payment_intent_id or p.pf_payment_id = b.payment_intent_id)) as bets_without_ledger,
     (select count(*)::int from public.payfast_payments p where p.status = 'complete'
        and not exists (select 1 from public.bets b where b.payment_intent_id in (p.m_payment_id, p.pf_payment_id))) as ledger_without_bet,
-    (select count(*)::int from public.bets where status in ('verified','paid')) as verified_or_paid,
+    (select count(*)::int from public.bets where status in ('verified','payout_approved','paid')) as verified_or_paid,
     (select count(*)::int from public.verifications where status = 'approved') as approved_verifications
 `))
 

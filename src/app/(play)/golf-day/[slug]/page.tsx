@@ -444,7 +444,7 @@ function Action({ golfDay, me, signedIn, busy, started, startedHole, onSignIn, o
     }
     if (swing.status === 'miss') return <p className="gd-status">Your swing is in. Not this time. Thanks for playing.</p>
     if (swing.status === 'claimed') return <p className="gd-status">Your hole-in-one claim is in. We are checking the footage and speaking to the club and your playing partners.</p>
-    if (swing.status === 'verified') return <p className="gd-status">Verified. {prize} is on its way to you.</p>
+    if (swing.status === 'verified' || swing.status === 'payout_approved') return <p className="gd-status">Verified. {prize} is on its way to you.</p>
     if (swing.status === 'paid') return <p className="gd-status">Paid. Congratulations on your hole-in-one.</p>
     return <p className="gd-status">Your swing is in.</p>
   }

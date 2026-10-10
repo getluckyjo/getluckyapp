@@ -27,7 +27,7 @@ export type WitnessRole = 'witness' | 'club_official'
 export type WitnessSource = 'claimant' | 'course'
 export type WitnessResponse = 'confirmed' | 'denied'
 export type BetTier = 'tier_1' | 'tier_2' | 'tier_3' | 'tier_4' | 'tier_5' | 'tier_6' | 'tier_free' | 'tier_promo' | 'tier_golf_day'
-export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'paid'
+export type BetStatus = 'active' | 'miss' | 'claimed' | 'verified' | 'payout_approved' | 'paid'
 export type VerificationStatus = 'pending' | 'documents_received' | 'under_review' | 'approved' | 'rejected'
 export type LeadLane = 'partner' | 'investor'
 export type IconTeam = 'rsa' | 'world'
@@ -204,6 +204,9 @@ export interface Database {
           risk_flags: Json | null
           risk_evaluated_at: string | null
           payout_reference: string | null
+          /** The admin who approved the payout (migration 039); a different admin marks it paid. */
+          payout_approved_by: string | null
+          payout_approved_at: string | null
           promo_code_id: string | null
           golf_day_id: string | null
           /** The currency of potential_win_pence: 'ZAR', or a golf trip's 'USD' (migration 033). */
@@ -248,6 +251,8 @@ export interface Database {
           risk_flags?: Json | null
           risk_evaluated_at?: string | null
           payout_reference?: string | null
+          payout_approved_by?: string | null
+          payout_approved_at?: string | null
           promo_code_id?: string | null
           golf_day_id?: string | null
           prize_currency?: 'ZAR' | 'USD'
@@ -289,6 +294,8 @@ export interface Database {
           risk_flags?: Json | null
           risk_evaluated_at?: string | null
           payout_reference?: string | null
+          payout_approved_by?: string | null
+          payout_approved_at?: string | null
           declared_result?: 'miss' | 'win' | null
           declared_at?: string | null
           expires_at?: string
@@ -667,6 +674,8 @@ export interface Database {
           prize_currency: 'ZAR' | 'USD'
           max_players: number
           note: string | null
+          /** The branded look (migration 031): colours, art and copy from src/lib/golf-days/look.ts; null for the Get Lucky look. */
+          look: Json | null
           disabled_at: string | null
           created_by: string | null
           created_at: string
@@ -683,6 +692,7 @@ export interface Database {
           prize_currency?: 'ZAR' | 'USD'
           max_players: number
           note?: string | null
+          look?: Json | null
           disabled_at?: string | null
           created_by?: string | null
         }
@@ -695,6 +705,7 @@ export interface Database {
           prize_currency?: 'ZAR' | 'USD'
           max_players?: number
           note?: string | null
+          look?: Json | null
           disabled_at?: string | null
           updated_at?: string
         }

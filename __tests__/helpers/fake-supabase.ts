@@ -248,6 +248,9 @@ export class Builder implements PromiseLike<Result> {
   }
   gte(col: string, val: string) { this.filters.push(r => String(r[col]) >= val); return this }
   lte(col: string, val: string) { this.filters.push(r => String(r[col]) <= val); return this }
+  /** As PostgREST: a null column never compares, so it is never matched. */
+  gt(col: string, val: string) { this.filters.push(r => r[col] != null && String(r[col]) > val); return this }
+  lt(col: string, val: string) { this.filters.push(r => r[col] != null && String(r[col]) < val); return this }
   ilike(col: string, val: string) {
     const needle = val.replace(/%/g, '').toLowerCase()
     this.filters.push(r => String(r[col] ?? '').toLowerCase().includes(needle)); return this
@@ -434,7 +437,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           then: (res: (v: Result) => unknown) => Promise.resolve({ data: null, error: fail }).then(res),
         }
         const proxy: Record<string, unknown> = {}
-        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'is', 'not', 'gte', 'lte', 'ilike', 'or', 'order', 'limit', 'range', 'maybeSingle', 'single']) {
+        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'is', 'not', 'gte', 'lte', 'gt', 'lt', 'ilike', 'or', 'order', 'limit', 'range', 'maybeSingle', 'single']) {
           proxy[m] = () => proxy
         }
         proxy.then = failing.then
@@ -557,7 +560,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
             golf_day_id: d.id,
             players: db.rows('golf_day_players').filter(p => p.golf_day_id === d.id).length,
             swings: swings.length,
-            claimed: swings.filter(b => ['claimed', 'verified', 'paid'].includes(String(b.status))).length,
+            claimed: swings.filter(b => ['claimed', 'verified', 'payout_approved', 'paid'].includes(String(b.status))).length,
           }
         }), error: null }
       }

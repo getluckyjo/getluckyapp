@@ -31,8 +31,8 @@ const QUERIES = [
   ['revenue by course',                   `select * from public.admin_revenue_by_course()`],
   ['dashboard totals (old way: all bets)',`select stake_pence, potential_win_pence, status from public.bets`],
   // Stage 4
-  ['queue by risk (claimed bets)',        `select id from public.bets where status in ('claimed','verified','paid') order by risk_score desc limit 5000`],
-  ['risk: hole cluster (7 days)',         `select id from public.bets where hole_id = (select hole_id from public.bets limit 1) and status in ('claimed','verified','paid') and created_at >= now() - interval '7 days'`],
+  ['queue by risk (claimed bets)',        `select id from public.bets where status in ('claimed','verified','payout_approved','paid') order by risk_score desc limit 5000`],
+  ['risk: hole cluster (7 days)',         `select id from public.bets where hole_id = (select hole_id from public.bets limit 1) and status in ('claimed','verified','payout_approved','paid') and created_at >= now() - interval '7 days'`],
   ['risk: shared ip (30 days)',           `select user_id from public.bets where claim_ip_hash = 'none' and created_at >= now() - interval '30 days'`],
   ['risk: duplicate footage',             `select id from public.bets where video_sha256 = 'none'`],
   ['retention: misses to purge',          `select id, video_url from public.bets where status = 'miss' and footage_purged_at is null and declared_at <= now() - interval '90 days' limit 200`],

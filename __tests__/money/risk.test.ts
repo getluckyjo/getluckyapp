@@ -296,13 +296,13 @@ describe('admin review discipline', () => {
     expect(detail.riskFlags.map((f: RiskFlag) => f.rule)).toEqual(['shared_ip'])
   })
 
-  it('paid needs a payout reference and stamps the verification', async () => {
-    const b = bet(USER_A.id, { status: 'verified' })
+  it('paid needs a payout reference and a different admin than the approver, and stamps the verification', async () => {
+    const b = bet(USER_A.id, { status: 'payout_approved', payout_approved_by: USER_A.id })
     const [v] = db.seed('verifications', { bet_id: b.id, status: 'approved' })
     const patch = (body: unknown) => adminBet(jsonRequest('http://x', body, { method: 'PATCH' }) as never, { params: Promise.resolve({ betId: b.id as string }) })
     expect(await (await patch({ status: 'paid' })).json()).toMatchObject({ code: 'PAYOUT_REFERENCE_REQUIRED' })
     expect(await (await patch({ status: 'paid', payoutReference: 'ab' })).json()).toMatchObject({ code: 'PAYOUT_REFERENCE_REQUIRED' })
-    expect(b.status).toBe('verified')
+    expect(b.status).toBe('payout_approved')
     expect((await patch({ status: 'paid', payoutReference: 'FNB-0042' })).status).toBe(200)
     expect(b).toMatchObject({ status: 'paid', payout_reference: 'FNB-0042' })
     expect(typeof v.payout_initiated_at).toBe('string')

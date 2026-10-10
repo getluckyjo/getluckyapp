@@ -114,6 +114,7 @@ export default function AdminBetsPage() {
             <option value="miss">Miss</option>
             <option value="claimed">Claimed</option>
             <option value="verified">Verified</option>
+            <option value="payout_approved">Payout approved</option>
             <option value="paid">Paid</option>
           </select>
         </label>

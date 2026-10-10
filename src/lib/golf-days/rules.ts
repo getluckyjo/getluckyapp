@@ -83,7 +83,7 @@ export function tabVisible(lastPlayed: string, now: number = Date.now()): boolea
  * verified and not yet paid. A missed, paid or lapsed swing is done.
  */
 export function swingInHand(status: string, expiresAt: string | null, now: number = Date.now()): boolean {
-  if (status === 'claimed' || status === 'verified') return true
+  if (status === 'claimed' || status === 'verified' || status === 'payout_approved') return true
   return status === 'active' && (!expiresAt || Date.parse(expiresAt) > now)
 }
 

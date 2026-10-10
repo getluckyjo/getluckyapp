@@ -82,7 +82,7 @@ export interface ClaimWitness {
 
 export interface DocumentSealInfo { sha256: string | null; bytes: number | null }
 
-export interface VerificationDetail extends VerificationQueueItem {
+export interface VerificationDetail extends VerificationQueueItem, PayoutApproval {
   videoSignedUrl: string | null
   certificateSignedUrl: string | null
   affidavitSignedUrl: string | null
@@ -146,7 +146,18 @@ export interface AdminPaymentRecord {
 }
 
 /** Everything the bet screen shows: the bet, its money, its risk, its history. */
-export interface AdminBetDetail extends AdminBetRecord {
+/**
+ * The first signature on a payout (migration 039): who approved it and
+ * when, and whether that is the admin looking at the screen, who then
+ * cannot be the one to mark it paid.
+ */
+export interface PayoutApproval {
+  payoutApprovedBy: string | null
+  payoutApprovedAt: string | null
+  payoutApprovedByViewer: boolean
+}
+
+export interface AdminBetDetail extends AdminBetRecord, PayoutApproval {
   expiresAt: string | null
   payoutReference: string | null
   videoSignedUrl: string | null

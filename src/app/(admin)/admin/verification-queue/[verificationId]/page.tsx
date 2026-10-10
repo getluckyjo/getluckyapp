@@ -24,7 +24,7 @@ const MIN_REFERENCE = 3
 /** Signed links last an hour. Past this age, a reviewer coming back to the tab gets new ones before they are needed. */
 const STALE_MS = 50 * 60_000
 
-type Confirm = 'approve' | 'reject' | 'pay'
+type Confirm = 'approve' | 'reject' | 'approve_payout' | 'pay'
 interface Warning { text: string; href?: string; action?: string }
 
 const PAYMENT_PILL: Record<NonNullable<VerificationReview['payment']>['status'], { label: string; pill: string }> = {
@@ -211,7 +211,8 @@ export default function VerificationDetailPage() {
     }
   }
 
-  const recordPayout = async () => {
+  /** One of the two signatures on the payout: approve it, or (a different admin) record it as paid. */
+  const signPayout = async (status: 'payout_approved' | 'paid') => {
     if (!detail) return
     const reference = payoutReference.trim()
     setBusy(true)
@@ -220,20 +221,20 @@ export default function VerificationDetailPage() {
       const res = await fetch(`/api/admin/bets/${detail.betId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'paid', payoutReference: reference }),
+        body: JSON.stringify(status === 'paid' ? { status, payoutReference: reference } : { status }),
       })
       const json = await res.json().catch(() => null)
       if (!res.ok) {
-        setModalError(failureMessage(res.status, json?.error) ?? 'The payout could not be recorded. Try again.')
+        setModalError(failureMessage(res.status, json?.error) ?? (status === 'paid' ? 'The payout could not be recorded. Try again.' : 'The approval could not be recorded. Try again.'))
         if (res.status === 409) void load(false)
         return
       }
       setConfirm(null)
-      setPayoutReference('')
+      if (status === 'paid') setPayoutReference('')
       await load(false)
     } catch (err) {
       console.error('[admin] payout request failed:', err)
-      setModalError('The request did not complete, so the payout may not have been recorded. Reload the claim to check before trying again.')
+      setModalError('The request did not complete, so the change may not have been recorded. Reload the claim to check before trying again.')
     } finally {
       setBusy(false)
     }
@@ -369,7 +370,7 @@ export default function VerificationDetailPage() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <StatusBadge status={d.status} />
-          {d.betStatus === 'paid' && <StatusBadge status="paid" />}
+          {(d.betStatus === 'paid' || d.betStatus === 'payout_approved') && <StatusBadge status={d.betStatus} />}
           {refreshing && <span className="adm-small">Refreshing…</span>}
         </div>
       </div>
@@ -556,12 +557,31 @@ export default function VerificationDetailPage() {
             ) : d.status === 'approved' && d.betStatus === 'verified' ? (
               <>
                 <p style={{ margin: '0 0 12px', fontSize: 14 }}>
-                  Approved {whenSA(d.verifiedAt)}. Pay <strong>{prize}</strong> to <strong>{payee}</strong>
+                  Approved {whenSA(d.verifiedAt)}. Paying <strong>{prize}</strong> to <strong>{payee}</strong>
+                  {d.userName && d.player.email ? <> ({d.player.email})</> : null} takes two admins: one approves the payout here, a different one records it as paid once the money has left the account.
+                </p>
+                <button type="button" onClick={() => openConfirm('approve_payout')} disabled={busy} className="adm-btn">
+                  <CheckCircle size={17} aria-hidden /> Approve payout
+                </button>
+              </>
+            ) : d.status === 'approved' && d.betStatus === 'payout_approved' ? (
+              <>
+                <p style={{ margin: '0 0 12px', fontSize: 14 }}>
+                  Payout approved{d.payoutApprovedAt ? ` ${whenSA(d.payoutApprovedAt)}` : ''}{d.payoutApprovedByViewer ? ' by you' : ''}. Pay <strong>{prize}</strong> to <strong>{payee}</strong>
                   {d.userName && d.player.email ? <> ({d.player.email})</> : null}, then record it here with the bank or PayFast reference.
                 </p>
-                <button type="button" onClick={() => openConfirm('pay')} disabled={busy} className="adm-btn">
-                  <CheckCircle size={17} aria-hidden /> Record the payout
+                <button
+                  type="button"
+                  onClick={() => openConfirm('pay')}
+                  disabled={busy || d.payoutApprovedByViewer}
+                  title={d.payoutApprovedByViewer ? 'You approved this payout, so a different admin must mark it as paid.' : undefined}
+                  className="adm-btn"
+                >
+                  <CheckCircle size={17} aria-hidden /> Mark as paid
                 </button>
+                {d.payoutApprovedByViewer && (
+                  <p className="adm-small" style={{ margin: '8px 0 0' }}>You approved this payout, so a different admin must mark it as paid.</p>
+                )}
               </>
             ) : d.betStatus === 'paid' ? (
               <p style={{ margin: 0, fontSize: 14 }}>
@@ -570,7 +590,7 @@ export default function VerificationDetailPage() {
               </p>
             ) : d.status === 'approved' ? (
               <p className="adm-warn" style={{ margin: 0 }}>
-                <AlertTriangle size={14} aria-hidden /> Approved, but the bet is {d.betStatus ?? 'missing'}, not verified, so the payout cannot be recorded. <Link href={`/admin/bets/${d.betId}`} className="adm-link">Open the bet</Link>
+                <AlertTriangle size={14} aria-hidden /> Approved, but the bet is {d.betStatus ?? 'missing'}, not verified, so the payout cannot be approved or recorded. <Link href={`/admin/bets/${d.betId}`} className="adm-link">Open the bet</Link>
               </p>
             ) : (
               <p style={{ margin: 0, fontSize: 14 }}>Rejected. No prize is paid.</p>
@@ -718,7 +738,7 @@ export default function VerificationDetailPage() {
                   : 'The pack was downloaded, but the server did not send its hash. Export it again before sending it.'}
               </p>
             )}
-            <Timeline status={d.status} paid={d.betStatus === 'paid'} />
+            <Timeline status={d.status} betStatus={d.betStatus} />
             <button
               type="button"
               className="adm-link"
@@ -808,15 +828,34 @@ export default function VerificationDetailPage() {
       </ConfirmModal>
 
       <ConfirmModal
+        open={confirm === 'approve_payout'}
+        title="Approve this payout"
+        message={`The first of two signatures: it records that you approve paying ${prize} to ${payee}. A different admin then marks it as paid once the money has left the account. Nothing is paid by this step.`}
+        confirmLabel="Approve the payout"
+        variant="success"
+        busy={busy}
+        error={modalError}
+        onConfirm={() => signPayout('payout_approved')}
+        onCancel={closeConfirm}
+      >
+        {warnings.length > 0 && (
+          <div className="adm-warn" style={{ display: 'block' }}>
+            <AlertTriangle size={14} aria-hidden style={{ verticalAlign: '-2px' }} /> Before approving the payout:
+            {warningList(true)}
+          </div>
+        )}
+      </ConfirmModal>
+
+      <ConfirmModal
         open={confirm === 'pay'}
         title="Confirm the prize was paid"
-        message={`Only confirm once ${prize} has left the account for ${payee}. This marks the bet as paid, puts it on the winners list, and records your admin id in its history.`}
+        message={`Only confirm once ${prize} has left the account for ${payee}. The second signature: it marks the bet as paid, puts it on the winners list, and records your admin id in its history.`}
         confirmLabel="Yes, the prize was paid"
         variant="success"
         busy={busy}
         confirmDisabled={payoutReference.trim().length < MIN_REFERENCE}
         error={modalError}
-        onConfirm={recordPayout}
+        onConfirm={() => signPayout('paid')}
         onCancel={closeConfirm}
       >
         <div className="adm-stack">
@@ -878,13 +917,16 @@ const STAGES = [
   { key: 'documents_received', label: 'Documents in' },
   { key: 'under_review', label: 'Under review' },
   { key: 'approved', label: 'Approved' },
+  { key: 'payout_approved', label: 'Payout approved' },
   { key: 'paid', label: 'Paid' },
 ] as const
 
-/** Where the claim is: done stages in lime, the current one in green, the rest plain; a rejection ends it. */
-function Timeline({ status, paid }: { status: string; paid: boolean }) {
+/** Where the claim is: done stages in lime, the current one in green, the rest plain; a rejection ends it. The last two stages are the bet's. */
+function Timeline({ status, betStatus }: { status: string; betStatus: string | null }) {
   const rejected = status === 'rejected'
-  const at = paid ? STAGES.length - 1 : STAGES.findIndex(s => s.key === status)
+  const at = betStatus === 'paid' || betStatus === 'payout_approved'
+    ? STAGES.findIndex(s => s.key === betStatus)
+    : STAGES.findIndex(s => s.key === status)
   const shown = rejected ? STAGES.slice(0, 3) : STAGES
   return (
     <ol aria-label="Where the claim is" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>

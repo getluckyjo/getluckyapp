@@ -31,7 +31,7 @@ export async function GET() {
     const [{ data: days, error: daysError }, { data: swings, error: swingsError }] = await Promise.all([
       admin.from('golf_days').select('*').in('id', ids),
       admin.from('bets').select('golf_day_id, status, expires_at').eq('user_id', user.id).in('golf_day_id', ids)
-        .in('status', ['active', 'claimed', 'verified']),
+        .in('status', ['active', 'claimed', 'verified', 'payout_approved']),
     ])
     if (daysError) throw daysError
     if (swingsError) throw swingsError

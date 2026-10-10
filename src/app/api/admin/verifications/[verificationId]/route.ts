@@ -164,6 +164,9 @@ export async function GET(request: Request, { params }: Params) {
       riskEvaluatedAt: risk ? new Date().toISOString() : bet?.risk_evaluated_at ?? null,
       reviewChecklist: (row.review_checklist as Record<string, unknown> | null) ?? null,
       payoutReference: bet?.payout_reference ?? null,
+      payoutApprovedBy: bet?.payout_approved_by ?? null,
+      payoutApprovedAt: bet?.payout_approved_at ?? null,
+      payoutApprovedByViewer: !!bet?.payout_approved_by && bet.payout_approved_by === auth.user.id,
       userBetHistory: history.map(b => toAdminBetRecord(b, names)),
       userTotalAttempts: profile?.total_attempts ?? 0,
       player: {

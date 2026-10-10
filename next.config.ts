@@ -26,6 +26,13 @@ export default withSentryConfig(withSerwist(nextConfig), {
   // Route browser events through this origin so ad-blockers do not drop them.
   tunnelRoute: "/monitoring",
   disableLogger: true,
-  automaticVercelMonitors: false,
+  // Cron monitors: Sentry creates one check-in per run of each cron in
+  // vercel.json (slug = the route's path). `automaticVercelMonitors` is the
+  // webpack-era switch; `next build` here is Turbopack, where the SDK does it
+  // with spans instead, which `_experimental.vercelCronsMonitoring` turns on.
+  // Both are set so the monitors exist whichever bundler builds. A check-in
+  // needs the cron's request traced, which sentry.server.config.ts ensures.
+  automaticVercelMonitors: true,
+  _experimental: { vercelCronsMonitoring: true },
   telemetry: false,
 });

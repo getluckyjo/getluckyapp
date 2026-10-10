@@ -36,7 +36,7 @@ const FILTERS: { key: Filter; label: string }[] = [
 type Outcome = 'won' | 'claimed' | 'miss'
 
 function getOutcome(bet: BetRecord): Outcome {
-  if (bet.status === 'paid' || bet.status === 'verified') return 'won'
+  if (bet.status === 'paid' || bet.status === 'payout_approved' || bet.status === 'verified') return 'won'
   if (bet.declared_result === 'win' || bet.status === 'claimed') return 'claimed'
   return 'miss'
 }
@@ -47,7 +47,7 @@ function matchesFilter(bet: BetRecord, filter: Filter): boolean {
   if (filter === 'all') return true
   if (filter === 'miss') return bet.declared_result === 'miss' || bet.status === 'miss'
   if (filter === 'claimed') return bet.declared_result === 'win' || bet.status === 'claimed'
-  if (filter === 'won') return bet.status === 'paid' || bet.status === 'verified'
+  if (filter === 'won') return bet.status === 'paid' || bet.status === 'payout_approved' || bet.status === 'verified'
   return true
 }
 

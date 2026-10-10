@@ -63,7 +63,7 @@ export default function HomePage() {
         const bets = data.bets as BetRecord[]
         const found = bets.find(
           b => b.status === 'claimed' ||
-            (b.declared_result === 'win' && b.status !== 'paid' && b.status !== 'verified'),
+            (b.declared_result === 'win' && b.status !== 'paid' && b.status !== 'payout_approved' && b.status !== 'verified'),
         )
         setClaim({ userId, bet: found ?? null })
       })

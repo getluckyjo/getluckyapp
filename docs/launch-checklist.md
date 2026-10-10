@@ -22,7 +22,8 @@ do it. Tick each line in the pull request that closes it, or here.
 
 ## 1. Database (production)
 
-- [ ] Migrations 001 to 036 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file).
+- [ ] Migrations 001 to 039 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file). 039 adds the `payout_approved` status and must be in before the code that uses it is deployed.
+- [ ] Two admin accounts exist. A payout takes two signatures (approve, then a different admin marks it paid); with one admin no prize can be paid.
 - [ ] Point-in-Time Recovery on (Settings → Add-ons). The restore drill (`docs/restore-runbook.md`) needs a second project to restore into; do it once there is data worth restoring, or when a staging project exists.
 - [ ] Authentication → Rate Limits: emails per hour raised from 30 to at least 3 000 for the Icons Cup weekend (11–13 Dec); sign-ins and OTP verifications per IP raised (mobile carriers share one address across thousands of phones).
 - [ ] Resend: plan with at least 100 000 emails a month before December (an email sign-up costs two); ask support to raise the 10 requests a second limit. The hook and the welcome queue retry a 429 (`src/lib/email/send.ts`), but a cap is a cap.
@@ -43,7 +44,7 @@ Preview:
 - [ ] `RESEND_API_KEY`, `RESEND_FROM_ADDRESS` (a verified domain), `SEND_EMAIL_HOOK_SECRET`.
 - [ ] `SENTRY_DSN`, `NEXT_PUBLIC_SENTRY_DSN`, `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN`.
 - [ ] `OPS_ALERT_EMAIL` (defaults to Johannes).
-- [ ] `CRON_SECRET` (long random string). Settings → Cron Jobs shows `/api/cron/outbox` every minute and `/api/cron/retention` nightly.
+- [ ] `CRON_SECRET` (long random string). Settings → Cron Jobs shows `/api/cron/outbox` every minute and `/api/cron/retention` nightly. After the first deploy, Sentry → Crons lists both as monitors (`docs/stage-2-safety-net.md` §4).
 - [ ] `RISK_HASH_SALT` (16+ random characters). Pick once; rotating orphans every hash.
 - [ ] `RETENTION_DAYS`, `BET_WINDOW_HOURS` only if you want other than 90 and 24.
 - [ ] `BETA_GATE` unset. `NEXT_PUBLIC_FEEDBACK=on` only if you want the floating feedback button for the first group; it emails you what they were doing, on which screen and build.
@@ -72,6 +73,7 @@ Preview:
 ## 5. Proof it holds
 
 - [ ] Sentry alert rules exist and the test alert arrived (`docs/stage-2-safety-net.md` §4).
+- [ ] An uptime monitor (Vercel, Better Stack, or similar) polls `https://www.getluckyholeinone.com/api/health` once a minute and alerts on anything but 200. The first call answers `{ ok: true, db: 'ok', … }`.
 - [ ] Independent penetration test of the claim and payment paths booked or done.
 - [ ] Vercel Web Analytics enabled on the project; the funnel events listed in `BETA-TESTING.md` show up from the first golfers.
 - Not run, by decision: the event-day load test (`docs/batch-12-scale.md`) and the query timings (`docs/batch-6-admin-queries.md`). Both need a non-production project. At the expected volume (about one entry a minute on an event day) the first event is the load test; watch the admin pages and the ITN logs during it. If a staging project is ever created, both run unchanged.
