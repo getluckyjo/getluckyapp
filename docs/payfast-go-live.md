@@ -150,6 +150,67 @@ To switch it on at PayFast:
 4. Test with one R50 entry with the box ticked, then a second entry: the
    stake sheet shows "Pay R50 with saved card".
 
+### Saved-card bounds
+
+A token charge has no 3-D Secure, so it is bounded (`src/lib/payfast/saved-card.ts`):
+stakes up to **R250** only (bigger stakes go through the hosted checkout, which
+has 3-D Secure), and at most **R2,500** per golfer in any rolling 24 hours,
+counting complete, pending and unknown saved-card rows. Over either bound the
+charge route answers `403 SAVED_CARD_LIMIT` and the stake screen shows the
+ordinary checkout button instead.
+
+## Unknown charges
+
+A saved-card charge PayFast never answers (the 12 s timeout, a dropped
+connection) is **not** marked failed: the money may have moved, and marking it
+failed is what used to produce a double charge when the late ITN flipped the
+row to complete. Instead the ledger row is `unknown` (migration 037), the
+golfer gets `409 CHARGE_UNKNOWN` ("We could not confirm the charge. Check your
+shots in a minute before paying again."), Home shows the payment as
+"Confirming your payment", and `/api/bets/create` answers 202 so the return
+page keeps polling.
+
+Two things settle it:
+
+- PayFast's ITN for the charge, which upserts on `m_payment_id`: a COMPLETE
+  ITN moves the row to `complete` and grants the bet.
+- The reconciliation in `src/lib/payfast/reconcile.ts`, which runs inside
+  `/api/cron/outbox` every minute. For each `unknown` row older than two
+  minutes it reads `GET /transactions/history?from=&to=` (signed like every
+  other API call) and looks for our `m_payment_id`: found with the right
+  amount → `complete` and the bet is granted; found with another amount →
+  `amount_mismatch` with an ops alert; not found → `failed`. If PayFast
+  cannot be reached, or answers anything other than the transaction CSV, the
+  row stays `unknown` for the next run. Every write is conditional on the row
+  still being `unknown`, so an ITN landing mid-run wins.
+
+Watch for `payfast.charge.unknown` (one per unanswered charge) and
+`payfast.reconcile.unreachable` (PayFast's API down: rows pile up as unknown
+until it is back). The admin Payments page lists `Unknown (confirming)` as a
+status.
+
+## Refunds
+
+An admin refunds a payment from the Payments page (Refund button on a row
+whose status is complete or amount mismatch, with PayFast's id known and no
+refund yet). The reason is required: PayFast wants 3 to 255 characters and
+shows it to the buyer.
+
+`POST /api/admin/payments/[mPaymentId]/refund` refuses if the payment did not
+take money, has no `pf_payment_id`, is already refunded, or its bet is
+claimed, verified or paid (resolve the claim first). It writes a `refunds`
+row (migration 037) as `requested`, calls
+`POST https://api.payfast.co.za/refunds/{pf_payment_id}` with `amount` in
+**cents** (PayFast's unit for this endpoint), `reason` and `notify_buyer=1`,
+then marks the row `sent` (with PayFast's refund id when it gives one) or
+`failed` (with what PayFast said, for ops, never for the golfer) and stamps
+`payfast_payments.refunded_at`. The bet is never touched. A failed request
+may be retried; a sent one cannot. Every failure raises `payfast.refund.failed`.
+
+Refunds need the Refunds API enabled on the merchant account: PayFast
+dashboard → **Settings → Integration** → API, and the same passphrase as the
+checkout. Nothing else to configure.
+
 ## Step 3 — Redeploy
 
 Env-var changes only take effect on a new deployment. Redeploy production after

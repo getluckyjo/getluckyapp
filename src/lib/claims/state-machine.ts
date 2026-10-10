@@ -5,14 +5,18 @@
  * be raced into a double resolution.
  *
  *   bet:   active ──player──▶ miss
- *          active ──player──▶ claimed ──review──▶ verified ──admin──▶ paid
+ *          active ──player──▶ claimed ──review──▶ verified
+ *                   ──admin──▶ payout_approved ──a different admin──▶ paid
  *
  *   verification:
  *          pending / documents_received ──▶ under_review ──▶ approved | rejected
  *          pending / documents_received ──────────────────▶ approved | rejected
  *
  * Anything else is a 409. A bet past its play window cannot leave `active`
- * (410). A suspended account cannot act on money paths (403).
+ * (410). A suspended account cannot act on money paths (403). A payout is
+ * two signatures: the admin who approves it (recorded in
+ * payout_approved_by) cannot be the one who marks it paid (409
+ * SECOND_APPROVER_REQUIRED); migration 039's trigger is the backstop.
  *
  * Writes use the service-role client (migration 006 removed client writes)
  * and always set `updated_by`, which the claim_events trigger records as the
@@ -21,7 +25,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-export const BET_STATUSES = ['active', 'miss', 'claimed', 'verified', 'paid'] as const
+export const BET_STATUSES = ['active', 'miss', 'claimed', 'verified', 'payout_approved', 'paid'] as const
 export type BetStatus = (typeof BET_STATUSES)[number]
 
 export const VERIFICATION_STATUSES = ['pending', 'documents_received', 'under_review', 'approved', 'rejected'] as const
@@ -32,8 +36,17 @@ export type BetActor = 'player' | 'review' | 'admin'
 const BET_TRANSITIONS: Record<BetActor, Partial<Record<BetStatus, readonly BetStatus[]>>> = {
   player: { active: ['miss', 'claimed'] },
   review: { claimed: ['verified'] },       // only via an approved verification
-  admin:  { verified: ['paid'] },          // payout confirmation
+  admin:  { verified: ['payout_approved'], payout_approved: ['paid'] }, // two signatures on a payout
 }
+
+/** Bets that reached a claim, in every state after it (a verification can exist). */
+export const CLAIMED_BET_STATUSES: readonly BetStatus[] = ['claimed', 'verified', 'payout_approved', 'paid']
+/** A prize that is owed: verified, with or without the first signature, and not yet paid. */
+export const OWED_BET_STATUSES: readonly BetStatus[] = ['verified', 'payout_approved']
+/** The golfer has won: the claim is verified, whether or not the prize has been paid. */
+export const WON_BET_STATUSES: readonly BetStatus[] = ['verified', 'payout_approved', 'paid']
+
+export const SECOND_APPROVER_MESSAGE = 'A different admin must mark the payout as paid.'
 
 const VERIFICATION_TRANSITIONS: Record<VerificationStatus, readonly VerificationStatus[]> = {
   pending:            ['documents_received', 'under_review', 'approved', 'rejected'],
@@ -54,6 +67,7 @@ export type ClaimErrorCode =
   | 'ACCOUNT_SUSPENDED'
   | 'CLAIM_LOCKED'
   | 'CONFLICT'
+  | 'SECOND_APPROVER_REQUIRED'
 
 export class ClaimError extends Error {
   constructor(public code: ClaimErrorCode, message: string, public status: number) {
@@ -133,15 +147,30 @@ export interface BetTransition {
  * Conditional status change: `update ... where id = $betId and status = $from`.
  * Zero rows means someone else got there first (or the caller's read was
  * stale) and is reported as a 409 rather than silently overwriting.
+ *
+ * Moving to `payout_approved` stamps the actor as the approver. Moving to
+ * `paid` is refused when the actor is that approver (SECOND_APPROVER_REQUIRED);
+ * migration 039's trigger refuses the same thing at the table.
  */
 export async function transitionBet(admin: SupabaseClient, t: BetTransition): Promise<void> {
   if (!canTransitionBet(t.actor, t.from, t.to)) {
     throw new ClaimError('INVALID_TRANSITION', `A ${t.actor} cannot move a bet from ${t.from} to ${t.to}.`, 409)
   }
 
+  if (t.to === 'paid') {
+    const { data: row, error: readError } = await admin.from('bets').select('payout_approved_by').eq('id', t.betId).maybeSingle()
+    if (readError) throw readError
+    if (row?.payout_approved_by === t.actorId) {
+      throw new ClaimError('SECOND_APPROVER_REQUIRED', SECOND_APPROVER_MESSAGE, 409)
+    }
+  }
+
+  const approval = t.to === 'payout_approved'
+    ? { payout_approved_by: t.actorId, payout_approved_at: new Date().toISOString() }
+    : {}
   let query = admin
     .from('bets')
-    .update({ status: t.to, updated_by: t.actorId, ...(t.extra ?? {}) })
+    .update({ status: t.to, updated_by: t.actorId, ...approval, ...(t.extra ?? {}) })
     .eq('id', t.betId)
     .eq('status', t.from)
   if (t.userId) query = query.eq('user_id', t.userId)

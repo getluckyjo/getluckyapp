@@ -2,18 +2,21 @@
  * The claim state machine, exhaustively. Every (actor, from, to) triple is
  * either in the allowed table or refused; there is no third case.
  */
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import {
   BET_STATUSES, VERIFICATION_STATUSES, canTransitionBet, canTransitionVerification,
-  betWindowHours, computeExpiresAt, isExpired, assertOpen, ClaimError,
+  betWindowHours, computeExpiresAt, isExpired, assertOpen, ClaimError, transitionBet,
+  CLAIMED_BET_STATUSES, OWED_BET_STATUSES, WON_BET_STATUSES, SECOND_APPROVER_MESSAGE,
   type BetStatus, type VerificationStatus,
 } from '@/lib/claims/state-machine'
+import { FakeDb, createFakeClient, USER_A, USER_B } from '../helpers/fake-supabase'
 
 const ALLOWED_BET: [string, BetStatus, BetStatus][] = [
   ['player', 'active', 'miss'],
   ['player', 'active', 'claimed'],
   ['review', 'claimed', 'verified'],
-  ['admin', 'verified', 'paid'],
+  ['admin', 'verified', 'payout_approved'],
+  ['admin', 'payout_approved', 'paid'],
 ]
 
 const ALLOWED_VERIFICATION: [VerificationStatus, VerificationStatus][] = [
@@ -23,7 +26,7 @@ const ALLOWED_VERIFICATION: [VerificationStatus, VerificationStatus][] = [
 ]
 
 describe('bet transitions', () => {
-  it('allows exactly the four listed transitions and nothing else', () => {
+  it('allows exactly the five listed transitions and nothing else', () => {
     for (const actor of ['player', 'review', 'admin'] as const) {
       for (const from of BET_STATUSES) {
         for (const to of BET_STATUSES) {
@@ -38,9 +41,59 @@ describe('bet transitions', () => {
     for (const actor of ['player', 'review', 'admin'] as const) {
       for (const to of BET_STATUSES) expect(canTransitionBet(actor, 'paid', to)).toBe(false)
     }
-    for (const from of ['miss', 'claimed', 'verified', 'paid'] as const) {
+    for (const from of ['miss', 'claimed', 'verified', 'payout_approved', 'paid'] as const) {
       for (const to of BET_STATUSES) expect(canTransitionBet('player', from, to)).toBe(false)
     }
+  })
+
+  it('paid is reached only through payout_approved: an admin cannot go from verified straight to paid', () => {
+    expect(canTransitionBet('admin', 'verified', 'paid')).toBe(false)
+    expect(canTransitionBet('admin', 'verified', 'payout_approved')).toBe(true)
+    expect(canTransitionBet('admin', 'payout_approved', 'paid')).toBe(true)
+    expect(canTransitionBet('admin', 'payout_approved', 'verified')).toBe(false)
+  })
+
+  it('the status groups the lists and reports use cover the new state and keep paid terminal', () => {
+    expect(BET_STATUSES).toEqual(['active', 'miss', 'claimed', 'verified', 'payout_approved', 'paid'])
+    expect(CLAIMED_BET_STATUSES).toEqual(['claimed', 'verified', 'payout_approved', 'paid'])
+    expect(OWED_BET_STATUSES).toEqual(['verified', 'payout_approved'])
+    expect(WON_BET_STATUSES).toEqual(['verified', 'payout_approved', 'paid'])
+  })
+})
+
+describe('transitionBet: two signatures on a payout', () => {
+  let db: FakeDb
+  const admin = () => createFakeClient(db) as never
+  beforeEach(() => {
+    db = new FakeDb()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+  afterEach(() => vi.restoreAllMocks())
+
+  it('approving records who and when; a different admin can then mark it paid', async () => {
+    const [bet] = db.seed('bets', { user_id: 'golfer', status: 'verified' })
+    await transitionBet(admin(), { betId: bet.id as string, from: 'verified', to: 'payout_approved', actor: 'admin', actorId: USER_A.id })
+    expect(bet).toMatchObject({ status: 'payout_approved', payout_approved_by: USER_A.id, updated_by: USER_A.id })
+    expect(typeof bet.payout_approved_at).toBe('string')
+
+    await transitionBet(admin(), { betId: bet.id as string, from: 'payout_approved', to: 'paid', actor: 'admin', actorId: USER_B.id, extra: { payout_reference: 'FNB-1' } })
+    expect(bet).toMatchObject({ status: 'paid', payout_approved_by: USER_A.id, updated_by: USER_B.id, payout_reference: 'FNB-1' })
+  })
+
+  it('refuses the approver as the payer: 409 SECOND_APPROVER_REQUIRED, nothing written', async () => {
+    const [bet] = db.seed('bets', { user_id: 'golfer', status: 'verified' })
+    await transitionBet(admin(), { betId: bet.id as string, from: 'verified', to: 'payout_approved', actor: 'admin', actorId: USER_A.id })
+    const attempt = transitionBet(admin(), { betId: bet.id as string, from: 'payout_approved', to: 'paid', actor: 'admin', actorId: USER_A.id, extra: { payout_reference: 'FNB-1' } })
+    await expect(attempt).rejects.toMatchObject({ code: 'SECOND_APPROVER_REQUIRED', status: 409, message: SECOND_APPROVER_MESSAGE })
+    expect(bet).toMatchObject({ status: 'payout_approved', payout_approved_by: USER_A.id })
+    expect(bet.payout_reference).toBeUndefined()
+  })
+
+  it('verified → paid in one step is an invalid transition even for an admin', async () => {
+    const [bet] = db.seed('bets', { user_id: 'golfer', status: 'verified' })
+    await expect(transitionBet(admin(), { betId: bet.id as string, from: 'verified', to: 'paid', actor: 'admin', actorId: USER_A.id }))
+      .rejects.toMatchObject({ code: 'INVALID_TRANSITION', status: 409 })
+    expect(bet.status).toBe('verified')
   })
 })
 

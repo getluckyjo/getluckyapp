@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { User, Session } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/client'
+import { captchaOptions } from '@/lib/auth/turnstile'
 import type { Database } from '@/types/database'
 
 type Profile = Database['public']['Tables']['profiles']['Row']
@@ -12,8 +13,9 @@ interface AuthContextValue {
   session: Session | null
   profile: Profile | null
   loading: boolean
-  signInWithGoogle: (next?: string) => Promise<void>
-  signInWithMagicLink: (email: string, next?: string) => Promise<{ error: string | null }>
+  /** `captchaToken`: the Turnstile token, when the sign-in screen has one (NEXT_PUBLIC_TURNSTILE_SITE_KEY). */
+  signInWithGoogle: (next?: string, captchaToken?: string | null) => Promise<void>
+  signInWithMagicLink: (email: string, next?: string, captchaToken?: string | null) => Promise<{ error: string | null }>
   verifyEmailCode: (email: string, code: string) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   refreshProfile: () => Promise<void>
@@ -82,20 +84,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return callback.toString()
   }
 
-  async function signInWithGoogle(next?: string) {
+  // The Turnstile token goes to Supabase with the sign-in when the screen
+  // has one. The OAuth options in auth-js carry no captchaToken (Google's own
+  // flow is the bot gate there); it is accepted and passed on so the screen
+  // treats both buttons the same, and reaches the request when the SDK does.
+  async function signInWithGoogle(next?: string, captchaToken?: string | null) {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: callbackUrl(next) },
+      options: { redirectTo: callbackUrl(next), ...captchaOptions(captchaToken) },
     })
   }
 
   // `next` rides in the emailed link too (src/lib/email/auth-emails.ts), so
   // a golfer who taps the link rather than typing the code lands in the same place.
-  async function signInWithMagicLink(email: string, next?: string) {
+  async function signInWithMagicLink(email: string, next?: string, captchaToken?: string | null) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
         emailRedirectTo: callbackUrl(next),
+        ...captchaOptions(captchaToken),
       },
     })
     return { error: error?.message ?? null }

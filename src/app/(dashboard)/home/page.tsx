@@ -20,6 +20,8 @@ interface BetRecord {
 interface PendingPayment {
   m_payment_id: string
   amount_cents: number
+  /** A saved-card charge PayFast has not answered for yet: show it as confirming, never as payable again. */
+  confirming?: boolean
   course: { id: string; name: string | null } | null
   hole: { id: string; hole_number: number | null } | null
 }
@@ -44,7 +46,7 @@ export default function HomePage() {
   const [paid, setPaid] = useState<{ userId: string; payment: PendingPayment | null } | null>(null)
   // The free swing, while this golfer still has it. The whole point of the
   // freemium entry is that it is visible before anyone is asked for a card.
-  const [free, setFree] = useState<{ userId: string; eligible: boolean } | null>(null)
+  const [free, setFree] = useState<{ userId: string; eligible: boolean; capped: boolean } | null>(null)
   const refreshTick = useRefreshSignal()
 
   const userId = user?.id
@@ -52,6 +54,8 @@ export default function HomePage() {
   const activeClaim = userId && claim?.userId === userId ? claim.bet : null
   const paidShot = userId && paid?.userId === userId ? paid.payment : null
   const freeSwing = Boolean(userId && free?.userId === userId && free.eligible)
+  // Still theirs, but the day's free swings are gone (migration 038): say so, quietly.
+  const freeCapped = Boolean(userId && free?.userId === userId && !free.eligible && free.capped)
 
   useEffect(() => {
     if (!userId) return
@@ -63,7 +67,7 @@ export default function HomePage() {
         const bets = data.bets as BetRecord[]
         const found = bets.find(
           b => b.status === 'claimed' ||
-            (b.declared_result === 'win' && b.status !== 'paid' && b.status !== 'verified'),
+            (b.declared_result === 'win' && b.status !== 'paid' && b.status !== 'payout_approved' && b.status !== 'verified'),
         )
         setClaim({ userId, bet: found ?? null })
       })
@@ -78,9 +82,9 @@ export default function HomePage() {
       .catch(() => {})
     fetch('/api/bets/free')
       .then(r => r.json())
-      .then((data: { eligible?: boolean }) => {
+      .then((data: { eligible?: boolean; used?: boolean; reason?: string }) => {
         if (cancelled) return
-        setFree({ userId, eligible: Boolean(data?.eligible) })
+        setFree({ userId, eligible: Boolean(data?.eligible), capped: !data?.eligible && !data?.used && data?.reason === 'cap' })
       })
       .catch(() => {})
     return () => { cancelled = true }
@@ -137,11 +141,13 @@ export default function HomePage() {
               >
                 <span className="home-claim-dot" aria-hidden />
                 <span>
-                  <span className="home-claim-title">Your paid shot is waiting</span>
+                  <span className="home-claim-title">{paidShot.confirming ? 'Confirming your payment' : 'Your paid shot is waiting'}</span>
                   <span className="home-claim-sub" style={{ display: 'block' }}>
                     {paidShot.course?.name ?? 'Your entry'}
                     {paidShot.hole?.hole_number ? ` · Hole ${paidShot.hole.hole_number}` : ''}
-                    {` · R${Math.round(paidShot.amount_cents / 100)} paid · Tap to record it`}
+                    {paidShot.confirming
+                      ? ` · R${Math.round(paidShot.amount_cents / 100)} · Checking with PayFast, no need to pay again`
+                      : ` · R${Math.round(paidShot.amount_cents / 100)} paid · Tap to record it`}
                   </span>
                 </span>
               </button>
@@ -177,6 +183,18 @@ export default function HomePage() {
                   </span>
                 </span>
               </button>
+            )}
+
+            {freeCapped && !paidShot && (
+              <p className="home-claim home-claim--free" role="status" style={{ cursor: 'default' }}>
+                <span className="home-claim-dot" aria-hidden />
+                <span>
+                  <span className="home-claim-title">Free swings are fully booked for today</span>
+                  <span className="home-claim-sub" style={{ display: 'block' }}>
+                    Yours is still waiting · Try again tomorrow
+                  </span>
+                </span>
+              </p>
             )}
           </div>
         </div>

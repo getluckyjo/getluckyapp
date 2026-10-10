@@ -29,6 +29,9 @@
  *    (dollars for Random Golf Club); joining and the tab follow its last
  *    day; the admin sets its dates and each hole's, and a golf day with
  *    swings never turns into a trip or back
+ *  - a join code (migration 038): a forwarded link alone does not join a
+ *    golf day that has one; the code is typed any old way, never sent to
+ *    the screen, set and cleared in the admin
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { Builder, FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, type FakeUser } from '../helpers/fake-supabase'
@@ -47,8 +50,8 @@ import { golfDayMessage } from '@/lib/golf-days/message'
 import { formatMoney, formatPrize } from '@/lib/format'
 import { siteUrl } from '@/lib/email/layout'
 import {
-  closesAt, formatGolfDayDate, formatGolfDayDates, golfDayPhase, golfDaySwingReference, lastDay, opensAt, refusalFromDbError, shortCourseName,
-  swingInHand, tabShows, tabVisible, todayInSouthAfrica,
+  GOLF_DAY_JOIN_CODE_PATTERN, closesAt, formatGolfDayDate, formatGolfDayDates, golfDayPhase, golfDaySwingReference, joinCodeMatches, lastDay,
+  normaliseJoinCode, opensAt, refusalFromDbError, shortCourseName, swingInHand, tabShows, tabVisible, todayInSouthAfrica,
 } from '@/lib/golf-days/rules'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
@@ -1040,5 +1043,115 @@ describe('a golf trip (migration 033): a swing every round, in dollars', () => {
       '',
       "18+. One swing a round. Swing like the rent's due. 🍀",
     ].join('\n'))
+  })
+})
+
+describe('a join code (migration 038)', () => {
+  const joinWith = (body: unknown, slug = 'bombsquad') => joinDay(jsonRequest(`http://x/api/golf-days/${slug}/join`, body), slugParams(slug))
+
+  it('the rules, said once in TypeScript', () => {
+    expect(normaliseJoinCode(' bo mb26 ')).toBe('BOMB26')
+    expect(joinCodeMatches(null, undefined)).toBe(true)
+    expect(joinCodeMatches(null, 'anything')).toBe(true)
+    expect(joinCodeMatches('BOMB26', 'bomb26')).toBe(true)
+    expect(joinCodeMatches('BOMB26', ' Bomb 26 ')).toBe(true)
+    expect(joinCodeMatches('BOMB26', 'BOMB27')).toBe(false)
+    expect(joinCodeMatches('BOMB26', '')).toBe(false)
+    expect(joinCodeMatches('BOMB26', undefined)).toBe(false)
+    for (const ok of ['ABCD', 'A1B2C3D4E5F6', '2026']) expect(GOLF_DAY_JOIN_CODE_PATTERN.test(ok), ok).toBe(true)
+    for (const bad of ['ABC', 'A1B2C3D4E5F6G', 'AB-CD', 'abcd', 'AB CD']) expect(GOLF_DAY_JOIN_CODE_PATTERN.test(bad), bad).toBe(false)
+  })
+
+  it('the screen is told a code is needed, and never the code', async () => {
+    asUser(null); seedDay({ join_code: 'BOMB26' }); seedDay({ slug: 'open' })
+    const coded = await (await read()).json()
+    expect(coded.golfDay.requiresCode).toBe(true)
+    expect(JSON.stringify(coded)).not.toContain('BOMB26')
+    expect(JSON.stringify(coded)).not.toContain('join_code')
+    expect((await (await read('open')).json()).golfDay.requiresCode).toBe(false)
+  })
+
+  it('joining needs the code, typed any old way; none or the wrong one is refused, and nothing is written', async () => {
+    player(); seedDay({ join_code: 'BOMB26' })
+    let res = await join()
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe('GOLF_DAY_CODE_REQUIRED')
+    res = await joinWith({ code: '' })
+    expect((await res.json()).code).toBe('GOLF_DAY_CODE_REQUIRED')
+    res = await joinWith({ code: 'bomb27' })
+    expect(res.status).toBe(403)
+    expect((await res.json()).code).toBe('GOLF_DAY_CODE_WRONG')
+    res = await joinWith({ code: 42 })
+    expect((await res.json()).code).toBe('GOLF_DAY_CODE_REQUIRED')
+    expect(db.rows('golf_day_players')).toHaveLength(0)
+
+    res = await joinWith({ code: ' bomb 26 ' })
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ joined: true, slug: 'bombsquad', tabLabel: 'Bomb Squad' })
+    expect(db.rows('golf_day_players')).toHaveLength(1)
+    // Joined already: a second tap, from any device, needs no code.
+    expect((await join()).status).toBe(200)
+    expect(db.rows('golf_day_players')).toHaveLength(1)
+  })
+
+  it('the code is asked for before anything else is said about the day', async () => {
+    player(); seedDay({ join_code: 'BOMB26', disabled_at: '2026-09-01T00:00:00Z' })
+    expect((await (await join()).json()).code).toBe('GOLF_DAY_CODE_REQUIRED')
+    expect((await (await joinWith({ code: 'bomb26' })).json()).code).toBe('GOLF_DAY_CLOSED')
+  })
+
+  it('a golf day without a code ignores whatever is sent, as before', async () => {
+    player(); seedDay()
+    expect((await joinWith({ code: 'ANYTHING' })).status).toBe(200)
+    expect(db.rows('golf_day_players')).toHaveLength(1)
+  })
+
+  describe('admin', () => {
+    const create = (body: Record<string, unknown>) => createDay(jsonRequest('http://x/api/admin/golf-days', body))
+    const patch = (id: string, body: Record<string, unknown>) => patchDay(jsonRequest('http://x', body, { method: 'PATCH' }), idParams(id))
+    const valid = (over: Record<string, unknown> = {}) => ({
+      slug: 'clubday', name: 'Club Day', tabLabel: 'Club Day', playsOn: addDays(today(), 10),
+      prize: 50000, maxPlayers: 120, holes: at(EAST_12), ...over,
+    })
+
+    it('makes a golf day with its code, tidied, and lists it; blank is none', async () => {
+      asAdmin()
+      const res = await create(valid({ joinCode: ' club 26 ' }))
+      expect(res.status).toBe(201)
+      expect((await res.json()).data.joinCode).toBe('CLUB26')
+      expect(db.find('golf_days', d => d.slug === 'clubday')!.join_code).toBe('CLUB26')
+      expect((await (await listDays()).json()).data[0].joinCode).toBe('CLUB26')
+
+      const open = await create(valid({ slug: 'open', joinCode: '' }))
+      expect(open.status).toBe(201)
+      expect((await open.json()).data.joinCode).toBeNull()
+      expect(db.find('golf_days', d => d.slug === 'open')!.join_code ?? null).toBeNull()
+    })
+
+    it('refuses a code that is too short, too long or not letters and digits', async () => {
+      asAdmin()
+      for (const joinCode of ['ABC', 'A'.repeat(13), 'AB-CD', 'AB_CD', 42]) {
+        expect((await create(valid({ joinCode }))).status, String(joinCode)).toBe(400)
+      }
+      expect(db.rows('golf_days')).toHaveLength(0)
+    })
+
+    it('sets or clears the code on a golf day already out, and players follow at once', async () => {
+      const day = seedDay(); asAdmin()
+      const set = await patch(String(day.id), { joinCode: 'late1' })
+      expect(set.status).toBe(200)
+      expect((await set.json()).data.joinCode).toBe('LATE1')
+      expect(db.find('golf_days', d => d.id === day.id)!.join_code).toBe('LATE1')
+
+      player()
+      expect((await (await join()).json()).code).toBe('GOLF_DAY_CODE_REQUIRED')
+      expect((await joinWith({ code: 'late1' })).status).toBe(200)
+
+      asAdmin()
+      expect((await (await patch(String(day.id), { joinCode: null })).json()).data.joinCode).toBeNull()
+      expect((await (await patch(String(day.id), { joinCode: 'bad' })).json()).code).toBe('INVALID_INPUT')
+      player(USER_B)
+      expect((await join()).status).toBe(200)
+    })
   })
 })

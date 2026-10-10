@@ -9,7 +9,7 @@ import {
 import { GOLF_DAY_SELECT, golfDayFacts, holesProblem, playerCount, type GolfDayRow } from '@/lib/golf-days/load'
 
 /**
- * Change a golf day: its name, tab label, dates, prize, places, holes or look, or
+ * Change a golf day: its name, tab label, dates, prize, places, join code, holes or look, or
  * switch it off (its tab and its swing stop at once) and on again. The link
  * never changes, because it has been sent out. A swing already taken keeps
  * the prize it was taken for. A golf day nobody has joined can be deleted.
@@ -26,6 +26,7 @@ const Patch = z.object({
   prize: EditableFields.prize.optional(),
   currency: EditableFields.currency.optional(),
   maxPlayers: EditableFields.maxPlayers.optional(),
+  joinCode: EditableFields.joinCode.optional(),
   holes: EditableFields.holes.optional(),
   note: EditableFields.note.optional(),
   look: EditableFields.look.optional(),
@@ -94,6 +95,7 @@ export async function PATCH(request: Request, { params }: Ctx) {
     if (b.prize !== undefined) patch.prize_pence = b.prize * 100
     if (b.currency !== undefined && b.currency !== was.currency) patch.prize_currency = b.currency
     if (b.maxPlayers !== undefined) patch.max_players = b.maxPlayers
+    if (b.joinCode !== undefined && b.joinCode !== (row.join_code ?? null)) patch.join_code = b.joinCode
     if (b.note !== undefined) patch.note = b.note || null
     if (b.look !== undefined) patch.look = b.look
     if (b.disabled !== undefined) patch.disabled_at = b.disabled ? new Date().toISOString() : null

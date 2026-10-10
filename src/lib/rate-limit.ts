@@ -50,6 +50,7 @@ export const RULES = {
   feedback:    { name: 'feedback',    perUser: 20, perIp: 400,  windowSeconds: ONE_HOUR    } as RateRule, // a clubhouse shares one IP
   betaRedeem:  { name: 'beta_redeem', perUser: 0,  perIp: 20,   windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only
   iconVote:    { name: 'icon_vote',   perUser: 30, perIp: 600,  windowSeconds: TEN_MINUTES } as RateRule, // changing your mind is cheap; a script is not
+  health:      { name: 'health',      perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // public, IP only: a monitor polls once a minute; nobody else needs it
 } as const
 
 export interface RateScope {

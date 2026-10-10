@@ -18,6 +18,7 @@ import type { Database } from '@/types/database'
 import { log } from '@/lib/observability/log'
 import { USER_BUCKETS, listObjectsUnder, removeObjects } from '@/lib/storage/objects'
 import { hashIdentifier } from '@/lib/risk/hash'
+import { CLAIMED_BET_STATUSES, WON_BET_STATUSES } from '@/lib/claims/state-machine'
 
 export type DeletionBlock = 'ACCOUNT_SUSPENDED' | 'CLAIM_OPEN'
 
@@ -46,12 +47,12 @@ export async function deletionStatus(admin: Admin, userId: string): Promise<Dele
   const base = {
     activeBets: list.filter(b => b.status === 'active').length,
     bets: list.length,
-    claims: list.filter(b => b.status === 'claimed' || b.status === 'verified' || b.status === 'paid').length,
+    claims: list.filter(b => CLAIMED_BET_STATUSES.includes(b.status)).length,
     email: profile?.email ?? null,
   }
 
   if (profile?.suspended_at) return { canDelete: false, reason: 'ACCOUNT_SUSPENDED', ...base }
-  if (list.some(b => b.status === 'verified' || b.status === 'paid')) return { canDelete: false, reason: 'CLAIM_OPEN', ...base }
+  if (list.some(b => WON_BET_STATUSES.includes(b.status))) return { canDelete: false, reason: 'CLAIM_OPEN', ...base }
 
   const claimed = list.filter(b => b.status === 'claimed').map(b => b.id)
   if (claimed.length > 0) {

@@ -8,7 +8,10 @@ import { uuid } from '@/lib/api/http'
 import { GOLF_DAY_SELECT, golfDayFacts, holesFor, type GolfDayRow } from './load'
 import { LookSchema, parseLook } from './look'
 import { formatPrize } from '@/lib/format'
-import { PRIZE_CURRENCIES, PRIZE_MAX, TRIP_MAX_DAYS, addDays, golfDayPhase, type AdminGolfDay, type PrizeCurrency } from './rules'
+import {
+  GOLF_DAY_JOIN_CODE_PATTERN, PRIZE_CURRENCIES, PRIZE_MAX, TRIP_MAX_DAYS, addDays, golfDayPhase, normaliseJoinCode,
+  type AdminGolfDay, type PrizeCurrency,
+} from './rules'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = SupabaseClient<any, any, any>
@@ -29,6 +32,10 @@ export const EditableFields = {
   prize: z.coerce.number().int().min(1, 'The prize is at least 1').max(PRIZE_MAX.ZAR),
   currency: z.enum(PRIZE_CURRENCIES),
   maxPlayers: z.coerce.number().int().min(1).max(5000),
+  /** The join code (migration 038), as stored; null (or blank) for a golf day the link alone joins. */
+  joinCode: z.string().max(40).nullable()
+    .transform(v => (v ? normaliseJoinCode(v) : null))
+    .refine(v => v === null || GOLF_DAY_JOIN_CODE_PATTERN.test(v), 'A join code is 4 to 12 letters or digits'),
   /** One per course on a golf day; one a round on a trip (a trip can play two courses in a day). */
   holes: z.array(z.object({ holeId: uuid, playsOn: z.iso.date().nullable() }))
     .min(1, 'Pick at least one hole').max(12, 'A golf day takes 12 holes at most')
@@ -90,6 +97,7 @@ export async function adminGolfDays(admin: Client, ids?: string[]): Promise<Admi
       tabLabel: r.tab_label,
       ...facts,
       maxPlayers: r.max_players,
+      joinCode: r.join_code ?? null,
       note: r.note,
       disabledAt: r.disabled_at,
       phase: golfDayPhase(facts.playsOn, Date.now(), facts.endsOn),

@@ -8,7 +8,9 @@
  *     has no cookies; the return page there cannot finish anything);
  *   - /api/bets/create, when the return page does come back signed in, or
  *     when Home's "paid shot is waiting" card is tapped. It finds the bet the
- *     ITN made, or makes it if the ITN could not (age not yet verified).
+ *     ITN made, or makes it if the ITN could not (age not yet verified);
+ *   - the reconciliation cron, once PayFast's history confirms a saved-card
+ *     charge that got no answer (src/lib/payfast/reconcile.ts).
  *
  * The ledger row is the only source of user, course, hole and tier: nothing
  * from a request body reaches the bet. One payment makes at most one bet:
@@ -26,8 +28,8 @@ export type GrantResult =
   | { ok: false; reason: 'PAYMENT_PENDING' | 'PAYMENT_NOT_VERIFIED' | 'PAYMENT_UNMATCHED' | 'AGE_NOT_VERIFIED' | 'ACCOUNT_SUSPENDED' | 'INSERT_FAILED' }
 
 interface GrantOptions {
-  /** Who is asking, for the logs. */
-  source: 'itn' | 'return'
+  /** Who is asking, for the logs. 'reconcile' is the cron settling an unknown saved-card charge. */
+  source: 'itn' | 'return' | 'reconcile'
   /** Hash of the caller's IP when a browser is asking; null from the ITN. */
   createdIpHash: string | null
 }

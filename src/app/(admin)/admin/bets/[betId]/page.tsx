@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowLeft, AlertTriangle, CreditCard, ExternalLink, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, CheckCircle2, CreditCard, ExternalLink, ShieldAlert } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
@@ -45,10 +45,12 @@ function BackToBets() {
 /**
  * One bet, with the money, the footage and the audit trail beside it.
  *
- * Read-mostly: the only change an admin makes here is confirming a payout
- * (verified → paid, with the bank reference). Results are declared by the
- * player and approval goes through the verification queue, which the state
- * machine enforces server-side regardless of what this screen offers.
+ * Read-mostly: the only changes an admin makes here are the two signatures
+ * on a payout: approving it (verified → payout_approved), then a different
+ * admin marking it paid (payout_approved → paid, with the bank reference).
+ * Results are declared by the player and approval of the claim goes through
+ * the verification queue, which the state machine enforces server-side
+ * regardless of what this screen offers.
  */
 export default function AdminBetDetailPage() {
   const params = useParams()
@@ -58,6 +60,7 @@ export default function AdminBetDetailPage() {
   const [attempt, setAttempt] = useState(0)
   const [outcome, setOutcome] = useState<{ key: string; failure: Failure | null } | null>(null)
   const [payoutOpen, setPayoutOpen] = useState(false)
+  const [approveOpen, setApproveOpen] = useState(false)
   const [payoutReference, setPayoutReference] = useState('')
   const [saving, setSaving] = useState(false)
   const [payoutError, setPayoutError] = useState<string | null>(null)
@@ -87,34 +90,49 @@ export default function AdminBetDetailPage() {
 
   function closePayout() {
     setPayoutOpen(false)
+    setApproveOpen(false)
     setPayoutError(null)
   }
 
-  async function confirmPayout() {
-    if (reference.length < MIN_REFERENCE) return
+  /** One of the two signatures: PATCH it, then show it at once so a failed reload cannot leave a button up. */
+  async function sign(body: { status: 'payout_approved' } | { status: 'paid'; payoutReference: string }, onDone: () => void) {
     setSaving(true)
     setPayoutError(null)
     try {
       const res = await fetch(`/api/admin/bets/${betId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'paid', payoutReference: reference }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string }
-        setPayoutError(body.error ?? 'The payout could not be recorded. Nothing has changed; please try again.')
+        const json = await res.json().catch(() => ({})) as { error?: string }
+        setPayoutError(json.error ?? 'The change could not be recorded. Nothing has changed; please try again.')
         return
       }
-      // Recorded: show it at once, so a failed reload cannot leave the payout button up.
-      setLoadedBet(b => (b ? { ...b, detail: { ...b.detail, status: 'paid', payoutReference: reference } } : b))
-      setPayoutOpen(false)
-      setPayoutReference('')
+      onDone()
       setAttempt(n => n + 1)
     } catch {
-      setPayoutError('The server could not be reached, so the payout may not have been recorded. Reload the page to check before trying again.')
+      setPayoutError('The server could not be reached, so the change may not have been recorded. Reload the page to check before trying again.')
     } finally {
       setSaving(false)
     }
+  }
+
+  function confirmApproval() {
+    void sign({ status: 'payout_approved' }, () => {
+      const now = new Date().toISOString()
+      setLoadedBet(b => (b ? { ...b, detail: { ...b.detail, status: 'payout_approved', payoutApprovedAt: now, payoutApprovedByViewer: true } } : b))
+      setApproveOpen(false)
+    })
+  }
+
+  function confirmPayout() {
+    if (reference.length < MIN_REFERENCE) return
+    void sign({ status: 'paid', payoutReference: reference }, () => {
+      setLoadedBet(b => (b ? { ...b, detail: { ...b.detail, status: 'paid', payoutReference: reference } } : b))
+      setPayoutOpen(false)
+      setPayoutReference('')
+    })
   }
 
   const bet = loadedBet?.id === betId ? loadedBet.detail : null
@@ -141,8 +159,15 @@ export default function AdminBetDetailPage() {
   }
 
   const paidOut = bet.status === 'paid'
+  const approved = bet.status === 'payout_approved' || paidOut
   const unmatchedPayment = bet.payment && bet.payment.status !== 'complete'
   const payee = bet.user.name || bet.user.email || 'the golfer'
+  const prize = formatMoney(bet.potentialWinCents, bet.prizeCurrency)
+  // Why "Mark as paid" is not available yet; null when it is.
+  const payBlocked = paidOut ? null
+    : !approved ? 'Approve the payout first.'
+    : bet.payoutApprovedByViewer ? 'You approved this payout, so a different admin must mark it as paid.'
+    : null
 
   return (
     <div style={{ maxWidth: 900 }}>
@@ -264,27 +289,55 @@ export default function AdminBetDetailPage() {
         </section>
       )}
 
-      {/* ── Payout ── */}
-      {(bet.status === 'verified' || paidOut) && (
+      {/* ── Payout: two signatures ── */}
+      {(bet.status === 'verified' || approved) && (
         <section className="adm-card adm-stack">
           <h2 className="adm-h3">Payout</h2>
-          {paidOut ? (
+          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
+            {paidOut
+              ? <><strong>{prize}</strong> was paid to <strong>{payee}</strong>.</>
+              : <>The claim is verified: <strong>{prize}</strong> is owed to <strong>{payee}</strong>. One admin approves the payout; a different admin marks it as paid once the money has left the account. The reference is kept with the bet.</>}
+          </p>
+          <ol className="adm-stack" style={{ margin: 0, paddingLeft: 22, fontSize: 14 }}>
+            <li>
+              <div className="adm-row" style={{ alignItems: 'center', gap: 10 }}>
+                <span style={{ fontWeight: 600 }}>Approve payout</span>
+                {approved ? (
+                  <span className="adm-pill adm-pill--lime">
+                    <CheckCircle2 size={12} aria-hidden /> Approved{bet.payoutApprovedAt ? ` ${sastDateTime(bet.payoutApprovedAt)}` : ''}{bet.payoutApprovedByViewer ? ' by you' : ''}
+                  </span>
+                ) : (
+                  <button type="button" onClick={() => { setPayoutError(null); setApproveOpen(true) }} className="adm-btn adm-btn--quiet">
+                    <CheckCircle2 size={15} aria-hidden /> Approve payout
+                  </button>
+                )}
+              </div>
+            </li>
+            <li>
+              <div className="adm-row" style={{ alignItems: 'center', gap: 10 }}>
+                <span style={{ fontWeight: 600 }}>Mark as paid</span>
+                {paidOut ? (
+                  <span className="adm-pill adm-pill--lime"><CheckCircle2 size={12} aria-hidden /> Paid</span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { setPayoutError(null); setPayoutOpen(true) }}
+                    disabled={payBlocked !== null}
+                    title={payBlocked ?? undefined}
+                    className="adm-btn"
+                  >
+                    <CreditCard size={17} aria-hidden /> Mark as paid
+                  </button>
+                )}
+              </div>
+              {payBlocked && <p className="adm-small" style={{ margin: '4px 0 0' }}>{payBlocked}</p>}
+            </li>
+          </ol>
+          {paidOut && (
             <dl className="adm-grid-2" style={{ margin: 0 }}>
-              <Field name="Prize">{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</Field>
+              <Field name="Prize">{prize}</Field>
               <Field name="Reference"><span className="adm-mono">{bet.payoutReference || '—'}</span></Field>
             </dl>
-          ) : (
-            <>
-              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5 }}>
-                The claim is verified: <strong>{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</strong> is owed to <strong>{payee}</strong>.
-                Record the payout once the money has left the account; the reference is kept with the bet.
-              </p>
-              <div>
-                <button type="button" onClick={() => setPayoutOpen(true)} className="adm-btn">
-                  <CreditCard size={17} aria-hidden /> Confirm payout
-                </button>
-              </div>
-            </>
           )}
         </section>
       )}
@@ -323,9 +376,29 @@ export default function AdminBetDetailPage() {
       </section>
 
       <ConfirmModal
+        open={approveOpen}
+        title="Approve this payout"
+        message={`The first of two signatures: it records that you approve paying ${prize} to ${payee}. A different admin then marks it as paid once the money has left the account. Nothing is paid by this step.`}
+        confirmLabel="Approve the payout"
+        variant="success"
+        busy={saving}
+        error={payoutError}
+        onConfirm={confirmApproval}
+        onCancel={closePayout}
+      >
+        <dl className="adm-grid-2" style={{ margin: 0 }}>
+          <Field name="Prize">{prize}</Field>
+          <Field name="To">
+            {bet.user.name || '—'}
+            <div className="adm-small" style={{ fontWeight: 400 }}>{bet.user.email || 'No email on record'}</div>
+          </Field>
+        </dl>
+      </ConfirmModal>
+
+      <ConfirmModal
         open={payoutOpen}
         title="Confirm the prize was paid"
-        message={`Only confirm once ${formatMoney(bet.potentialWinCents, bet.prizeCurrency)} has left the account for ${payee}. This marks the bet as paid, puts it on the winners list, and records your admin id in its history.`}
+        message={`Only confirm once ${prize} has left the account for ${payee}. The second signature: it marks the bet as paid, puts it on the winners list, and records your admin id in its history.`}
         confirmLabel="Yes, the prize was paid"
         variant="success"
         busy={saving}
@@ -336,7 +409,7 @@ export default function AdminBetDetailPage() {
       >
         <div className="adm-stack">
           <dl className="adm-grid-2" style={{ margin: 0 }}>
-            <Field name="Prize">{formatMoney(bet.potentialWinCents, bet.prizeCurrency)}</Field>
+            <Field name="Prize">{prize}</Field>
             <Field name="Paid to">
               {bet.user.name || '—'}
               <div className="adm-small" style={{ fontWeight: 400 }}>{bet.user.email || 'No email on record'}</div>

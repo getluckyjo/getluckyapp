@@ -8,7 +8,7 @@ import { searchTerm } from '@/lib/api/http'
 import { orSearchTerm } from '@/lib/admin/data'
 
 export const paymentFilters = {
-  status: z.enum(['complete', 'amount_mismatch', 'pending', 'failed']).optional(),
+  status: z.enum(['complete', 'amount_mismatch', 'pending', 'failed', 'unknown']).optional(),
   search: searchTerm.optional(),
 }
 

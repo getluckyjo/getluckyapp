@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseQuery, pagination } from '@/lib/api/http'
 import { betsForVerifications, namesForBets, toQueueItem, type VerificationRowLike } from '@/lib/admin/data'
-import { VERIFICATION_STATUSES } from '@/lib/claims/state-machine'
+import { CLAIMED_BET_STATUSES, OWED_BET_STATUSES, VERIFICATION_STATUSES } from '@/lib/claims/state-machine'
 import { ALL_TIERS } from '@/lib/tiers'
 import type { VerificationQueueItem, PaginatedResponse } from '@/types/admin'
 import { OPEN_REVIEW_STATUSES, QUEUE_STAGES } from './review-types'
@@ -16,8 +16,6 @@ const Query = pagination.extend({
   sort: z.enum(['oldest', 'newest', 'highest', 'risk']).default('oldest'),
 })
 
-/** Only bets in these states can have a verification at all. */
-const CLAIMED_STATES = ['claimed', 'verified', 'paid']
 
 export async function GET(request: Request) {
   const auth = await requireAdmin()
@@ -38,8 +36,9 @@ export async function GET(request: Request) {
       // Tier, prize, risk and payout state live on the bet. Resolve the
       // ordered set of claimed bets first (small: only bets that reached a
       // claim), then page over their verifications in that order. Count and
-      // pages are exact. Awaiting payout: approved, and the bet verified, not paid.
-      let bq = admin.from('bets').select('id').in('status', stage === 'awaiting_payout' ? ['verified'] : CLAIMED_STATES)
+      // pages are exact. Awaiting payout: approved, and the prize still owed
+      // (verified, or approved for payout and waiting for its second signature).
+      let bq = admin.from('bets').select('id').in('status', stage === 'awaiting_payout' ? [...OWED_BET_STATUSES] : [...CLAIMED_BET_STATUSES])
       if (tier) bq = bq.eq('tier', tier)
       bq = sort === 'highest'
         ? bq.order('potential_win_pence', { ascending: false })

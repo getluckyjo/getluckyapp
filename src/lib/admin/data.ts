@@ -28,6 +28,9 @@ export interface BetRowLike {
   risk_score?: number | null
   risk_flags?: unknown
   payout_reference?: string | null
+  /** Who approved the payout (migration 039) and when; null until verified → payout_approved. */
+  payout_approved_by?: string | null
+  payout_approved_at?: string | null
 }
 
 export interface VerificationRowLike {
@@ -138,7 +141,7 @@ export async function betsForVerifications(admin: SupabaseClient, rows: Pick<Ver
   return new Map(((data ?? []) as BetRowLike[]).map(b => [b.id, b]))
 }
 
-export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, prize_currency, status, declared_result, declared_at, video_url, payment_intent_id, created_at, risk_score, risk_flags, payout_reference'
+export const BET_SELECT = 'id, user_id, course_id, hole_id, tier, stake_pence, potential_win_pence, prize_currency, status, declared_result, declared_at, video_url, payment_intent_id, created_at, risk_score, risk_flags, payout_reference, payout_approved_by, payout_approved_at'
 
 /**
  * A search term safe to embed in a PostgREST `.or()` filter string: the

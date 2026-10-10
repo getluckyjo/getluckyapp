@@ -12,6 +12,11 @@ import { apiError } from '@/lib/api/http'
  * left (an installed iOS app opens PayFast in an in-app browser with its
  * own storage), so the record screen never opened. Home shows these so
  * the golfer can pick up with one tap; nothing here creates anything.
+ *
+ * A saved-card charge that got no answer ('unknown') is listed too, as
+ * `confirming: true`: the money may have moved, so Home must show it as
+ * being confirmed rather than invite the golfer to pay again. The ITN or
+ * the reconciliation cron settles it within minutes.
  */
 export async function GET() {
   try {
@@ -22,9 +27,9 @@ export async function GET() {
     // RLS shows the caller only their own ledger rows.
     const { data: rows, error } = await supabase
       .from('payfast_payments')
-      .select('m_payment_id, tier, amount_cents, course_id, hole_id, created_at')
+      .select('m_payment_id, tier, amount_cents, course_id, hole_id, status, created_at')
       .eq('user_id', user.id)
-      .eq('status', 'complete')
+      .in('status', ['complete', 'unknown'])
       .order('created_at', { ascending: false })
       .limit(10)
     if (error) throw error
@@ -58,6 +63,7 @@ export async function GET() {
         tier: r.tier,
         amount_cents: r.amount_cents,
         created_at: r.created_at,
+        confirming: r.status === 'unknown',
         course: r.course_id ? { id: r.course_id, name: courseName.get(r.course_id) ?? null } : null,
         hole: r.hole_id ? { id: r.hole_id, hole_number: holeNumber.get(r.hole_id) ?? null } : null,
       })),

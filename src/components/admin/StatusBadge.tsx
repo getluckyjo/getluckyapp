@@ -18,6 +18,7 @@ const STATUS_VARIANTS: Record<string, BadgeVariant> = {
   miss: 'neutral',
   claimed: 'gold',
   verified: 'success',
+  payout_approved: 'info',
   paid: 'success',
   pending: 'warning',
   documents_received: 'gold',

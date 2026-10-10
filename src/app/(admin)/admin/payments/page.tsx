@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Check, Copy, Download } from 'lucide-react'
+import { AlertTriangle, Check, Copy, Download, Undo2 } from 'lucide-react'
 import StatusBadge from '@/components/admin/StatusBadge'
+import ConfirmModal from '@/components/admin/ConfirmModal'
 import SearchInput from '@/components/admin/SearchInput'
 import Pagination from '@/components/admin/Pagination'
 import LoadError from '@/components/admin/LoadError'
@@ -16,9 +17,14 @@ const STATUS_VARIANT: Record<AdminPaymentRecord['status'], 'success' | 'warning'
   pending: 'warning',
   failed: 'danger',
   amount_mismatch: 'danger',
+  unknown: 'warning',
 }
 
-const COLUMNS = 8
+const COLUMNS = 9
+
+/** PayFast wants a reason of 3 to 255 characters. */
+const MIN_REASON = 3
+const MAX_REASON = 255
 
 interface Loaded {
   key: string
@@ -30,6 +36,8 @@ interface Loaded {
 
 /** Money was taken: complete, or complete for the wrong amount. */
 const tookMoney = (p: AdminPaymentRecord) => p.status === 'complete' || p.status === 'amount_mismatch'
+/** A refund can be asked for: money was taken, PayFast's id is known, and it has not been refunded. The server also checks the bet. */
+const canRefund = (p: AdminPaymentRecord) => tookMoney(p) && !!p.pfPaymentId && !p.refundedAt
 
 /**
  * The PayFast ledger: every payment the app has recorded, and the bet it
@@ -47,6 +55,12 @@ export default function AdminPaymentsPage() {
   const [copied, setCopied] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
   const [exportNote, setExportNote] = useState<{ error: boolean; text: string } | null>(null)
+  // The refund being asked about: the payment, the reason typed, and how the request went.
+  const [refunding, setRefunding] = useState<AdminPaymentRecord | null>(null)
+  const [refundReason, setRefundReason] = useState('')
+  const [refundBusy, setRefundBusy] = useState(false)
+  const [refundError, setRefundError] = useState<string | null>(null)
+  const [refundNote, setRefundNote] = useState<string | null>(null)
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), limit: '20' })
@@ -83,6 +97,46 @@ export default function AdminPaymentsPage() {
       setCopied(id)
       setTimeout(() => setCopied(c => (c === id ? null : c)), 1500)
     } catch { /* clipboard blocked; the reference is on screen to select by hand */ }
+  }
+
+  function openRefund(payment: AdminPaymentRecord) {
+    setRefunding(payment)
+    setRefundReason('')
+    setRefundError(null)
+    setRefundNote(null)
+  }
+
+  function closeRefund() {
+    if (refundBusy) return
+    setRefunding(null)
+  }
+
+  async function confirmRefund() {
+    if (!refunding) return
+    const reason = refundReason.trim()
+    if (reason.length < MIN_REASON) return
+    setRefundBusy(true)
+    setRefundError(null)
+    try {
+      const res = await fetch(`/api/admin/payments/${encodeURIComponent(refunding.mPaymentId)}/refund`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const json = await res.json().catch(() => ({})) as { error?: string; requestId?: string }
+      if (!res.ok) {
+        const message = json.error ?? `The server answered ${res.status}.`
+        setRefundError(json.requestId ? `${message} Reference ${json.requestId}.` : message)
+        return
+      }
+      setRefundNote(`${formatZAR(refunding.amountCents)} is on its way back to ${refunding.userName || refunding.userEmail || 'the golfer'}. PayFast tells them.`)
+      setRefunding(null)
+      setAttempt(n => n + 1)
+    } catch {
+      setRefundError('The server could not be reached. Check your connection.')
+    } finally {
+      setRefundBusy(false)
+    }
   }
 
   async function handleExport() {
@@ -125,6 +179,9 @@ export default function AdminPaymentsPage() {
           {exportNote.text}
         </p>
       )}
+      {refundNote && (
+        <p role="status" className="adm-warn" style={{ margin: '0 0 14px' }}>{refundNote}</p>
+      )}
 
       <div className="adm-row" style={{ marginBottom: 16 }}>
         <SearchInput
@@ -145,6 +202,7 @@ export default function AdminPaymentsPage() {
             <option value="complete">Complete</option>
             <option value="pending">Pending</option>
             <option value="failed">Failed</option>
+            <option value="unknown">Unknown (confirming)</option>
             <option value="amount_mismatch">Amount mismatch</option>
           </select>
         </label>
@@ -177,6 +235,7 @@ export default function AdminPaymentsPage() {
                   <th>Paid with</th>
                   <th style={{ textAlign: 'center' }}>Bet</th>
                   <th style={{ textAlign: 'right' }}>Taken (SA time)</th>
+                  <th><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -221,6 +280,9 @@ export default function AdminPaymentsPage() {
                         <td style={{ textAlign: 'right', fontWeight: 700 }}>{formatZAR(payment.amountCents)}</td>
                         <td style={{ textAlign: 'center' }}>
                           <StatusBadge status={payment.status} small variant={STATUS_VARIANT[payment.status]} />
+                          {payment.refundedAt && (
+                            <div className="adm-small" title={sastDateTime(payment.refundedAt)}>Refunded {timeAgo(payment.refundedAt)}</div>
+                          )}
                         </td>
                         <td className="adm-small">{payment.source === 'saved_card' ? 'Saved card' : 'Checkout'}</td>
                         <td style={{ textAlign: 'center' }}>
@@ -236,6 +298,13 @@ export default function AdminPaymentsPage() {
                           <time dateTime={payment.createdAt}>{sastDateTime(payment.createdAt)}</time>
                           <div className="adm-small">{timeAgo(payment.createdAt)}</div>
                         </td>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                          {canRefund(payment) && (
+                            <button type="button" onClick={() => openRefund(payment)} className="adm-btn adm-btn--quiet" style={{ minHeight: 32, padding: '0 10px' }}>
+                              <Undo2 size={13} aria-hidden /> Refund
+                            </button>
+                          )}
+                        </td>
                       </tr>
                     )
                   })
@@ -247,6 +316,36 @@ export default function AdminPaymentsPage() {
       )}
 
       {list && <Pagination page={page} totalPages={list.totalPages || 1} total={list.total} onPageChange={setPage} />}
+
+      <ConfirmModal
+        open={refunding !== null}
+        title="Refund this payment"
+        message={refunding
+          ? `${formatZAR(refunding.amountCents)} goes back to ${refunding.userName || refunding.userEmail || 'the golfer'} through PayFast, to the card or account it came from. PayFast tells them. The bet is not changed; if it is still active, close it on the bet screen.`
+          : ''}
+        confirmLabel="Send the refund"
+        busy={refundBusy}
+        confirmDisabled={refundReason.trim().length < MIN_REASON}
+        error={refundError}
+        onConfirm={confirmRefund}
+        onCancel={closeRefund}
+      >
+        <label className="adm-field">
+          Reason (the golfer may see it)
+          <textarea
+            value={refundReason}
+            onChange={e => setRefundReason(e.target.value.slice(0, MAX_REASON))}
+            rows={3}
+            maxLength={MAX_REASON}
+            placeholder="e.g. Charged twice after a timeout"
+            className="adm-input"
+            disabled={refundBusy}
+          />
+        </label>
+        <p className="adm-small" style={{ margin: '6px 0 0' }}>
+          {refundReason.trim().length < MIN_REASON ? `At least ${MIN_REASON} characters.` : `${refundReason.length}/${MAX_REASON}`}
+        </p>
+      </ConfirmModal>
     </div>
   )
 }

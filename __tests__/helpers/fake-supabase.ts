@@ -21,11 +21,11 @@
  * Two constraints from the schema are modelled because the handlers branch on
  * them: the partial unique index on `bets.payment_intent_id` (error 23505) and
  * the unique `payfast_payments.m_payment_id` that `upsert(onConflict)` targets.
- * So are the triggers the routes branch on: migration 027's promo code check
- * and migration 029's golf day checks as 033 extends them to trips, on
- * inserting a bet or a golf day player (error P0001), which run before the
- * unique check as a BEFORE trigger does, and can set a column as one does
- * (bets.golf_day_slot). A unique key can span columns (golf_day_players).
+ * So are the triggers the routes branch on: migration 027's promo code check,
+ * migration 029's golf day checks as 033 extends them to trips, and
+ * migration 038's daily cap on free swings, on inserting a bet or a golf day
+ * player (error P0001), which run before the unique check as a BEFORE
+ * trigger does, and can set a column as one does (bets.golf_day_slot). A unique key can span columns (golf_day_players).
  * `db.beforeInsert` lets a test slip a row in just ahead of an insert, which
  * is how a race between a route's check and its write is staged.
  *
@@ -93,7 +93,7 @@ const iconPicksOpenTrigger: Trigger = db => {
 }
 
 const BEFORE_INSERT: Record<string, Trigger> = {
-  bets: (db, row) => golfDaySwingTrigger(db, row) ?? promoCodeTrigger(db, row),
+  bets: (db, row) => golfDaySwingTrigger(db, row) ?? promoCodeTrigger(db, row) ?? freeSwingCapTrigger(db, row),
   icon_votes: iconPicksOpenTrigger,
   // Mirrors enforce_golf_day_join() in migration 033.
   golf_day_players: (db, row) => {
@@ -135,6 +135,20 @@ function promoCodeTrigger(db: FakeDb, row: Row): PostgrestError | null {
   if (Date.parse(String(code.expires_at)) <= Date.now()) return refuse('PROMO_CODE_EXPIRED')
   const used = db.rows('bets').filter(b => b.promo_code_id === row.promo_code_id).length
   if (used >= Number(code.max_uses)) return refuse('PROMO_CODE_EXHAUSTED')
+  return null
+}
+
+// Mirrors enforce_free_swing_cap() in migration 038: no row, no cap; paused
+// refuses; otherwise today's (South African date) free swings against the cap.
+function freeSwingCapTrigger(db: FakeDb, row: Row): PostgrestError | null {
+  if (row.tier !== 'tier_free') return null
+  const caps = db.find('free_swing_caps', c => Number(c.id) === 1)
+  if (!caps) return null
+  if (caps.paused) return refuse('FREE_SWING_PAUSED')
+  const today = southAfricanToday()
+  const taken = db.rows('bets').filter(b =>
+    b.tier === 'tier_free' && new Date(Date.parse(String(b.created_at)) + 2 * 3_600_000).toISOString().slice(0, 10) === today).length
+  if (taken >= Number(caps.daily_cap)) return refuse('FREE_SWING_CAP')
   return null
 }
 
@@ -191,6 +205,15 @@ export class FakeDb {
   }
 }
 
+/** `raw_payload->>source` on a row: the key's value as text, or null (PostgREST's `->>`). */
+function jsonText(row: Row, path: string): string | null {
+  const [col, key] = path.split('->>')
+  const obj = row[col]
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null
+  const v = (obj as Record<string, unknown>)[key]
+  return v == null ? null : typeof v === 'string' ? v : JSON.stringify(v)
+}
+
 export class Builder implements PromiseLike<Result> {
   private filters: Filter[] = []
   private op: 'select' | 'insert' | 'update' | 'upsert' | 'delete' = 'select'
@@ -224,8 +247,10 @@ export class Builder implements PromiseLike<Result> {
   delete() { this.op = 'delete'; return this }
 
   // A filter on an embedded resource ('holes.is_active') shapes the child
-  // rows, not the parent's.
+  // rows, not the parent's. A JSON path ('raw_payload->>source') reads the
+  // key out of the column, as text, the way PostgREST does.
   eq(col: string, val: unknown) {
+    if (col.includes('->>')) { this.filters.push(r => jsonText(r, col) === val); return this }
     const dot = col.indexOf('.')
     if (dot === -1) this.filters.push(r => r[col] === val)
     else {
@@ -248,6 +273,9 @@ export class Builder implements PromiseLike<Result> {
   }
   gte(col: string, val: string) { this.filters.push(r => String(r[col]) >= val); return this }
   lte(col: string, val: string) { this.filters.push(r => String(r[col]) <= val); return this }
+  /** As PostgREST: a null column never compares, so it is never matched. */
+  gt(col: string, val: string) { this.filters.push(r => r[col] != null && String(r[col]) > val); return this }
+  lt(col: string, val: string) { this.filters.push(r => r[col] != null && String(r[col]) < val); return this }
   ilike(col: string, val: string) {
     const needle = val.replace(/%/g, '').toLowerCase()
     this.filters.push(r => String(r[col] ?? '').toLowerCase().includes(needle)); return this
@@ -434,7 +462,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           then: (res: (v: Result) => unknown) => Promise.resolve({ data: null, error: fail }).then(res),
         }
         const proxy: Record<string, unknown> = {}
-        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'is', 'not', 'gte', 'lte', 'ilike', 'or', 'order', 'limit', 'range', 'maybeSingle', 'single']) {
+        for (const m of ['select', 'insert', 'update', 'upsert', 'delete', 'eq', 'neq', 'in', 'is', 'not', 'gte', 'lte', 'gt', 'lt', 'ilike', 'or', 'order', 'limit', 'range', 'maybeSingle', 'single']) {
           proxy[m] = () => proxy
         }
         proxy.then = failing.then
@@ -557,7 +585,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
             golf_day_id: d.id,
             players: db.rows('golf_day_players').filter(p => p.golf_day_id === d.id).length,
             swings: swings.length,
-            claimed: swings.filter(b => ['claimed', 'verified', 'paid'].includes(String(b.status))).length,
+            claimed: swings.filter(b => ['claimed', 'verified', 'payout_approved', 'paid'].includes(String(b.status))).length,
           }
         }), error: null }
       }

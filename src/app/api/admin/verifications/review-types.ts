@@ -10,7 +10,8 @@ export const OPEN_REVIEW_STATUSES = ['pending', 'documents_received', 'under_rev
 /**
  * Queue filters that are not one verification status. `open`: waiting on a
  * reviewer. `awaiting_payout`: approved, and the prize not yet recorded as
- * paid (the bet is verified), so paying it is the next action.
+ * paid (the bet is verified, or approved for payout and waiting for a
+ * second admin), so approving or paying it is the next action.
  */
 export const QUEUE_STAGES = ['open', 'awaiting_payout'] as const
 export type QueueStage = (typeof QUEUE_STAGES)[number]
@@ -28,7 +29,7 @@ export interface VerificationReview extends VerificationDetail {
   }
   /** The payment that bought the swing; null for a free swing (no stake). `missing`: no ledger row found. */
   payment: {
-    status: 'complete' | 'amount_mismatch' | 'pending' | 'failed' | 'missing'
+    status: 'complete' | 'amount_mismatch' | 'pending' | 'failed' | 'unknown' | 'missing'
     amountCents: number | null
     reference: string | null
   } | null

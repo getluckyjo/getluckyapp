@@ -4,7 +4,8 @@
  *
  *   miss      footage removed RETENTION_DAYS after the miss was declared
  *   rejected  documents and footage removed RETENTION_DAYS after the review
- *   verified / paid   never touched here: the insurer's record of a payout
+ *   verified / payout_approved / paid
+ *             never touched here: the insurer's record of a payout
  *
  * Run nightly by /api/cron/retention. Each row is handled on its own so one
  * bad object cannot stall the sweep; failures are counted, logged, and tried

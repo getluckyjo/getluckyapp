@@ -25,7 +25,7 @@ export interface RiskResult {
 }
 
 type Admin = SupabaseClient<Database>
-const CLAIM_STATES = ['claimed', 'verified', 'paid'] as const
+const CLAIM_STATES = ['claimed', 'verified', 'payout_approved', 'paid'] as const
 const days = (n: number) => n * 86_400_000
 
 interface BetRow {

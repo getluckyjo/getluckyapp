@@ -4,7 +4,7 @@
  * `verified` and is therefore a money decision).
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B } from '../helpers/fake-supabase'
+import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, type FakeUser } from '../helpers/fake-supabase'
 import { REVIEW_CHECKLIST } from '@/lib/claims/checklist'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
@@ -187,23 +187,57 @@ describe('PATCH /api/admin/bets/[betId]', () => {
     return import('@/app/api/admin/bets/[betId]/route')
   }
 
-  it('lets an admin confirm a payout: verified → paid', async () => {
-    const { PATCH } = await loadBets()
-    db.seed('profiles', { id: USER_A.id, is_admin: true })
-    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
-    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'verified' })
-    const res = await PATCH(jsonRequest('http://x', { status: 'paid', payoutReference: 'FNB-2026-09-15-0042' }, { method: 'PATCH' }) as never, params(bet.id as string))
-    expect(res.status).toBe(200)
-    expect(bet.status).toBe('paid')
-    expect(bet.payout_reference).toBe('FNB-2026-09-15-0042')
-    expect(bet.updated_by).toBe(USER_A.id)
+  /** A second admin, for the second signature. */
+  const ADMIN_2: FakeUser = { id: '99999999-9999-4999-8999-999999999999', email: 'two@example.com' }
+  const signedInAs = (user: FakeUser) => {
+    db.seed('profiles', { id: user.id, is_admin: true })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user }))
+  }
+
+  it('a payout takes two admins: one approves (verified → payout_approved), a different one marks it paid', async () => {
+    const { PATCH, GET } = await loadBets()
+    signedInAs(USER_A)
+    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'verified', course_id: 'c', hole_id: 'h', tier: 'tier_1', stake_pence: 5000, potential_win_pence: 2_500_000, created_at: '2026-09-01T00:00:00Z' })
+    db.seed('verifications', { bet_id: bet.id, status: 'approved' })
+
+    const approve = await PATCH(jsonRequest('http://x', { status: 'payout_approved' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    expect(approve.status).toBe(200)
+    expect(bet).toMatchObject({ status: 'payout_approved', payout_approved_by: USER_A.id, updated_by: USER_A.id })
+    expect(typeof bet.payout_approved_at).toBe('string')
+    expect(bet.payout_reference).toBeUndefined()
+
+    // The approver sees that it was them, and is refused as the payer.
+    const mine = await (await GET(new Request('http://x') as never, params(bet.id as string))).json()
+    expect(mine).toMatchObject({ status: 'payout_approved', payoutApprovedBy: USER_A.id, payoutApprovedByViewer: true })
+    const refused = await PATCH(jsonRequest('http://x', { status: 'paid', payoutReference: 'FNB-2026-09-15-0042' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    expect(refused.status).toBe(409)
+    expect(await refused.json()).toEqual({ error: 'A different admin must mark the payout as paid.', code: 'SECOND_APPROVER_REQUIRED' })
+    expect(bet.status).toBe('payout_approved')
+
+    signedInAs(ADMIN_2)
+    const theirs = await (await GET(new Request('http://x') as never, params(bet.id as string))).json()
+    expect(theirs).toMatchObject({ payoutApprovedBy: USER_A.id, payoutApprovedByViewer: false })
+    const paid = await PATCH(jsonRequest('http://x', { status: 'paid', payoutReference: 'FNB-2026-09-15-0042' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    expect(paid.status).toBe(200)
+    expect(bet).toMatchObject({ status: 'paid', payout_reference: 'FNB-2026-09-15-0042', payout_approved_by: USER_A.id, updated_by: ADMIN_2.id })
+    expect(typeof db.rows('verifications')[0].payout_initiated_at).toBe('string')
   })
 
-  it('refuses every other admin status change, including declaring results or approving directly', async () => {
+  it('marking paid still needs the bank reference, and approving does not take one', async () => {
+    const { PATCH } = await loadBets()
+    signedInAs(USER_A)
+    const [bet] = db.seed('bets', { user_id: USER_B.id, status: 'payout_approved', payout_approved_by: ADMIN_2.id })
+    const res = await PATCH(jsonRequest('http://x', { status: 'paid' }, { method: 'PATCH' }) as never, params(bet.id as string))
+    expect(res.status).toBe(400)
+    expect((await res.json()).code).toBe('PAYOUT_REFERENCE_REQUIRED')
+    expect(bet.status).toBe('payout_approved')
+  })
+
+  it('refuses every other admin status change, including declaring results, approving directly, or paying in one step', async () => {
     const { PATCH } = await loadBets()
     db.seed('profiles', { id: USER_A.id, is_admin: true })
     serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
-    const cases: [string, string][] = [['claimed', 'verified'], ['claimed', 'paid'], ['active', 'miss'], ['miss', 'claimed'], ['paid', 'verified'], ['active', 'paid']]
+    const cases: [string, string][] = [['claimed', 'verified'], ['claimed', 'paid'], ['active', 'miss'], ['miss', 'claimed'], ['paid', 'verified'], ['active', 'paid'], ['verified', 'paid'], ['payout_approved', 'verified'], ['paid', 'payout_approved']]
     for (const [from, to] of cases) {
       const [bet] = db.seed('bets', { user_id: USER_B.id, status: from })
       const res = await PATCH(jsonRequest('http://x', { status: to }, { method: 'PATCH' }) as never, params(bet.id as string))

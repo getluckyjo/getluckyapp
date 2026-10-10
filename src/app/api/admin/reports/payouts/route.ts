@@ -3,8 +3,9 @@
  * Returns: { kind, data: PayoutRecord[], total, page, limit, totalPages }
  *
  * Prizes, split the way the admin acts on them:
- *   owed  verified and not yet paid, the longest-waiting first. Each row
- *         links to its bet, where the payout is recorded.
+ *   owed  verified and not yet paid (with or without the first of the two
+ *         payout signatures), the longest-waiting first. Each row links to
+ *         its bet, where the payout is approved and recorded.
  *   paid  recorded as paid, the latest first, with the payout's date and
  *         its bank or PayFast reference.
  *
@@ -18,6 +19,7 @@ import { z } from 'zod'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseQuery, pagination } from '@/lib/api/http'
 import { BET_SELECT, namesForBets, toAdminBetRecord, type BetRowLike } from '@/lib/admin/data'
+import { OWED_BET_STATUSES } from '@/lib/claims/state-machine'
 
 const Query = pagination.extend({ kind: z.enum(['owed', 'paid']).default('owed') })
 
@@ -36,7 +38,7 @@ export async function GET(request: Request) {
     const { data, count, error } = await admin
       .from('bets')
       .select(`${BET_SELECT}, updated_at`, { count: 'exact' })
-      .eq('status', kind === 'owed' ? 'verified' : 'paid')
+      .in('status', kind === 'owed' ? [...OWED_BET_STATUSES] : ['paid'])
       .order('updated_at', { ascending: kind === 'owed', nullsFirst: false })
       .order('created_at', { ascending: kind === 'owed' })
       .range((page - 1) * limit, page * limit - 1)

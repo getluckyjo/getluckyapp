@@ -68,7 +68,7 @@ export async function betTotals(admin: SupabaseClient, userIds: string[]): Promi
       t.bets += 1
       t.staked += b.stake_pence ?? 0
       // Rand only: a golf trip's dollar prize is not added to rand.
-      if ((b.status === 'paid' || b.status === 'verified') && b.prize_currency !== 'USD') t.won += b.potential_win_pence ?? 0
+      if ((b.status === 'paid' || b.status === 'payout_approved' || b.status === 'verified') && b.prize_currency !== 'USD') t.won += b.potential_win_pence ?? 0
     }
     read += rows.length
     if (rows.length === 0 || (rows.length < PAGE && read >= (count ?? 0))) return totals

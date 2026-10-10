@@ -50,17 +50,20 @@ service role; the admin layout's client-side gate is cosmetic.
 
 ## 3. Data model
 
-All in `public`, defined by `supabase/migrations/001…029`, typed by hand in
+All in `public`, defined by `supabase/migrations/001…039`, typed by hand in
 `src/types/database.ts` (regenerate after a migration; see README).
+`__tests__/types-drift.test.ts` fails CI when a migration creates a table or
+adds a column that the types file does not have.
 
 | Table | One row per | Notes |
 |---|---|---|
 | `profiles` | user | Name, handicap, email mirror, age and terms timestamps, `is_admin`, suspension. Server-managed columns are guarded by trigger; changes to them are logged to `account_events`. |
 | `courses`, `holes` | course, par-3 hole | `courses.lat/lng` for the distance check; `is_partner` gates checkout. |
 | `course_contacts` | club official per course | Asked to confirm the certificate on every claim at the course. |
-| `bets` | entry | Status, stake, prize, ledger reference, play window, footage path + hash + size + sealed-at, capture report, hashed IP/device, risk flags and score, payout reference, purge stamp. `tier = 'tier_free'` is the free swing: stake 0, no ledger row, one per user by unique index. `tier = 'tier_promo'` is a promo swing: stake 0, no ledger row, `promo_code_id` names the code. |
+| `bets` | entry | Status, stake, prize, ledger reference, play window, footage path + hash + size + sealed-at, capture report, hashed IP/device, risk flags and score, payout approver and time, payout reference, purge stamp. `tier = 'tier_free'` is the free swing: stake 0, no ledger row, one per user by unique index. `tier = 'tier_promo'` is a promo swing: stake 0, no ledger row, `promo_code_id` names the code. |
 | `promo_codes` | promo code | Code, cap on total uses, expiry, off switch, note. Uses are counted from `bets`. Service role only; a used code cannot be deleted. |
-| `golf_days`, `golf_day_holes`, `golf_day_players` | sponsored golf day; its holes; a player who joined | Link (slug), tab label, date, prize, places, off switch. `bets.golf_day_id` names the golf day of a `tier_golf_day` swing. Service role only; a golf day with swings cannot be deleted. The look of a branded day is code: `src/lib/golf-days/themes.ts`. |
+| `free_swing_caps` | the one row (`id = 1`) | How many free swings a day (South African date) and whether they are paused (migration 038); a trigger on `bets` locks it, counts and refuses. Set on the admin dashboard. |
+| `golf_days`, `golf_day_holes`, `golf_day_players` | sponsored golf day; its holes; a player who joined | Link (slug), tab label, date, prize, places, off switch, optional join code (migration 038). `bets.golf_day_id` names the golf day of a `tier_golf_day` swing. Service role only; a golf day with swings cannot be deleted. The look of a branded day is code: `src/lib/golf-days/themes.ts`. |
 | `payfast_payments` | payment the ITN accepted | The money ledger. Keeps amounts when a user is deleted (`user_id` nulled). |
 | `verifications` | claim | Document paths + hashes, review state, checklist, notes, reviewer, timestamps, purge stamp. One per bet. |
 | `claim_witnesses` | person named on a claim | Role, source (claimant or course), token hash, request and response with time, hashed IP, note. |
@@ -86,8 +89,9 @@ changes status.
 
 ```
 bets           player:  active → miss | claimed
-               review:  claimed → verified        (only via an approved verification)
-               admin:   verified → paid           (payout reference required)
+               review:  claimed → verified            (only via an approved verification)
+               admin:   verified → payout_approved    (records payout_approved_by/at)
+               admin:   payout_approved → paid        (a different admin; payout reference required)
 
 verifications  pending → documents_received | under_review | approved | rejected
                documents_received → under_review | approved | rejected
@@ -96,7 +100,12 @@ verifications  pending → documents_received | under_review | approved | reject
 ```
 
 Every transition is `update … where id = ? and status = <from>`; zero rows
-is a 409, never a silent overwrite. Declaring the same result twice is a
+is a 409, never a silent overwrite. A payout is two signatures: the admin
+who approves it is stamped on the bet, and the move to `paid` is refused
+for that admin (409 `SECOND_APPROVER_REQUIRED`, in the state machine and
+again by migration 039's trigger at the table). `paid` is the only
+terminal paid state; `payout_approved` counts as owed everywhere a report
+counts `verified`, and is never purged by retention. Declaring the same result twice is a
 200 no-op. A resubmitted claim updates the same open verification; a
 reviewed one is locked. `assertOpen()` enforces the play window;
 `assertNotSuspended()` the suspension.
@@ -106,6 +115,17 @@ unique and the ITN upserts on it. `bets.payment_intent_id` is unique and
 never rewritten, so bet creation for a payment is idempotent. Footage and
 documents are write-once (hash stands, bucket policy forbids overwrite).
 Witness tokens work once. Outbox handlers are safe to run twice.
+
+**The ledger's own states** (`payfast_payments.status`, migrations 005,
+021, 037): `complete`, `amount_mismatch`, `pending` (a saved-card charge
+in flight), `failed` (declined), `unknown` (charge sent, no answer). An
+unanswered charge is never marked failed, because the money may have
+moved: the ITN or the reconciliation in `payfast/reconcile.ts` (inside the
+outbox cron, after two minutes, from PayFast's transaction history) moves
+it to `complete`, `amount_mismatch` or `failed`, each write conditional on
+the row still being `unknown`. A refund is a `refunds` row (one per
+payment, `requested → sent | failed`, append-only otherwise) and
+`refunded_at` on the payment; the bet's status is never changed by it.
 
 ## 5. The fraud controls, and why each exists
 
@@ -126,6 +146,7 @@ Nothing here decides a claim. A person does, with more in front of them.
 | Suspension and blocked deletion | `profiles.suspended_at`, `account/delete.ts` | A fraud review cannot be ended by deleting the evidence |
 | Deleted-account memory | `deleted_accounts`, `deleted_and_back` rule | Deletion is not a reset |
 | Rate limits, Postgres-backed | `rate-limit.ts`, migration 009 | The old in-memory limiter limited nothing on Vercel |
+| Saved-card bounds: stakes to R250, R2,500 per golfer per rolling 24 h | `payfast/saved-card.ts`, charge route | A token charge has no 3-D Secure; a hijacked session could one-tap R1,000 ten times in ten minutes. Bigger stakes go through the hosted checkout |
 | Evidence pack with its own hash | `evidence-pack/route.ts` | One file per claim the insurer can verify with `sha256sum` |
 
 Retention is the other half of "what we keep": footage of misses and the
@@ -140,9 +161,15 @@ days (`retention.ts`, nightly). Approved and paid claims are kept.
 - `/api/cron/outbox`, every minute: drains `outbox`. Jobs today:
   `witness_request`, `welcome_email`. Claim = conditional update on
   `next_attempt_at` (also the 5-minute lease). Backoff 1 m, 5 m, 30 m,
-  2 h, 12 h; sixth failure is a dead letter with one ops alert.
+  2 h, 12 h; sixth failure is a dead letter with one ops alert. Then
+  `reconcileUnknownPayments` settles saved-card charges PayFast never
+  answered for (section 4); it cannot fail the drain.
 - `/api/cron/retention`, 02:00 UTC: the purge, 200 rows per scan, each on
   its own, stamped only after the object is gone.
+
+Both runs are cron monitors in Sentry (`next.config.ts`: one check-in per
+run, slug = the route's path; every cron request is traced so no run goes
+unreported). A missed or failed run is an alert there, not a quiet gap.
 
 Ops alerts (`alertOps`) send inline, Sentry plus an email to
 `OPS_ALERT_EMAIL`, so an alert about the queue never sits in the queue.
@@ -152,7 +179,11 @@ Ops alerts (`alertOps`) send inline, Sentry plus an email to
 `src/lib/observability/log.ts` writes one JSON line per event to stdout
 (Vercel logs) and forwards `error` to Sentry with a `money_path` tag.
 `apiError()` answers every unhandled failure with a generic message and a
-request id that is also on the log line and the Sentry event. `alertOps()`
+request id that is also on the log line and the Sentry event.
+`GET /api/health` (public, rate limited per IP, never cached) is the
+uptime probe: 200 when the database answers and no outbox job is more
+than ten minutes overdue, 503 naming the failing part otherwise, never
+with the reason (that is in the log under `health.*`). `alertOps()`
 is for the handful of things that need a person within the hour: ITN
 could not be recorded, claim could not be saved, retention partial
 failure, dead letter. Alert rules and the Sentry set-up are in
@@ -271,14 +302,14 @@ on one Saturday.
   club may take days. WhatsApp through Twilio is a sender away.
 - Batch approve exists and bypasses the review checklist; the record shows
   when it was used. The decision to keep it was the owner's.
-- Second sign-off on a payout is outside the app.
 - `shared_ip` fires on club Wi-Fi. It is a flag, paired with the device
   rule, never a block.
 - Thresholds in `risk/thresholds.ts` are starting values, not measured.
 - The privacy page has not had a legal read. Retention periods should be
   confirmed with Indwe.
 - The database types file is hand-maintained until it is generated from
-  the Supabase CLI. A column added by migration without updating it
+  the Supabase CLI. `__tests__/types-drift.test.ts` catches a table or an
+  added column that is missing from it; a changed column type still
   compiles fine and fails at runtime.
 - The admin panel's five list pages set loading state in effects; the
   React Compiler rule that flags it is downgraded to a warning.
@@ -297,7 +328,8 @@ on one Saturday.
   admin). If a route needs a filter the fake lacks, add it to the fake.
 - A migration checklist: write `supabase/migrations/NNN_*.sql`
   idempotent; apply to staging (`npm run staging:bootstrap`); update
-  `src/types/database.ts`; extend the seed if the table matters; add the
+  `src/types/database.ts` (`__tests__/types-drift.test.ts` says what is
+  missing); extend the seed if the table matters; add the
   read to `scripts/staging/explain.mjs` if it is hot; note the apply order
   in the batch doc; apply to production before deploying code that needs
   it.

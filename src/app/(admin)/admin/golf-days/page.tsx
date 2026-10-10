@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle, Trash2, ChevronDown, ChevronUp } from 'lucide-react'
+import { Copy, Check, Pencil, Power, Users, Plus, MessageCircle, AlertTriangle, Trash2, ChevronDown, ChevronUp, KeyRound } from 'lucide-react'
 import ConfirmModal from '@/components/admin/ConfirmModal'
 import LoadError from '@/components/admin/LoadError'
 import type { AdminGolfDay, GolfDayHole, GolfDayPhase, PrizeCurrency } from '@/lib/golf-days/rules'
@@ -40,12 +40,14 @@ interface Form {
   prize: string
   currency: PrizeCurrency
   maxPlayers: string
+  /** The join code; '' when the link alone joins. */
+  joinCode: string
   holes: FormHole[]
   note: string
   look: LookForm
 }
 
-const EMPTY: Form = { slug: '', name: '', tabLabel: '', playsOn: '', endsOn: '', prize: '100000', currency: 'ZAR', maxPlayers: '200', holes: [], note: '', look: BLANK_LOOK }
+const EMPTY: Form = { slug: '', name: '', tabLabel: '', playsOn: '', endsOn: '', prize: '100000', currency: 'ZAR', maxPlayers: '200', joinCode: '', holes: [], note: '', look: BLANK_LOOK }
 
 /** Every date of a trip, first to last; none for a golf day of one day. */
 function tripDates(playsOn: string, endsOn: string): string[] {
@@ -227,7 +229,7 @@ export default function AdminGolfDaysPage() {
     const r = next.row
     open(r.id, {
       slug: r.slug, name: r.name, tabLabel: r.tabLabel, playsOn: r.playsOn, endsOn: r.endsOn ?? '',
-      prize: String(r.prize), currency: r.currency, maxPlayers: String(r.maxPlayers),
+      prize: String(r.prize), currency: r.currency, maxPlayers: String(r.maxPlayers), joinCode: r.joinCode ?? '',
       holes: r.holes.map(h => ({ holeId: h.holeId, playsOn: h.playsOn ?? '' })), note: r.note ?? '',
       look: lookFormFrom(themeFor(r.slug, r.look)),
     })
@@ -248,7 +250,8 @@ export default function AdminGolfDaysPage() {
     const f = editing.form
     const fields: Record<string, unknown> = {
       name: f.name.trim(), tabLabel: f.tabLabel.trim(), playsOn: f.playsOn, endsOn: f.endsOn || null,
-      prize: Number(f.prize), currency: f.currency, maxPlayers: Number(f.maxPlayers), note: f.note.trim() || null,
+      prize: Number(f.prize), currency: f.currency, maxPlayers: Number(f.maxPlayers), joinCode: f.joinCode.trim() || null,
+      note: f.note.trim() || null,
       look: lookFrom(f.look, f.name.trim()),
     }
     // The holes only when they or their dates changed: the server then leaves
@@ -345,6 +348,12 @@ export default function AdminGolfDaysPage() {
               <strong>{showDates(r)}</strong> · {formatPrize(r.prize, r.currency)}{r.endsOn ? ' · a swing every round' : ''} · tab &ldquo;{r.tabLabel}&rdquo;
             </p>
             <p className="adm-muted" style={{ fontSize: 13, margin: '4px 0 0' }}>{showHoles(r)}</p>
+            {r.joinCode && (
+              <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, margin: '6px 0 0' }}>
+                <KeyRound size={14} aria-hidden /> Join code <span className="adm-mono" style={{ fontWeight: 700, letterSpacing: '0.08em' }}>{r.joinCode}</span>
+                <span className="adm-muted">· players type it to join; hand it out on the day, not in the message</span>
+              </p>
+            )}
             <p className="adm-mono" style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 0', fontWeight: 600, wordBreak: 'break-all' }}>
               {origin}{golfDayPath(r.slug)}
               <button type="button" onClick={() => copy(r.id, `${origin}${golfDayPath(r.slug)}`)} title="Copy the link" aria-label="Copy the link" className="adm-icon-btn" style={{ width: 30, height: 30 }}>
@@ -497,6 +506,18 @@ export default function AdminGolfDaysPage() {
               Players
               <input type="number" required min={1} max={5000} value={editing.form.maxPlayers} onChange={e => setField('maxPlayers', e.target.value)} className="adm-input" style={{ width: 110 }} />
             </label>
+            <label className="adm-field">
+              Join code <span className="adm-hint">Optional. 4–12 letters or digits</span>
+              <input
+                value={editing.form.joinCode}
+                onChange={e => setField('joinCode', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12))}
+                placeholder="None"
+                maxLength={12}
+                autoCapitalize="characters"
+                className="adm-input adm-mono"
+                style={{ width: 150 }}
+              />
+            </label>
             <label className="adm-field" style={{ flex: '1 1 280px' }}>
               Note
               <input value={editing.form.note} onChange={e => setField('note', e.target.value)} placeholder="Organiser, venue, anything to remember" maxLength={200} className="adm-input" />
@@ -565,6 +586,8 @@ export default function AdminGolfDaysPage() {
           <p className="adm-small" style={{ margin: 0 }}>
             The link cannot change once made, because it has been sent out. The look changes the moment you save, for everyone.
             Only a drawn tab icon (Bomb Squad&rsquo;s bomb) is added in code; any other golf day&rsquo;s tab shows a flag.
+            With a join code, a forwarded link is not enough on its own: players type the code when they join, so give it out
+            at registration rather than in the message.
           </p>
         </form>
       )}

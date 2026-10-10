@@ -8,6 +8,7 @@ import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
 import { FREE_TIER, PROMO_TIER, tierByKey } from '@/lib/tiers'
+import { SAVED_CARD_MAX_STAKE_ZAR, savedCardAllowedForTier } from '@/lib/payfast/saved-card'
 import { useAuth } from '@/context/AuthContext'
 import { formatRand } from '@/lib/format'
 
@@ -15,8 +16,8 @@ type LoadingStep = 'idle' | 'opening' | 'paying'
 
 interface SavedCard { label: string; savedAt: string; lastUsedAt: string | null }
 
-/** What /api/bets/free says about this golfer's one free swing. */
-interface FreeSwing { eligible: boolean; used: boolean; ageVerified: boolean }
+/** What /api/bets/free says about this golfer's one free swing. `reason: 'cap'`: the day's free swings are gone or paused. */
+interface FreeSwing { eligible: boolean; used: boolean; ageVerified: boolean; reason?: 'cap' }
 
 /** A promo code /api/bets/promo has accepted for this golfer: one more free swing. */
 interface PromoSwing { code: string }
@@ -85,6 +86,9 @@ export default function ChooseStakePage() {
   const [savedCardState, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
   const [saveCard, setSaveCard]     = useState(true)
   const savedCard = user ? savedCardState : null
+  // One tap is for stakes up to R250 (no 3-D Secure on a token charge); a
+  // bigger stake goes through PayFast's checkout, same as with no card.
+  const oneTap = !!savedCard && savedCardAllowedForTier(tierByKey(selected))
   // Keyed by user, so a sign-out never offers the previous golfer's free swing.
   const [freeSwing, setFreeSwing]   = useState<{ userId: string; value: FreeSwing } | null>(null)
   // A promo code typed on this screen; keyed by user for the same reason.
@@ -100,6 +104,8 @@ export default function ChooseStakePage() {
   const promoSelected = selected === PROMO_TIER.tier
   const noStakeSelected = freeSelected || promoSelected
   const showFree = Boolean(user && freeSwing?.userId === user.id && freeSwing.value.eligible)
+  // Still theirs to take, but not today: the day's free swings are gone (migration 038).
+  const freeCapped = Boolean(user && freeSwing?.userId === user.id && !freeSwing.value.eligible && !freeSwing.value.used && freeSwing.value.reason === 'cap')
   const promoSwing = user && promo?.userId === user.id ? promo.value : null
 
   // Guard: if no course selected, send back to select-course
@@ -162,6 +168,10 @@ export default function ChooseStakePage() {
         // Already taken — on another device, or a second tap. The card goes
         // away behind the sheet; the message in the sheet says why.
         if (user) setFreeSwing({ userId: user.id, value: { eligible: false, used: true, ageVerified: true } })
+      }
+      if (data.code === 'FREE_SWING_CAP' || data.code === 'FREE_SWING_PAUSED') {
+        // The day's free swings went while the sheet was open. Theirs is still to take, tomorrow.
+        if (user) setFreeSwing({ userId: user.id, value: { eligible: false, used: false, ageVerified: true, reason: 'cap' } })
       }
       setErrorMsg(data.error ?? 'Your free swing could not be started. Please try again.')
       setStep('idle')
@@ -261,6 +271,21 @@ export default function ChooseStakePage() {
       if (res.status === 404) {
         // The card is gone; fall back to the ordinary checkout without fuss.
         setSavedCard(null)
+        setStep('idle')
+        return
+      }
+      if (data.code === 'CHARGE_UNKNOWN') {
+        // PayFast did not answer: the money may have moved. Say so, and do
+        // not offer the card again from this sheet; Home shows it confirming.
+        setSavedCard(null)
+        setErrorMsg(data.error ?? 'We could not confirm the charge. Check your shots in a minute before paying again.')
+        setStep('idle')
+        return
+      }
+      if (res.status === 403 && data.code === 'SAVED_CARD_LIMIT') {
+        // Over the saved-card bound for today: the hosted checkout is the way.
+        setSavedCard(null)
+        setErrorMsg(data.error ?? 'Pay this one through PayFast checkout below.')
         setStep('idle')
         return
       }
@@ -393,6 +418,11 @@ export default function ChooseStakePage() {
         </div>
 
         <div className={`cs-list stake-list${confirming ? ' cs-list--sheet-open' : ''}`} aria-label="Stake tiers">
+          {freeCapped && (
+            <p className="stake-free-note" role="status" style={{ margin: '0 0 10px' }}>
+              Free swings are fully booked for today. Yours is still waiting: come back tomorrow, or choose a stake to play now.
+            </p>
+          )}
           {showFree && (
             <button
               type="button"
@@ -557,7 +587,7 @@ export default function ChooseStakePage() {
                     same review — and a real {formatRand(PROMO_TIER.winZAR)} if it goes in.
                   </p>
                 </>
-              ) : savedCard ? (
+              ) : oneTap ? (
                 <>
                   <button
                     type="button"
@@ -583,10 +613,16 @@ export default function ChooseStakePage() {
                     <LockIcon />
                     {step === 'paying' ? 'Complete your payment…' : loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
                   </button>
-                  <label className="stake-save">
-                    <input type="checkbox" checked={saveCard} onChange={e => setSaveCard(e.target.checked)} disabled={loading} />
-                    <span>Save my card with PayFast for one-tap entries next time. You can remove it under Account.</span>
-                  </label>
+                  {savedCard ? (
+                    <p className="stake-free-note">
+                      Stakes above R{SAVED_CARD_MAX_STAKE_ZAR} go through PayFast checkout, with your bank&apos;s extra check. Your saved card still works for smaller stakes.
+                    </p>
+                  ) : (
+                    <label className="stake-save">
+                      <input type="checkbox" checked={saveCard} onChange={e => setSaveCard(e.target.checked)} disabled={loading} />
+                      <span>Save my card with PayFast for one-tap entries next time. You can remove it under Account.</span>
+                    </label>
+                  )}
                 </>
               )}
 

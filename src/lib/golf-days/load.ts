@@ -26,6 +26,8 @@ export interface GolfDayRow {
   /** A trip's last day and its currency (migration 033). Absent before 033 has run. */
   ends_on?: string | null
   prize_currency?: string
+  /** The join code (migration 038). Absent before 038 has run; null when the day has none. */
+  join_code?: string | null
 }
 
 /**
