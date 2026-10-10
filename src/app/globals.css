@@ -782,6 +782,9 @@ body {
 }
 .signin-or i { flex: 1; height: 1px; background: var(--bar-off); }
 .signin-social { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; width: 100%; }
+/* Cloudflare Turnstile (compact, dark theme), when NEXT_PUBLIC_TURNSTILE_SITE_KEY is set. Empty until the script renders into it. */
+.signin-turnstile { min-height: 0; align-self: flex-start; }
+.signin-turnstile:empty { display: none; }
 .signin-email {
   display: flex; flex-direction: column; gap: 10px; width: 100%;
   animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
@@ -2258,6 +2261,18 @@ button, [role="button"], [role="tab"] {
   font-family: 'Inter', sans-serif; font-size: var(--text-body); line-height: 1.45;
 }
 .gd-pick { display: grid; gap: 10px; }
+/* The join code field, for a golf day that asks for one (migration 038). */
+.gd-code { display: flex; flex-direction: column; gap: 6px; }
+.gd-code-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gd-ink); opacity: 0.75; }
+.gd-code input {
+  width: 100%; min-height: 50px; padding: 0 16px; box-sizing: border-box;
+  background: var(--gd-paper); color: var(--gd-ink); border: 2px solid var(--gd-ink); border-radius: 6px;
+  font-family: var(--font-heading); font-size: 22px; font-weight: 800; letter-spacing: 0.18em; text-transform: uppercase;
+  outline: none; transition: box-shadow 0.15s;
+}
+.gd-code input:focus { box-shadow: 0 0 0 3px var(--gd-accent); }
+.gd-code input::placeholder { font-family: 'Inter', sans-serif; font-size: 15px; font-weight: 400; letter-spacing: 0; text-transform: none; opacity: 0.5; }
+.gd-code input:disabled { opacity: 0.6; }
 .gd-hole {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   width: 100%; padding: 14px 16px; border: none; border-radius: 12px; cursor: pointer; text-align: left;

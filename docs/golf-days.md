@@ -26,7 +26,13 @@ Everything is in `/admin/golf-days` → **New golf day**. No code, no deploy:
 
 1. **The facts:** the link (it can't change once sent), name, tab label
    (7 characters fits best), date, prize, places, and the holes (course,
-   then hole; only par 3s of 140 m or more are offered).
+   then hole; only par 3s of 140 m or more are offered). Optionally a
+   **join code** (4–12 letters or digits, migration 038): a WhatsApp link
+   gets forwarded, and anyone holding it could join and swing for a prize
+   Get Lucky pays. With a code set, players type it when they join (any
+   case). Give it out at registration, not in the message, and change or
+   clear it from the same form at any time. A golf day without a code works
+   as before.
 2. **The look:** upload the host's logo or a photo. It is resized and
    stored, shown whole if it has a see-through background (a logo) or
    filling the top if not (a photo), and colours are suggested from it.
@@ -328,6 +334,8 @@ A finished golf day gets out of the way (Johannes, 5 October 2026):
 | A golf day swing names its golf day, and nothing else does | Check constraint `bets_golf_day_matches_tier` |
 | Never bought or matched to a payment | `tier_golf_day` is not in `BET_TIERS` |
 | The hole is a real, active, partner par 3 of 140 m or more | Checked when the golf day is saved, and again by the swing (`checkTarget`) |
+| A forwarded link alone does not join a golf day that has a join code | `golf_days.join_code` (migration 038); `POST …/join` answers 403 `GOLF_DAY_CODE_REQUIRED` or `GOLF_DAY_CODE_WRONG`, and the public GET says only `requiresCode` |
+| A golf day swing recorded further than 2 km from the course (`farFromCourseMetres`) is not a claim | `POST /api/verifications/[betId]` refuses it, 403 `CAPTURE_FAR_FROM_COURSE`, before anything is written. A report with no distance stays a flag; every other tier stays flag-only |
 
 A player who signs in from the link comes back to it afterwards, including
 a first-timer sent through the 18+ check (`safeNext` accepts
@@ -341,7 +349,11 @@ player's swing there is still in hand; then it stays a week at most
 ## Testing
 
 `__tests__/money/golf-day.test.ts` covers the day's time window, the
-routes, the tab, the admin and both races, staged through the test fake.
+routes, the tab, the admin and both races, staged through the test fake,
+and the join code (asked for, typed any old way, never shown, set and
+cleared in the admin). `__tests__/money/claims.test.ts` covers the golf
+day swing refused for being far from the course, and the paid entries
+that are only flagged.
 Its last block covers trips: the window over several days, a swing a
 round (two on a two-course day), a hole only on its round's date, the
 dollar prize, the race on one hole, the admin's dates and the rule that

@@ -16,8 +16,8 @@ type LoadingStep = 'idle' | 'opening' | 'paying'
 
 interface SavedCard { label: string; savedAt: string; lastUsedAt: string | null }
 
-/** What /api/bets/free says about this golfer's one free swing. */
-interface FreeSwing { eligible: boolean; used: boolean; ageVerified: boolean }
+/** What /api/bets/free says about this golfer's one free swing. `reason: 'cap'`: the day's free swings are gone or paused. */
+interface FreeSwing { eligible: boolean; used: boolean; ageVerified: boolean; reason?: 'cap' }
 
 /** A promo code /api/bets/promo has accepted for this golfer: one more free swing. */
 interface PromoSwing { code: string }
@@ -104,6 +104,8 @@ export default function ChooseStakePage() {
   const promoSelected = selected === PROMO_TIER.tier
   const noStakeSelected = freeSelected || promoSelected
   const showFree = Boolean(user && freeSwing?.userId === user.id && freeSwing.value.eligible)
+  // Still theirs to take, but not today: the day's free swings are gone (migration 038).
+  const freeCapped = Boolean(user && freeSwing?.userId === user.id && !freeSwing.value.eligible && !freeSwing.value.used && freeSwing.value.reason === 'cap')
   const promoSwing = user && promo?.userId === user.id ? promo.value : null
 
   // Guard: if no course selected, send back to select-course
@@ -166,6 +168,10 @@ export default function ChooseStakePage() {
         // Already taken — on another device, or a second tap. The card goes
         // away behind the sheet; the message in the sheet says why.
         if (user) setFreeSwing({ userId: user.id, value: { eligible: false, used: true, ageVerified: true } })
+      }
+      if (data.code === 'FREE_SWING_CAP' || data.code === 'FREE_SWING_PAUSED') {
+        // The day's free swings went while the sheet was open. Theirs is still to take, tomorrow.
+        if (user) setFreeSwing({ userId: user.id, value: { eligible: false, used: false, ageVerified: true, reason: 'cap' } })
       }
       setErrorMsg(data.error ?? 'Your free swing could not be started. Please try again.')
       setStep('idle')
@@ -412,6 +418,11 @@ export default function ChooseStakePage() {
         </div>
 
         <div className={`cs-list stake-list${confirming ? ' cs-list--sheet-open' : ''}`} aria-label="Stake tiers">
+          {freeCapped && (
+            <p className="stake-free-note" role="status" style={{ margin: '0 0 10px' }}>
+              Free swings are fully booked for today. Yours is still waiting: come back tomorrow, or choose a stake to play now.
+            </p>
+          )}
           {showFree && (
             <button
               type="button"

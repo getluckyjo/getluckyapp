@@ -3,13 +3,18 @@
  * footage was made, and the checks the server runs on it before storing it
  * on the bet (docs/stage-4-proposal.md §1.2).
  *
- * Nothing here blocks a claim. The values are stored so the reviewer can
- * compare them with the footage and with the bet's own timeline; Batch 10
- * turns the disagreements into flags. Location is flag-only by decision.
+ * The values are stored so the reviewer can compare them with the footage
+ * and with the bet's own timeline; Batch 10 turns the disagreements into
+ * flags. Location is flag-only by decision for every paid entry. The one
+ * exception is a golf day swing (migration 038's change): its prize is Get
+ * Lucky's own, with no stake and no insurer behind it, so footage recorded
+ * far from the course is refused at claim time (`farFromCourse`, applied in
+ * /api/verifications/[betId]). A report with no distance stays a flag.
  *
  * Safe to import from the browser: zod and arithmetic, no server imports.
  */
 import { z } from 'zod'
+import { THRESHOLDS } from '@/lib/risk/thresholds'
 
 /** The recorder caps at 120 s; allow a little for the last chunk. */
 export const MAX_RECORDING_MS = 130_000
@@ -89,6 +94,16 @@ export function captureColumns(input: CaptureInput | undefined, opts: { course: 
       capture_distance_m: distance,
     } : {}),
   }
+}
+
+/**
+ * Whether a capture report puts the recording too far from the course to
+ * be its tee: further than the far_from_course threshold. A missing
+ * distance (no position, or a course without coordinates) is not "far":
+ * the no_location flag says so to the reviewer instead.
+ */
+export function farFromCourse(distanceM: number | null | undefined): boolean {
+  return typeof distanceM === 'number' && Number.isFinite(distanceM) && distanceM > THRESHOLDS.farFromCourseMetres
 }
 
 /** Great-circle distance in metres (haversine). Plenty for "is this near the course". */

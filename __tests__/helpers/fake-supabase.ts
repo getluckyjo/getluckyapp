@@ -21,11 +21,11 @@
  * Two constraints from the schema are modelled because the handlers branch on
  * them: the partial unique index on `bets.payment_intent_id` (error 23505) and
  * the unique `payfast_payments.m_payment_id` that `upsert(onConflict)` targets.
- * So are the triggers the routes branch on: migration 027's promo code check
- * and migration 029's golf day checks as 033 extends them to trips, on
- * inserting a bet or a golf day player (error P0001), which run before the
- * unique check as a BEFORE trigger does, and can set a column as one does
- * (bets.golf_day_slot). A unique key can span columns (golf_day_players).
+ * So are the triggers the routes branch on: migration 027's promo code check,
+ * migration 029's golf day checks as 033 extends them to trips, and
+ * migration 038's daily cap on free swings, on inserting a bet or a golf day
+ * player (error P0001), which run before the unique check as a BEFORE
+ * trigger does, and can set a column as one does (bets.golf_day_slot). A unique key can span columns (golf_day_players).
  * `db.beforeInsert` lets a test slip a row in just ahead of an insert, which
  * is how a race between a route's check and its write is staged.
  *
@@ -93,7 +93,7 @@ const iconPicksOpenTrigger: Trigger = db => {
 }
 
 const BEFORE_INSERT: Record<string, Trigger> = {
-  bets: (db, row) => golfDaySwingTrigger(db, row) ?? promoCodeTrigger(db, row),
+  bets: (db, row) => golfDaySwingTrigger(db, row) ?? promoCodeTrigger(db, row) ?? freeSwingCapTrigger(db, row),
   icon_votes: iconPicksOpenTrigger,
   // Mirrors enforce_golf_day_join() in migration 033.
   golf_day_players: (db, row) => {
@@ -135,6 +135,20 @@ function promoCodeTrigger(db: FakeDb, row: Row): PostgrestError | null {
   if (Date.parse(String(code.expires_at)) <= Date.now()) return refuse('PROMO_CODE_EXPIRED')
   const used = db.rows('bets').filter(b => b.promo_code_id === row.promo_code_id).length
   if (used >= Number(code.max_uses)) return refuse('PROMO_CODE_EXHAUSTED')
+  return null
+}
+
+// Mirrors enforce_free_swing_cap() in migration 038: no row, no cap; paused
+// refuses; otherwise today's (South African date) free swings against the cap.
+function freeSwingCapTrigger(db: FakeDb, row: Row): PostgrestError | null {
+  if (row.tier !== 'tier_free') return null
+  const caps = db.find('free_swing_caps', c => Number(c.id) === 1)
+  if (!caps) return null
+  if (caps.paused) return refuse('FREE_SWING_PAUSED')
+  const today = southAfricanToday()
+  const taken = db.rows('bets').filter(b =>
+    b.tier === 'tier_free' && new Date(Date.parse(String(b.created_at)) + 2 * 3_600_000).toISOString().slice(0, 10) === today).length
+  if (taken >= Number(caps.daily_cap)) return refuse('FREE_SWING_CAP')
   return null
 }
 

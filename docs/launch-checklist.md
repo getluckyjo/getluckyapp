@@ -22,8 +22,10 @@ do it. Tick each line in the pull request that closes it, or here.
 
 ## 1. Database (production)
 
-- [ ] Migrations 001 to 039 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file). 039 adds the `payout_approved` status and must be in before the code that uses it is deployed.
+- [ ] Migrations 001 to 039 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file). 037 adds the `unknown` ledger status and refunds, 038 the golf-day join code and the free-swing cap, 039 the `payout_approved` status; each must be in before the code that uses it is deployed.
 - [ ] Two admin accounts exist. A payout takes two signatures (approve, then a different admin marks it paid); with one admin no prize can be paid.
+- [ ] After 038: its select shows the `join_code` column, the caps row (500 a day, not paused) and the trigger. Then set the day's cap on the admin dashboard (Free swings today) to what the budget allows.
+- [ ] Authentication → Attack Protection → Turnstile: enabled, with the **secret key** from the Cloudflare Turnstile widget (Cloudflare dashboard → Turnstile → the widget for `www.getluckyholeinone.com`, hostnames `www` and the bare domain). The site key goes in Vercel (below). Test a sign-in with the widget on before the link goes out.
 - [ ] Point-in-Time Recovery on (Settings → Add-ons). The restore drill (`docs/restore-runbook.md`) needs a second project to restore into; do it once there is data worth restoring, or when a staging project exists.
 - [ ] Authentication → Rate Limits: emails per hour raised from 30 to at least 3 000 for the Icons Cup weekend (11–13 Dec); sign-ins and OTP verifications per IP raised (mobile carriers share one address across thousands of phones).
 - [ ] Resend: plan with at least 100 000 emails a month before December (an email sign-up costs two); ask support to raise the 10 requests a second limit. The hook and the welcome queue retry a 429 (`src/lib/email/send.ts`), but a cap is a cap.
@@ -48,6 +50,8 @@ Preview:
 - [ ] `RISK_HASH_SALT` (16+ random characters). Pick once; rotating orphans every hash.
 - [ ] `RETENTION_DAYS`, `BET_WINDOW_HOURS` only if you want other than 90 and 24.
 - [ ] `BETA_GATE` unset. `NEXT_PUBLIC_FEEDBACK=on` only if you want the floating feedback button for the first group; it emails you what they were doing, on which screen and build.
+- [ ] `NEXT_PUBLIC_TURNSTILE_SITE_KEY`: the Turnstile widget's **site key** (its secret key is in Supabase, above). Redeploy after setting it: it is read at build time. Without it the sign-in screen has no widget, and Supabase will refuse every sign-in if Turnstile is on there, so set both or neither.
+- [ ] `FREE_SWING_PAUSED` unset. `on` is the kill switch for free swings when the database cannot be reached to pause them from the admin.
 - [ ] Preview environment: leave its Supabase variables unset (or pointing anywhere but production). A preview that points at production refuses to start; that is the guard working.
 
 ## 3. PayFast go-live (`docs/payfast-go-live.md`)

@@ -713,6 +713,8 @@ export interface Database {
           prize_pence: number
           prize_currency: 'ZAR' | 'USD'
           max_players: number
+          /** When set, joining needs this code too (migration 038): 4–12 capitals and digits. */
+          join_code: string | null
           note: string | null
           /** The branded look (migration 031): colours, art and copy from src/lib/golf-days/look.ts; null for the Get Lucky look. */
           look: Json | null
@@ -731,6 +733,7 @@ export interface Database {
           prize_pence: number
           prize_currency?: 'ZAR' | 'USD'
           max_players: number
+          join_code?: string | null
           note?: string | null
           look?: Json | null
           disabled_at?: string | null
@@ -744,6 +747,7 @@ export interface Database {
           prize_pence?: number
           prize_currency?: 'ZAR' | 'USD'
           max_players?: number
+          join_code?: string | null
           note?: string | null
           look?: Json | null
           disabled_at?: string | null
@@ -762,6 +766,13 @@ export interface Database {
         Row: { golf_day_id: string; user_id: string; joined_at: string }
         Insert: { golf_day_id: string; user_id: string }
         Update: never
+        Relationships: []
+      }
+      /** One row (id = 1): the daily cap on free swings and the pause switch (migration 038). */
+      free_swing_caps: {
+        Row: { id: number; daily_cap: number; paused: boolean; updated_by: string | null; updated_at: string }
+        Insert: { id?: number; daily_cap?: number; paused?: boolean; updated_by?: string | null; updated_at?: string }
+        Update: { daily_cap?: number; paused?: boolean; updated_by?: string | null; updated_at?: string }
         Relationships: []
       }
       promo_codes: {

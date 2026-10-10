@@ -27,6 +27,25 @@ export function golfDayPath(slug: string): string {
   return `/golf-day/${slug}`
 }
 
+/**
+ * A golf day's join code (migration 038): 4 to 12 capitals and digits, as
+ * stored. Mirrors the table's check. A link gets forwarded; a code set on
+ * the day is handed out by the organiser, so a forwarded link alone does
+ * not get a swing at the prize.
+ */
+export const GOLF_DAY_JOIN_CODE_PATTERN = /^[A-Z0-9]{4,12}$/
+
+/** As typed → as stored: case and spaces do not matter to a player. */
+export function normaliseJoinCode(input: string): string {
+  return input.replace(/\s+/g, '').toUpperCase()
+}
+
+/** Whether what a player typed is the golf day's code. Null when the day has none: anything goes. */
+export function joinCodeMatches(stored: string | null | undefined, typed: string | null | undefined): boolean {
+  if (!stored) return true
+  return typeof typed === 'string' && normaliseJoinCode(typed) === normaliseJoinCode(stored)
+}
+
 /** A golf day's prize is in rand; a golf trip's can be in dollars (migration 033). */
 export type PrizeCurrency = 'ZAR' | 'USD'
 export const PRIZE_CURRENCIES: readonly PrizeCurrency[] = ['ZAR', 'USD']
@@ -175,6 +194,8 @@ export type GolfDayRefusal =
   | 'GOLF_DAY_WRONG_DAY'
   | 'GOLF_DAY_SWING_USED'
   | 'GOLF_DAY_ROUND_USED'
+  | 'GOLF_DAY_CODE_REQUIRED'
+  | 'GOLF_DAY_CODE_WRONG'
 
 /** What the player is told for each, and with which status. */
 export const GOLF_DAY_REFUSALS: Record<GolfDayRefusal, { status: number; error: string }> = {
@@ -189,6 +210,8 @@ export const GOLF_DAY_REFUSALS: Record<GolfDayRefusal, { status: number; error: 
   GOLF_DAY_WRONG_DAY:   { status: 409, error: 'That hole’s round is on another day. Your swing there opens on the day.' },
   GOLF_DAY_SWING_USED:  { status: 409, error: 'You have already taken your swing at this golf day.' },
   GOLF_DAY_ROUND_USED:  { status: 409, error: 'You have already taken your swing on this hole. Your next one is in the next round.' },
+  GOLF_DAY_CODE_REQUIRED: { status: 403, error: 'This golf day needs its join code. Ask the organiser for it.' },
+  GOLF_DAY_CODE_WRONG:  { status: 403, error: 'That join code is not right. Check it and try again.' },
 }
 
 /** The refusals the migration 029 and 033 triggers raise, as their message. */
@@ -229,6 +252,8 @@ export interface PublicGolfDay {
   phase: GolfDayPhase
   closed: boolean
   full: boolean
+  /** Joining needs the golf day's code (migration 038). The code itself is never sent here. */
+  requiresCode: boolean
   holes: GolfDayHole[]
   /** The look set in the admin; null when it has none (the code theme or the Get Lucky look applies). */
   look: GolfDayLook | null
@@ -259,6 +284,8 @@ export interface AdminGolfDay {
   prize: number
   currency: PrizeCurrency
   maxPlayers: number
+  /** The code players must type to join, or null when the link alone is enough. */
+  joinCode: string | null
   note: string | null
   disabledAt: string | null
   phase: GolfDayPhase
