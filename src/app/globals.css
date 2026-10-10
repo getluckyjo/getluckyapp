@@ -724,6 +724,11 @@ body {
 }
 .v2-legal a { color: var(--green); font-weight: 700; text-decoration: none; }
 .v2-legal a:hover { text-decoration: underline; }
+/* The note in place of the Google tile inside an app's web view (auth page). */
+.v2-hint {
+  font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.5;
+  color: var(--green); margin: 14px 0 0; opacity: 0.85;
+}
 
 /* ── SCREEN: LANDING ── */
 .landing {

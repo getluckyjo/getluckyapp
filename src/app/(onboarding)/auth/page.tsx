@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useEffect, useRef, useSyncExternalStore, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
@@ -10,7 +10,11 @@ import { GoogleIcon } from '@/components/icons'
 import { useAuth } from '@/context/AuthContext'
 import { safeNext } from '@/lib/auth/next-path'
 import { turnstileSiteKey } from '@/lib/auth/turnstile'
+import { isInAppBrowser } from '@/lib/in-app-browser'
 import Turnstile, { type TurnstileHandle } from '@/components/auth/Turnstile'
+
+/** The user agent never changes during a page's life. */
+const subscribeNever = () => () => {}
 
 /** Cloudflare Turnstile, when its site key is set; nothing changes without it. */
 const TURNSTILE_SITE_KEY = turnstileSiteKey()
@@ -65,6 +69,12 @@ function AuthForm() {
   useEffect(() => {
     if (user && busy !== 'code') router.push(landing)
   }, [user, landing, router, busy])
+
+  // Inside Instagram, Facebook, WhatsApp or the Gmail app's browser Google
+  // refuses to sign anyone in, so the tile is not offered there; the email
+  // code works anywhere. The server does not know the browser, so it renders
+  // the tile and the client corrects it on hydration.
+  const inAppBrowser = useSyncExternalStore(subscribeNever, () => isInAppBrowser(navigator.userAgent), () => false)
 
   /** Each token is good once: clear the widget after a sign-in has used it. */
   function spendCaptcha() {
@@ -237,7 +247,13 @@ function AuthForm() {
                 <Turnstile ref={turnstile} siteKey={TURNSTILE_SITE_KEY} onToken={setCaptchaToken} />
               )}
 
-              {mode !== 'sent' && (
+              {mode !== 'sent' && inAppBrowser && (
+                <p className="v2-hint" role="note">
+                  Google sign-in does not work inside this app&rsquo;s browser. Use your email above, or open this page in Safari or Chrome.
+                </p>
+              )}
+
+              {mode !== 'sent' && !inAppBrowser && (
                 <>
                   <span className="signin-or" aria-hidden><i />or sign in with<i /></span>
                   <div className="signin-social">
