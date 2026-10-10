@@ -20,6 +20,14 @@ interface Payload {
   /** Are there enough picks for the counts to be worth showing? */
   revealVotes?: boolean
   myVote: string | null
+  /** False once picks have closed: at first tee, or when the backer list was frozen for the draw. */
+  picksOpen?: boolean
+  picksCloseAt?: string | null
+}
+
+/** "Fri 11 Dec, 07:00" in South African time, for the picks-close line. */
+function closesAt(iso: string): string {
+  return new Intl.DateTimeFormat('en-ZA', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Johannesburg' }).format(new Date(iso))
 }
 
 const TEAMS: IconTeam[] = ['rsa', 'world']
@@ -59,7 +67,7 @@ export default function IconsPage() {
 
   async function back(iconId: string) {
     if (!user) { signIn(); return }
-    if (!data || saving || data.myVote === iconId) return
+    if (!data || saving || data.myVote === iconId || !open) return
     setSaving(iconId)
     setError(null)
     const previous = data
@@ -79,6 +87,7 @@ export default function IconsPage() {
       if (res.status === 401) { signIn(); return }
       if (!res.ok) {
         const json = await res.json().catch(() => ({}))
+        if (json.code === 'PICKS_CLOSED') setData(d => (d ? { ...d, picksOpen: false } : d))
         throw new Error(json.error ?? 'Could not save your pick')
       }
       haptics.success()
@@ -93,6 +102,8 @@ export default function IconsPage() {
 
   const icons = data?.icons ?? []
   const mine = icons.find(i => i.id === data?.myVote) ?? null
+  // Picks close at first tee; an older payload without the flag stays open.
+  const open = data ? data.picksOpen !== false : true
   // The server decides; the fallback keeps an older payload behaving.
   const reveal = data ? (data.revealVotes ?? shouldRevealVotes(data.totalVotes)) : false
 
@@ -128,13 +139,21 @@ export default function IconsPage() {
 
           {mine && (
             <div className={`ic-mine is-${mine.team}`}>
-              <span className="ic-mine-label">You&rsquo;re backing</span>
+              <span className="ic-mine-label">{open ? 'You\u2019re backing' : 'You backed'}</span>
               <span className="ic-mine-name">{mine.name}</span>
               <span className="ic-mine-prize">If {mine.name} {ICONS_EVENT.fanStake}</span>
             </div>
           )}
 
-          {!user && data && icons.length > 0 && (
+          {data && icons.length > 0 && (
+            <p className="lb-note ic-close" role="status">
+              {open
+                ? (data.picksCloseAt ? `Picks close at first tee, ${closesAt(data.picksCloseAt)}.` : 'Picks close at first tee.')
+                : 'Picks are closed. The backer list is locked in for the draw.'}
+            </p>
+          )}
+
+          {!user && data && icons.length > 0 && open && (
             <button type="button" className="btn-lime btn-lime--block ic-signin" onClick={signIn}>
               Sign in to pick yours
             </button>
@@ -171,7 +190,7 @@ export default function IconsPage() {
                         type="button"
                         className={`ic-card${picked ? ' is-picked' : ''}`}
                         aria-pressed={picked}
-                        disabled={saving !== null}
+                        disabled={saving !== null || !open}
                         onClick={() => back(icon.id)}
                       >
                         <span className="ic-avatar" aria-hidden>

@@ -48,15 +48,30 @@ export async function PATCH(request: Request, { params }: Ctx) {
   }
 }
 
-/** Deleting an Icon removes every pick for it (cascade). Prefer deactivating. */
+/**
+ * An Icon nobody has backed can be deleted. One with picks stays on record
+ * (migration 036: the foreign key restricts, and the frozen list and the
+ * winners point at it); hide it instead.
+ */
 export async function DELETE(_request: Request, { params }: Ctx) {
   const auth = await requireAdmin()
   if (!auth.ok) return auth.error
   const { iconId } = await params
   if (!uuid.safeParse(iconId).success) return NextResponse.json({ error: 'Invalid id', code: 'INVALID_INPUT' }, { status: 400 })
+  const backed = () => NextResponse.json(
+    { error: 'Golfers have backed this Icon, so it stays on record. Hide it from the app instead.', code: 'ICON_BACKED' },
+    { status: 409 },
+  )
   try {
+    const { count, error: countErr } = await auth.adminClient.from('icon_votes').select('user_id', { count: 'exact', head: true }).eq('icon_id', iconId)
+    if (countErr) throw countErr
+    if ((count ?? 0) > 0) return backed()
     const { data, error } = await auth.adminClient.from('icons').delete().eq('id', iconId).select('id')
-    if (error) throw error
+    if (error) {
+      // 23503: someone backed it between the count and the delete, or the frozen list names it.
+      if (error.code === '23503') return backed()
+      throw error
+    }
     if (!data || data.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 })
     log.info('admin.icons.removed', { id: iconId, by: auth.user.id })
     return NextResponse.json({ ok: true })
