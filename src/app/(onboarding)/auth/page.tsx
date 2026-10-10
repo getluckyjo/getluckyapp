@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import AppHeader from '@/components/layout/AppHeader'
@@ -9,6 +9,11 @@ import StepBar from '@/components/layout/StepBar'
 import { GoogleIcon } from '@/components/icons'
 import { useAuth } from '@/context/AuthContext'
 import { safeNext } from '@/lib/auth/next-path'
+import { turnstileSiteKey } from '@/lib/auth/turnstile'
+import Turnstile, { type TurnstileHandle } from '@/components/auth/Turnstile'
+
+/** Cloudflare Turnstile, when its site key is set; nothing changes without it. */
+const TURNSTILE_SITE_KEY = turnstileSiteKey()
 
 type Mode = 'idle' | 'email' | 'sent'
 
@@ -28,6 +33,11 @@ const ERROR_COPY: Record<string, string> = {
  * Email sign-in sends a branded email carrying a six-digit code and a button.
  * The code is entered right here, so it works even when the email is opened
  * on another device or a mail scanner has already followed the link.
+ *
+ * With NEXT_PUBLIC_TURNSTILE_SITE_KEY set, Cloudflare's Turnstile widget sits
+ * above the buttons and its token goes to Supabase with the sign-in (Supabase
+ * → Authentication → Attack Protection → Turnstile checks it). A token is
+ * good once, so the widget is reset after each use.
  */
 function AuthForm() {
   const router = useRouter()
@@ -40,6 +50,9 @@ function AuthForm() {
   const [busy, setBusy] = useState<null | 'google' | 'email' | 'code'>(null)
   const [error, setError] = useState<string | null>(null)
   const [resent, setResent] = useState(false)
+  // The Turnstile token, when the widget is on; null until solved, and again after use.
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const turnstile = useRef<TurnstileHandle>(null)
 
   const urlError = searchParams.get('error')
   // Set by the proxy when it bounced someone off a signed-in-only route, and by
@@ -53,11 +66,18 @@ function AuthForm() {
     if (user && busy !== 'code') router.push(landing)
   }, [user, landing, router, busy])
 
+  /** Each token is good once: clear the widget after a sign-in has used it. */
+  function spendCaptcha() {
+    turnstile.current?.reset()
+    setCaptchaToken(null)
+  }
+
   async function handleGoogle() {
     setError(null)
     setBusy('google')
     try {
-      await signInWithGoogle(landing)
+      await signInWithGoogle(landing, captchaToken)
+      spendCaptcha()
     } catch {
       setError('Google sign-in is unavailable right now. Please try again.')
       setBusy(null)
@@ -66,12 +86,15 @@ function AuthForm() {
 
   async function sendLink(trimmed: string) {
     setBusy('email')
-    const { error: linkError } = await signInWithMagicLink(trimmed, next ? landing : undefined)
+    const { error: linkError } = await signInWithMagicLink(trimmed, next ? landing : undefined, captchaToken)
     setBusy(null)
+    spendCaptcha()
     if (linkError) {
-      setError(/rate|too many|seconds/i.test(linkError)
-        ? 'Too many attempts. Give it a minute, then try again.'
-        : 'We couldn’t send that email. Please check the address and try again.')
+      setError(/captcha/i.test(linkError)
+        ? 'Please tick the box to show you’re not a robot, then try again.'
+        : /rate|too many|seconds/i.test(linkError)
+          ? 'Too many attempts. Give it a minute, then try again.'
+          : 'We couldn’t send that email. Please check the address and try again.')
       return false
     }
     return true
@@ -208,6 +231,10 @@ function AuthForm() {
                     The email also has a sign-in button. It works on the phone you play from. Not there? Check spam.
                   </p>
                 </form>
+              )}
+
+              {mode !== 'sent' && TURNSTILE_SITE_KEY && (
+                <Turnstile ref={turnstile} siteKey={TURNSTILE_SITE_KEY} onToken={setCaptchaToken} />
               )}
 
               {mode !== 'sent' && (

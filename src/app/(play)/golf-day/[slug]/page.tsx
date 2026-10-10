@@ -30,15 +30,19 @@ interface Loaded { golfDay: PublicGolfDay; me: GolfDayMe | null }
 
 /** Set before sending a player to sign in from this screen, so they are joined on the way back. */
 const JOIN_AFTER_SIGN_IN = 'gl_golf_day_join'
+/** The join code they typed before signing in, to join with on the way back. */
+const JOIN_CODE_AFTER_SIGN_IN = 'gl_golf_day_join_code'
 
-/** Whether this player left to sign in from this golf day's Join; reading it clears it. */
-function takeJoinFlag(slug: string): boolean {
+/** Whether this player left to sign in from this golf day's Join, and the code they typed; reading it clears it. */
+function takeJoinFlag(slug: string): { join: boolean; code: string } {
   try {
-    if (sessionStorage.getItem(JOIN_AFTER_SIGN_IN) !== slug) return false
+    if (sessionStorage.getItem(JOIN_AFTER_SIGN_IN) !== slug) return { join: false, code: '' }
+    const code = sessionStorage.getItem(JOIN_CODE_AFTER_SIGN_IN) ?? ''
     sessionStorage.removeItem(JOIN_AFTER_SIGN_IN)
-    return true
+    sessionStorage.removeItem(JOIN_CODE_AFTER_SIGN_IN)
+    return { join: true, code }
   } catch {
-    return false // storage blocked: they tap Join instead
+    return { join: false, code: '' } // storage blocked: they tap Join instead
   }
 }
 
@@ -90,6 +94,8 @@ export default function GolfDayPage() {
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState<'join' | 'swing' | null>(null)
   const [error, setError] = useState('')
+  // The join code, when the golf day asks for one; typed as given, compared without case.
+  const [code, setCode] = useState('')
   const [picked, setPicked] = useState<GolfDayHole | null>(null)
   const [reload, setReload] = useState(0)
   // The home screen pop-up: 'joined' straight after joining, 'asked' from the link.
@@ -104,12 +110,16 @@ export default function GolfDayPage() {
    * straight away (it must follow a tap, and this is one). Everywhere else,
    * and when joined on the way back from signing in, the pop-up opens.
    */
-  const join = useCallback(async (fromTap: boolean) => {
+  const join = useCallback(async (fromTap: boolean, typedCode: string) => {
     if (!user) return
     setBusy('join')
     setError('')
     try {
-      const res = await fetch(`/api/golf-days/${encodeURIComponent(slug)}/join`, { method: 'POST' })
+      const res = await fetch(`/api/golf-days/${encodeURIComponent(slug)}/join`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(typedCode.trim() ? { code: typedCode.trim() } : {}),
+      })
       const body = await res.json().catch(() => ({})) as { joined?: boolean; slug?: string; tabLabel?: string; error?: string }
       if (res.ok && body.joined && body.slug && body.tabLabel) {
         setGolfDayTab(user.id, { slug: body.slug, tabLabel: body.tabLabel })
@@ -146,16 +156,24 @@ export default function GolfDayPage() {
         if (cancelled) return
         setFailed(false)
         setData(loaded)
-        // Back from signing in through "Sign in to join": join without a second tap.
+        // Back from signing in through "Sign in to join": join without a second tap,
+        // with the code typed before leaving when the golf day asks for one.
         const { me, golfDay } = loaded
-        if (me && !me.joined && !golfDay.closed && !golfDay.full && golfDay.phase !== 'over' && takeJoinFlag(slug)) void join(false)
+        if (me && !me.joined && !golfDay.closed && !golfDay.full && golfDay.phase !== 'over') {
+          const flag = takeJoinFlag(slug)
+          if (flag.code) setCode(flag.code)
+          if (flag.join && (!golfDay.requiresCode || flag.code)) void join(false, flag.code)
+        }
       })
       .catch(() => { if (!cancelled) setFailed(true) })
     return () => { cancelled = true }
   }, [slug, authLoading, user?.id, refreshTick, reload, join])
 
   function signInToJoin() {
-    try { sessionStorage.setItem(JOIN_AFTER_SIGN_IN, slug) } catch { /* storage blocked: they tap Join after */ }
+    try {
+      sessionStorage.setItem(JOIN_AFTER_SIGN_IN, slug)
+      if (code.trim()) sessionStorage.setItem(JOIN_CODE_AFTER_SIGN_IN, code.trim())
+    } catch { /* storage blocked: they tap Join after */ }
     router.push(`/auth?next=${encodeURIComponent(golfDayPath(slug))}`)
   }
 
@@ -250,8 +268,10 @@ export default function GolfDayPage() {
                   busy={busy}
                   started={started}
                   startedHole={startedHole}
+                  code={code}
+                  onCode={setCode}
                   onSignIn={signInToJoin}
-                  onJoin={() => join(true)}
+                  onJoin={() => join(true, code)}
                   onInstall={offerInstall ? () => setInstallSheet('asked') : undefined}
                   venue={theme.venue}
                   onPick={setPicked}
@@ -385,7 +405,28 @@ function AddToCalendar({ golfDay, venue }: { golfDay: PublicGolfDay; venue: stri
   )
 }
 
-function Action({ golfDay, me, signedIn, busy, started, startedHole, onSignIn, onJoin, onPick, onResume, onInstall, venue }: {
+/** The join code field, for a golf day that asks for one: capitals and digits, any case typed. */
+function JoinCodeField({ code, onCode, disabled }: { code: string; onCode: (code: string) => void; disabled: boolean }) {
+  return (
+    <label className="gd-code">
+      <span className="gd-code-label">Join code</span>
+      <input
+        value={code}
+        onChange={e => onCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12))}
+        placeholder="From the organiser"
+        inputMode="text"
+        autoCapitalize="characters"
+        autoComplete="off"
+        spellCheck={false}
+        maxLength={12}
+        disabled={disabled}
+        aria-label="Join code"
+      />
+    </label>
+  )
+}
+
+function Action({ golfDay, me, signedIn, busy, started, startedHole, code, onCode, onSignIn, onJoin, onPick, onResume, onInstall, venue }: {
   golfDay: PublicGolfDay
   me: GolfDayMe | null
   signedIn: boolean
@@ -393,6 +434,9 @@ function Action({ golfDay, me, signedIn, busy, started, startedHole, onSignIn, o
   /** A swing started and not yet filmed or declared, and its hole. */
   started: GolfDaySwing | null
   startedHole: GolfDayHole | null
+  /** The join code as typed, for a golf day that asks for one. */
+  code: string
+  onCode: (code: string) => void
   onSignIn: () => void
   onJoin: () => void
   onPick: (hole: GolfDayHole) => void
@@ -412,18 +456,27 @@ function Action({ golfDay, me, signedIn, busy, started, startedHole, onSignIn, o
   if (!joined) {
     if (golfDay.phase === 'over') return <p className="gd-status">This {trip ? 'trip' : 'golf day'} is over. Thanks to everyone who played.</p>
     if (golfDay.full) return <p className="gd-status">Every place on this {trip ? 'trip' : 'golf day'} has been taken.</p>
+    const needsCode = golfDay.requiresCode && !code.trim()
     if (!signedIn) {
       return (
         <>
+          {golfDay.requiresCode && <JoinCodeField code={code} onCode={onCode} disabled={false} />}
           <button type="button" className="btn-lime btn-lime--block" onClick={onSignIn}>Sign in to join</button>
-          <p className="gd-small">Google or your email, then your date of birth (18+). It takes a minute. Do it before {trip ? 'the trip' : 'the day'}.</p>
+          <p className="gd-small">
+            {golfDay.requiresCode ? 'The organiser gives you the join code. ' : ''}
+            Google or your email, then your date of birth (18+). It takes a minute. Do it before {trip ? 'the trip' : 'the day'}.
+          </p>
         </>
       )
     }
     return (
-      <button type="button" className="btn-lime btn-lime--block" onClick={onJoin} disabled={busy === 'join'}>
-        {busy === 'join' ? 'Joining…' : trip ? 'Join the trip' : 'Join the golf day'}
-      </button>
+      <>
+        {golfDay.requiresCode && <JoinCodeField code={code} onCode={onCode} disabled={busy === 'join'} />}
+        <button type="button" className="btn-lime btn-lime--block" onClick={onJoin} disabled={busy === 'join' || needsCode}>
+          {busy === 'join' ? 'Joining…' : trip ? 'Join the trip' : 'Join the golf day'}
+        </button>
+        {golfDay.requiresCode && <p className="gd-small">This {trip ? 'trip' : 'golf day'} needs its join code. The organiser has it.</p>}
+      </>
     )
   }
 

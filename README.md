@@ -76,6 +76,8 @@ the access token comes from). Every one of them refuses the production ref.
 | `NEXT_PUBLIC_BUILD_DATE` | build | set by `next.config.ts` at build time; shown on the Account screen as the build stamp with the commit SHA |
 | `NEXT_PUBLIC_FEEDBACK` | build | `on` shows the floating feedback button on every screen (closed-beta use). Unset: no button; the `/api/feedback` route still exists |
 | `RETENTION_DAYS` | server | footage of misses and documents of rejected claims are purged after this many days, default 90 |
+| `FREE_SWING_PAUSED` | server | `on` stops free swings before the database is asked anything (`/api/bets/free` answers 503 "fully booked for today"), for the day the database is the problem. The ordinary switch and the daily cap are on the admin dashboard (migration 038). Unset or anything else: no effect |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | build | Cloudflare Turnstile's site key. Set, the sign-in screen shows the widget and sends its token with the emailed code; Supabase checks it (Authentication → Attack Protection → Turnstile, with the secret key set there). Unset: no widget, nothing changes |
 
 A preview deployment refuses to start if it points at the production database
 or has PayFast in live mode (`src/instrumentation.ts`).

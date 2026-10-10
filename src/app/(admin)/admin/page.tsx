@@ -6,6 +6,7 @@ import { Banknote, Ticket, ClipboardCheck, Hourglass, Trophy, HandCoins, Users, 
 import StatCard from '@/components/admin/StatCard'
 import StatusBadge from '@/components/admin/StatusBadge'
 import LoadError from '@/components/admin/LoadError'
+import FreeSwingCapCard from '@/components/admin/FreeSwingCapCard'
 import { formatZAR, timeAgo, formatMoney } from '@/lib/format'
 import { TIER_LABELS } from '@/lib/tiers'
 import type { AdminBetRecord, VerificationQueueItem } from '@/types/admin'
@@ -153,6 +154,10 @@ export default function AdminDashboardPage() {
               <Download size={15} aria-hidden /> {exporting ? 'Preparing…' : 'Download bets (CSV)'}
             </button>
             {exportNote && <span role={exportNote.error ? 'alert' : 'status'} className={exportNote.error ? 'adm-error' : 'adm-small'}>{exportNote.text}</span>}
+          </div>
+
+          <div style={{ marginBottom: 26 }}>
+            <FreeSwingCapCard />
           </div>
 
           <div className="adm-grid-2">

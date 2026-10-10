@@ -13,12 +13,14 @@
  * service role after an ownership check through RLS.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, COURSE_ID, HOLE_ID, type FakeClientOptions } from '../helpers/fake-supabase'
 import { PATCH as patchBet, GET as getBet } from '@/app/api/bets/[betId]/route'
 import { POST as submitClaim, GET as getVerification } from '@/app/api/verifications/[betId]/route'
 import { POST as uploadUrl } from '@/app/api/videos/upload-url/route'
 import { POST as sealVideo } from '@/app/api/videos/uploaded/route'
+import { farFromCourse } from '@/lib/claims/capture'
+import { THRESHOLDS } from '@/lib/risk/thresholds'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
 const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
@@ -356,5 +358,67 @@ describe('POST /api/videos/uploaded — sealing the footage', () => {
     expect((await seal(noSlot.id as string)).status).toBe(400)
     asUser(USER_B)
     expect((await seal(noObject.id as string)).status).toBe(404)
+  })
+})
+
+describe('a golf day swing filmed far from the course (migration 038)', () => {
+  const submit = (betId: string, body: unknown = {}) =>
+    submitClaim(jsonRequest('http://x', body) as never, params(betId))
+  const PARTNER = [{ role: 'witness', name: 'Sipho Dlamini', email: 'sipho@example.com' }]
+  const FAR = THRESHOLDS.farFromCourseMetres + 1
+  /** A golf day swing whose recorder reported this distance to the course (null: no position). Each at its own golf day: one swing each. */
+  const golfDaySwing = (distance: number | null, over: Record<string, unknown> = {}) => ownBet({
+    tier: 'tier_golf_day', golf_day_id: randomUUID(), golf_day_slot: 'day', stake_pence: 0, potential_win_pence: 10_000_000,
+    capture_lat: distance === null ? null : -26.14, capture_lng: distance === null ? null : 28.11, capture_distance_m: distance, ...over,
+  })
+
+  it('the rule itself: over the threshold is far; at it, under it, or unknown is not', () => {
+    expect(farFromCourse(FAR)).toBe(true)
+    expect(farFromCourse(THRESHOLDS.farFromCourseMetres)).toBe(false)
+    expect(farFromCourse(0)).toBe(false)
+    expect(farFromCourse(null)).toBe(false)
+    expect(farFromCourse(undefined)).toBe(false)
+    expect(farFromCourse(Number.NaN)).toBe(false)
+  })
+
+  it('403 CAPTURE_FAR_FROM_COURSE, in plain words, before anything is written', async () => {
+    asUser()
+    const bet = golfDaySwing(FAR)
+    const res = await submit(bet.id as string, { witnesses: PARTNER })
+    expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({ error: 'This swing was recorded too far from the course for a golf day prize.', code: 'CAPTURE_FAR_FROM_COURSE' })
+    expect(bet.status).toBe('active')
+    expect(bet.declared_result).toBeUndefined()
+    expect(bet.claim_ip_hash).toBeUndefined()
+    expect(db.rows('verifications')).toHaveLength(0)
+    expect(db.rows('claim_witnesses')).toHaveLength(0)
+    expect(db.rows('outbox')).toHaveLength(0)
+  })
+
+  it('a swing already declared a win is refused the same way, and stays as it was', async () => {
+    asUser()
+    const bet = golfDaySwing(FAR, { status: 'claimed', declared_result: 'win', declared_at: '2026-10-02T10:00:00Z' })
+    expect((await submit(bet.id as string, { witnesses: PARTNER })).status).toBe(403)
+    expect(db.rows('verifications')).toHaveLength(0)
+  })
+
+  it('at the threshold, nearer, or with no position at all, the claim goes through', async () => {
+    asUser()
+    for (const distance of [THRESHOLDS.farFromCourseMetres, 120, null]) {
+      const bet = golfDaySwing(distance)
+      expect((await submit(bet.id as string, { witnesses: PARTNER })).status, String(distance)).toBe(200)
+      expect(bet.status).toBe('claimed')
+    }
+    expect(db.rows('verifications')).toHaveLength(3)
+  })
+
+  it('every other entry far from the course is still a claim, flagged for the reviewer as before', async () => {
+    asUser()
+    for (const tier of ['tier_1', 'tier_free', 'tier_promo']) {
+      const bet = ownBet({ tier, capture_lat: -26.14, capture_lng: 28.11, capture_distance_m: 50_000 })
+      expect((await submit(bet.id as string, { witnesses: PARTNER })).status, tier).toBe(200)
+      expect(bet.status).toBe('claimed')
+      expect((bet.risk_flags as { rule: string }[]).map(f => f.rule)).toContain('far_from_course')
+    }
   })
 })

@@ -7,11 +7,16 @@
  *  - the prize is R10,000 and comes from the tier table, never from the body
  *  - the paid gates still apply: signed in, 18+, not suspended, real target
  *  - GET tells the screen whether to offer the card at all
+ *  - at most daily_cap a day, system-wide (migration 038), held by the
+ *    insert; paused by the admin or by FREE_SWING_PAUSED=on in the
+ *    environment, which answers before the database is touched
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, COURSE_ID, HOLE_ID, type FakeUser } from '../helpers/fake-supabase'
 import { GET, POST } from '@/app/api/bets/free/route'
+import { GET as readCap, PATCH as setCap } from '@/app/api/admin/free-swings/route'
 import { FREE_TIER } from '@/lib/tiers'
+import { FREE_SWING_CAP_MESSAGE, capRefusalFromDbError, envPaused, southAfricanDayStart } from '@/lib/free-swing-cap'
 
 const serverClient = vi.hoisted(() => ({ createClient: vi.fn() }))
 const adminClient = vi.hoisted(() => ({ createAdminClient: vi.fn() }))
@@ -47,7 +52,7 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.spyOn(console, 'log').mockImplementation(() => {})
 })
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks() })
 
 describe('gates', () => {
   it('401 without a session', async () => {
@@ -213,5 +218,161 @@ describe('GET eligibility', () => {
   it('not eligible while suspended', async () => {
     asUser(); verifiedProfile().suspended_at = '2026-09-01T00:00:00Z'
     expect(await (await GET()).json()).toMatchObject({ eligible: false })
+  })
+})
+
+const ADMIN: FakeUser = { id: '99999999-9999-4999-8999-999999999999', email: 'admin@example.com' }
+const DAY = 24 * 3_600_000
+
+/** The one caps row migration 038 seeds, as the admin may have set it. */
+const caps = (over: Record<string, unknown> = {}) =>
+  db.seed('free_swing_caps', { id: 1, daily_cap: 500, paused: false, updated_at: new Date().toISOString(), ...over })[0]
+/** Another golfer's free swing, taken `daysAgo` days ago (today by default). */
+const someoneElses = (daysAgo = 0, user = USER_B) =>
+  db.seed('bets', { user_id: user.id, tier: 'tier_free', status: 'active', payment_intent_id: `free_${user.id}`, created_at: new Date(Date.now() - daysAgo * DAY).toISOString() })[0]
+
+describe('the daily cap and the pause switch (migration 038)', () => {
+  beforeEach(() => { asUser(); verifiedProfile(); seedTarget() })
+
+  it('the rules, said once in TypeScript', () => {
+    expect(capRefusalFromDbError({ code: 'P0001', message: 'FREE_SWING_CAP' })).toBe('FREE_SWING_CAP')
+    expect(capRefusalFromDbError({ code: 'P0001', message: 'FREE_SWING_PAUSED' })).toBe('FREE_SWING_PAUSED')
+    expect(capRefusalFromDbError({ code: 'P0001', message: 'PROMO_CODE_EXHAUSTED' })).toBeNull()
+    expect(capRefusalFromDbError({ code: '23505', message: 'FREE_SWING_CAP' })).toBeNull()
+    expect(envPaused({ FREE_SWING_PAUSED: 'on' })).toBe(true)
+    for (const v of ['off', 'true', '1', '', undefined]) expect(envPaused({ FREE_SWING_PAUSED: v }), String(v)).toBe(false)
+    // Midnight in South Africa, either side of midnight UTC.
+    expect(southAfricanDayStart(Date.parse('2026-10-01T21:59:00Z'))).toBe('2026-09-30T22:00:00.000Z')
+    expect(southAfricanDayStart(Date.parse('2026-10-01T22:00:00Z'))).toBe('2026-10-01T22:00:00.000Z')
+  })
+
+  it('with no caps row (a database before 038), nothing is capped', async () => {
+    someoneElses()
+    expect(await (await GET()).json()).toMatchObject({ eligible: true })
+    expect((await (await GET()).json()).reason).toBeUndefined()
+    expect((await post(body())).status).toBe(200)
+  })
+
+  it('503 FREE_SWING_CAP once the day\'s free swings are gone, and nothing is written', async () => {
+    caps({ daily_cap: 1 }); someoneElses()
+    expect(await (await GET()).json()).toMatchObject({ eligible: false, used: false, ageVerified: true, reason: 'cap' })
+    const res = await post(body())
+    expect(res.status).toBe(503)
+    expect(await res.json()).toEqual({ error: FREE_SWING_CAP_MESSAGE, code: 'FREE_SWING_CAP' })
+    expect(db.rows('bets').filter(b => b.user_id === USER_A.id)).toHaveLength(0)
+  })
+
+  it('counts today in South Africa: yesterday\'s free swings and paid bets do not count', async () => {
+    caps({ daily_cap: 1 })
+    someoneElses(2)
+    db.seed('bets', { user_id: USER_B.id, tier: 'tier_1', status: 'active', payment_intent_id: 'gl_paid_b' })
+    expect(await (await GET()).json()).toMatchObject({ eligible: true })
+    expect((await post(body())).status).toBe(200)
+  })
+
+  it('a race for the last free swing of the day is settled by the insert, not the check', async () => {
+    caps({ daily_cap: 1 })
+    expect(await (await GET()).json()).toMatchObject({ eligible: true })
+    db.beforeInsert = table => {
+      if (table !== 'bets') return
+      db.beforeInsert = null
+      someoneElses()
+    }
+    const res = await post(body())
+    expect(res.status).toBe(503)
+    expect((await res.json()).code).toBe('FREE_SWING_CAP')
+    expect(db.rows('bets').map(b => b.user_id)).toEqual([USER_B.id])
+  })
+
+  it('paused by the admin: 503 FREE_SWING_PAUSED, in the same words; GET says cap', async () => {
+    caps({ paused: true })
+    expect(await (await GET()).json()).toMatchObject({ eligible: false, reason: 'cap' })
+    const res = await post(body())
+    expect(res.status).toBe(503)
+    expect(await res.json()).toEqual({ error: FREE_SWING_CAP_MESSAGE, code: 'FREE_SWING_PAUSED' })
+    expect(db.rows('bets')).toHaveLength(0)
+  })
+
+  it('a golfer who has had theirs is told used, not capped', async () => {
+    caps({ daily_cap: 1 }); someoneElses(0, USER_A)
+    const status = await (await GET()).json()
+    expect(status).toMatchObject({ eligible: false, used: true })
+    expect(status.reason).toBeUndefined()
+    expect((await post(body())).status).toBe(409)
+  })
+
+  it('FREE_SWING_PAUSED=on answers before the database is touched', async () => {
+    vi.stubEnv('FREE_SWING_PAUSED', 'on')
+    serverClient.createClient.mockImplementation(() => { throw new Error('database down') })
+    adminClient.createAdminClient.mockImplementation(() => { throw new Error('database down') })
+    const res = await post(body())
+    expect(res.status).toBe(503)
+    expect(await res.json()).toEqual({ error: FREE_SWING_CAP_MESSAGE, code: 'FREE_SWING_PAUSED' })
+    expect(await (await GET()).json()).toMatchObject({ eligible: false, reason: 'cap' })
+  })
+
+  it('FREE_SWING_PAUSED set to anything but on does nothing', async () => {
+    vi.stubEnv('FREE_SWING_PAUSED', 'off')
+    expect((await post(body())).status).toBe(200)
+  })
+})
+
+describe('admin: the cap and the switch', () => {
+  const asAdmin = () => {
+    db.seed('profiles', { id: ADMIN.id, name: 'Admin', is_admin: true })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: ADMIN }))
+  }
+  const patch = (b: unknown) => setCap(jsonRequest('http://x/api/admin/free-swings', b, { method: 'PATCH' }))
+
+  it('non-admins never reach the handlers', async () => {
+    asUser(); verifiedProfile()
+    expect((await readCap()).status).toBe(403)
+    expect((await patch({ paused: true })).status).toBe(403)
+    expect(db.rows('free_swing_caps')).toHaveLength(0)
+  })
+
+  it('reads the row and today\'s count; the defaults without the row', async () => {
+    asAdmin()
+    expect((await (await readCap()).json()).data).toEqual({ dailyCap: 500, paused: false, usedToday: 0, open: true, envPaused: false, updatedAt: null })
+    caps({ daily_cap: 20 }); someoneElses(); someoneElses(2, USER_A)
+    expect((await (await readCap()).json()).data).toMatchObject({ dailyCap: 20, paused: false, usedToday: 1, open: true })
+  })
+
+  it('sets the cap and the switch, and the golfer\'s route follows at once', async () => {
+    asAdmin(); const row = caps()
+    let res = await patch({ dailyCap: 0 })
+    expect(res.status).toBe(200)
+    expect((await res.json()).data).toMatchObject({ dailyCap: 0, paused: false, open: false })
+    res = await patch({ paused: true })
+    expect((await res.json()).data).toMatchObject({ dailyCap: 0, paused: true, open: false })
+    expect(row).toMatchObject({ daily_cap: 0, paused: true, updated_by: ADMIN.id })
+
+    asUser(); verifiedProfile(); seedTarget()
+    expect((await post(body())).status).toBe(503)
+    asAdmin()
+    await patch({ dailyCap: 500, paused: false })
+    asUser()
+    expect((await post(body())).status).toBe(200)
+  })
+
+  it('makes the row when migration 038\'s seed is not there', async () => {
+    asAdmin()
+    expect((await (await patch({ dailyCap: 10 })).json()).data).toMatchObject({ dailyCap: 10, paused: false })
+    expect(db.find('free_swing_caps', c => Number(c.id) === 1)).toMatchObject({ daily_cap: 10, updated_by: ADMIN.id })
+  })
+
+  it('refuses an empty body, a cap outside 0–100 000, and a switch that is not true or false', async () => {
+    asAdmin()
+    for (const b of [{}, { dailyCap: -1 }, { dailyCap: 100001 }, { dailyCap: 1.5 }, { paused: 'yes' }]) {
+      expect((await patch(b)).status, JSON.stringify(b)).toBe(400)
+    }
+    expect(db.rows('free_swing_caps')).toHaveLength(0)
+  })
+
+  it('reports the environment switch, which it cannot change', async () => {
+    asAdmin(); vi.stubEnv('FREE_SWING_PAUSED', 'on')
+    expect((await (await readCap()).json()).data).toMatchObject({ envPaused: true })
+    await patch({ paused: false })
+    expect((await (await readCap()).json()).data).toMatchObject({ envPaused: true, paused: false })
   })
 })

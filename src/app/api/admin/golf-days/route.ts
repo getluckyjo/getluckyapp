@@ -12,7 +12,8 @@ import { GOLF_DAY_SLUG_PATTERN, todayInSouthAfrica } from '@/lib/golf-days/rules
  * /golf-day/<slug>; players who join through it get the golf day tab in
  * place of Icons and one free swing on the day. A golf trip (migration 033)
  * has a last day too, a date on each hole, and a swing every round; its
- * prize can be in dollars. No deploy involved, look included
+ * prize can be in dollars. A join code (migration 038) makes a forwarded
+ * link not enough on its own. No deploy involved, look included
  * (golf_days.look, migration 031); only a drawn tab icon is code.
  */
 
@@ -22,6 +23,7 @@ const Create = z.object({
   ...EditableFields,
   endsOn: EditableFields.endsOn.optional(),
   currency: EditableFields.currency.optional(),
+  joinCode: EditableFields.joinCode.optional(),
   note: EditableFields.note.optional(),
   look: EditableFields.look.optional(),
 }).refine(v => v.playsOn >= todayInSouthAfrica(), { message: 'The golf day cannot be in the past', path: ['playsOn'] })
@@ -65,6 +67,8 @@ export async function POST(request: Request) {
         ...(currency !== 'ZAR' ? { prize_currency: currency } : {}),
         prize_pence: b.prize * 100,
         max_players: b.maxPlayers,
+        // Only when there is one, so a golf day without a code can be made before migration 038.
+        ...(b.joinCode ? { join_code: b.joinCode } : {}),
         note: b.note || null,
         ...(b.look ? { look: b.look } : {}),
         created_by: auth.user.id,
@@ -86,7 +90,7 @@ export async function POST(request: Request) {
       throw holesError
     }
 
-    log.info('admin.golf_days.created', { id: data.id, slug: b.slug, plays_on: b.playsOn, ends_on: endsOn, prize: b.prize, currency, by: auth.user.id })
+    log.info('admin.golf_days.created', { id: data.id, slug: b.slug, plays_on: b.playsOn, ends_on: endsOn, prize: b.prize, currency, join_code: Boolean(b.joinCode), by: auth.user.id })
     const [created] = await adminGolfDays(auth.adminClient, [data.id])
     return NextResponse.json({ data: created }, { status: 201 })
   } catch (err) {

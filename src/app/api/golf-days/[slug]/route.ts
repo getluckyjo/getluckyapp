@@ -7,7 +7,8 @@
  * the prize and the holes before they sign in. `me` is null until they do;
  * then it carries every swing they took (one a round on a trip).
  *
- * The number of players is not shown, only whether the day is full.
+ * The number of players is not shown, only whether the day is full. A join
+ * code (migration 038) is never sent; only that one is needed.
  */
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
@@ -43,6 +44,7 @@ export async function GET(_request: Request, { params }: Ctx) {
       phase: golfDayPhase(facts.playsOn, Date.now(), facts.endsOn),
       closed: Boolean(day.disabled_at),
       full: players >= day.max_players,
+      requiresCode: Boolean(day.join_code),
       holes: holes.get(day.id) ?? [],
       look: parseLook(day.look),
     }

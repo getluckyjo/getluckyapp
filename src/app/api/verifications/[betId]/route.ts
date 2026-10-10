@@ -11,6 +11,8 @@ import {
 import { z } from 'zod'
 import { apiError, parseBody } from '@/lib/api/http'
 import { DocumentMissingError, sealDocument } from '@/lib/claims/documents'
+import { farFromCourse } from '@/lib/claims/capture'
+import { GOLF_DAY_TIER } from '@/lib/tiers'
 import { WitnessesSchema, hasPlayingPartner, replaceWitnesses, witnessesForBet } from '@/lib/claims/witnesses'
 import { hashIdentifier } from '@/lib/risk/hash'
 import { tryRefreshClaimRisk } from '@/lib/risk/rules'
@@ -80,6 +82,13 @@ export async function GET(
  * (400 DOCUMENT_MISSING if it is not there). At least one playing partner
  * must be named, in this submission or an earlier one (400 WITNESS_REQUIRED).
  * Both checks run before the bet changes state.
+ *
+ * A golf day swing whose footage was recorded too far from the course
+ * (the capture report's distance, over the far_from_course threshold) is
+ * refused outright, 403 CAPTURE_FAR_FROM_COURSE, before anything is
+ * written: its prize is Get Lucky's own, with nothing behind it. For every
+ * other entry the distance stays a flag for the reviewer, as before, and a
+ * report with no distance is a flag for a golf day swing too.
  */
 export async function POST(
   request: NextRequest,
@@ -102,7 +111,7 @@ export async function POST(
     // Ownership: RLS only shows the caller their own bets.
     const { data: bet } = await supabase
       .from('bets')
-      .select('id, status, expires_at, course_id')
+      .select('id, status, expires_at, course_id, tier, capture_distance_m')
       .eq('id', betId)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -136,6 +145,15 @@ export async function POST(
     // A resolved bet answers with its own reason before the evidence is looked at.
     if (bet.status !== 'active' && bet.status !== 'claimed') {
       throw new ClaimError('INVALID_TRANSITION', `This bet is already ${bet.status}.`, 409)
+    }
+
+    // A golf day swing filmed far from the course is not a claim at all.
+    if (bet.tier === GOLF_DAY_TIER.tier && farFromCourse(bet.capture_distance_m)) {
+      log.warn('claim.far_from_course_refused', { user_id: user.id, bet_id: betId, distance_m: Math.round(bet.capture_distance_m as number) })
+      return NextResponse.json(
+        { error: 'This swing was recorded too far from the course for a golf day prize.', code: 'CAPTURE_FAR_FROM_COURSE' },
+        { status: 403 },
+      )
     }
 
     // Evidence checks, before anything changes state.
