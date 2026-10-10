@@ -5,7 +5,8 @@
  * the signed-in user's email is on the list, or the browser carries the
  * cookie set by redeeming an invite code at /beta. The list is one table,
  * beta_access, edited from /admin/beta; the check is the beta_check()
- * function from migration 016, so the list is never readable directly.
+ * function from migration 016, so the list is never readable directly, and
+ * since migration 040 only the service role may call it.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
@@ -38,7 +39,11 @@ export function normaliseEmail(email: string): string {
   return email.trim().toLowerCase()
 }
 
-/** True when either credential is on the list. Any client works; the function is security definer. */
+/**
+ * True when either credential is on the list. Call with the service-role
+ * client: since migration 040 only service_role may execute beta_check, so
+ * the list cannot be probed with the public key.
+ */
 export async function betaAllowed(
   client: Pick<SupabaseClient<Database>, 'rpc'>,
   { email, code }: { email?: string | null; code?: string | null },

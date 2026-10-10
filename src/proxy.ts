@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/database'
 import { BETA_COOKIE, betaAllowed, betaGateApplies, betaGateEnabled } from '@/lib/beta'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // ── Route config ──────────────────────────────────────────────────────────
 // Reachable signed out. Marketing, legal, and the sign-in flow itself.
@@ -119,7 +120,9 @@ export async function proxy(request: NextRequest) {
     const code = request.cookies.get(BETA_COOKIE)?.value ?? null
     let allowed = false
     try {
-      allowed = await betaAllowed(supabase, { email: user?.email ?? null, code })
+      // The service role, not the session: beta_check is closed to the
+      // public key (migration 040) so the list cannot be probed.
+      allowed = await betaAllowed(createAdminClient(), { email: user?.email ?? null, code })
     } catch {
       // The gate must fail closed, but a broken lookup should send the tester
       // to the gate page, not to a 500.

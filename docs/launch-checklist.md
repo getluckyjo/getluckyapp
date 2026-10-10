@@ -22,7 +22,7 @@ do it. Tick each line in the pull request that closes it, or here.
 
 ## 1. Database (production)
 
-- [ ] Migrations 001 to 039 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file). 037 adds the `unknown` ledger status and refunds, 038 the golf-day join code and the free-swing cap, 039 the `payout_approved` status; each must be in before the code that uses it is deployed.
+- [ ] Migrations 001 to 040 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file). 037 adds the `unknown` ledger status and refunds, 038 the golf-day join code and the free-swing cap, 039 the `payout_approved` status, 040 closes every `public` function to the anon and authenticated roles (beta_check becomes service-role only); each must be in before the code that uses it is deployed.
 - [ ] Two admin accounts exist. A payout takes two signatures (approve, then a different admin marks it paid); with one admin no prize can be paid.
 - [ ] After 038: its select shows the `join_code` column, the caps row (500 a day, not paused) and the trigger. Then set the day's cap on the admin dashboard (Free swings today) to what the budget allows.
 - [ ] Authentication → Attack Protection → Turnstile: enabled, with the **secret key** from the Cloudflare Turnstile widget (Cloudflare dashboard → Turnstile → the widget for `www.getluckyholeinone.com`, hostnames `www` and the bare domain). The site key goes in Vercel (below). Test a sign-in with the widget on before the link goes out.
