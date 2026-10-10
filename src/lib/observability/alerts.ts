@@ -11,12 +11,32 @@
  *
  * Alerts are deliberately rare. Anything that fires more than a few times a
  * day belongs in `log.error` (Sentry aggregates it) rather than here.
+ *
+ * The email leg is throttled: one email per event name per EMAIL_THROTTLE_MS
+ * per function instance. An outage that fires the same alert a thousand
+ * times in a minute (Resend refusing auth emails, say) would otherwise send
+ * a thousand emails through the same refused provider and eat the quota the
+ * golfers need. Sentry and the log still see every occurrence.
  */
 import * as Sentry from '@sentry/nextjs'
 import { log, errorMessage, type MoneyPath } from './log'
 import { FROM_ADDRESS } from '@/lib/email/from'
 
 const OPS_EMAIL = (process.env.OPS_ALERT_EMAIL ?? 'johannes@getluckygolfclub.com').trim()
+
+export const EMAIL_THROTTLE_MS = 5 * 60_000
+const lastEmailed = new Map<string, number>()
+
+/** Test hook: forget what has been emailed. */
+export function resetAlertThrottle() { lastEmailed.clear() }
+
+/** Should an email go out for this event now? Records the send when it says yes. */
+export function emailDue(event: string, now = Date.now()): boolean {
+  const last = lastEmailed.get(event)
+  if (last !== undefined && now - last < EMAIL_THROTTLE_MS) return false
+  lastEmailed.set(event, now)
+  return true
+}
 
 export interface OpsAlert {
   /** Stable event name, e.g. `payfast.itn.ledger_write_failed`. */
@@ -43,7 +63,8 @@ export async function alertOps(alert: OpsAlert): Promise<void> {
     Sentry.captureMessage(`[ALERT] ${alert.event}: ${alert.summary}`, 'fatal')
   })
 
-  await sendEmail(alert, details)
+  if (emailDue(alert.event)) await sendEmail(alert, details)
+  else log.warn('alerts.email_throttled', { event: alert.event })
 }
 
 async function sendEmail(alert: OpsAlert, details: Record<string, unknown>) {

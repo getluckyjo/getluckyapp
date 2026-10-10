@@ -76,7 +76,8 @@ describe('finishSignIn', () => {
     const client = createFakeClient(db, { user: USER_A })
     const res = await finishSignIn(client as never, ORIGIN, '/home')
 
-    expect(location(res)).toBe(`${ORIGIN}/age-check`)
+    // Where they were going rides through the gate.
+    expect(location(res)).toBe(`${ORIGIN}/age-check?next=%2Fhome`)
     expect(db.find('profiles', p => p.id === USER_A.id)?.onboarding_done).toBe(true)
     // Queued, not sent in the request; the outbox drain sends it.
     expect(sendSpy).not.toHaveBeenCalled()
@@ -93,7 +94,7 @@ describe('finishSignIn', () => {
   it('a welcome email failure is logged and does not block sign-in; the queue retries it', async () => {
     sendSpy.mockResolvedValue({ data: null, error: { message: 'Resend down' } })
     const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/home')
-    expect(location(res)).toBe(`${ORIGIN}/age-check`)
+    expect(location(res)).toBe(`${ORIGIN}/age-check?next=%2Fhome`)
     const r = await drainOutbox(createFakeClient(db) as never)
     expect(r).toMatchObject({ claimed: 1, retried: 1, done: 0 })
   })
@@ -101,20 +102,20 @@ describe('finishSignIn', () => {
   it('falls back to sending inline when the queue cannot be written', async () => {
     adminClient.createAdminClient.mockImplementation(() => createFakeClient(db, { failTable: { outbox: { code: '42P01', message: 'relation "outbox" does not exist' } } }))
     const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/home')
-    expect(location(res)).toBe(`${ORIGIN}/age-check`)
+    expect(location(res)).toBe(`${ORIGIN}/age-check?next=%2Fhome`)
     expect(sendSpy).toHaveBeenCalledOnce()
   })
 
   it('returning user without age verification is still sent to the age gate, no welcome email', async () => {
     db.seed('profiles', { id: USER_A.id, onboarding_done: true, age_verified_at: null })
     const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/select-course')
-    expect(location(res)).toBe(`${ORIGIN}/age-check`)
+    expect(location(res)).toBe(`${ORIGIN}/age-check?next=%2Fselect-course`)
     expect(sendSpy).not.toHaveBeenCalled()
     expect(db.rows('outbox')).toHaveLength(0)
   })
 
   // A golf day's player signs in from its link and must come back to it to
-  // join, so the link rides through the 18+ check. Nothing else does.
+  // join, so the link rides through the 18+ check like any other safe path.
   it('a first-timer from a golf day link goes through the age gate and back to the link', async () => {
     const res = await finishSignIn(createFakeClient(db, { user: USER_A }) as never, ORIGIN, '/golf-day/bombsquad')
     expect(location(res)).toBe(`${ORIGIN}/age-check?next=%2Fgolf-day%2Fbombsquad`)

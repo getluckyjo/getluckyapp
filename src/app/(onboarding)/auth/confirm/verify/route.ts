@@ -20,8 +20,10 @@ const OTP_TYPES: EmailOtpType[] = ['signup', 'invite', 'magiclink', 'recovery', 
  */
 export async function POST(request: NextRequest) {
   const { origin } = new URL(request.url)
+  // A browser is arriving here, so an over-limit answer is a sign-in screen
+  // with a message, never raw JSON.
   const limited = await enforceRateLimit(RULES.authConfirm, { ip: clientIp(request) })
-  if (limited) return limited
+  if (limited) return NextResponse.redirect(`${origin}/auth?error=rate_limited`, 303)
 
   const form = await request.formData()
   const tokenHash = String(form.get('token_hash') ?? '')

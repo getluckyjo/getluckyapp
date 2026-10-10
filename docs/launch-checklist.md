@@ -22,9 +22,10 @@ do it. Tick each line in the pull request that closes it, or here.
 
 ## 1. Database (production)
 
-- [ ] Migrations 001 to 016 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file).
+- [ ] Migrations 001 to 036 applied, in order (`select * from public.schema_migrations` if bootstrap was used; otherwise the verify block at the end of each file).
 - [ ] Point-in-Time Recovery on (Settings → Add-ons). The restore drill (`docs/restore-runbook.md`) needs a second project to restore into; do it once there is data worth restoring, or when a staging project exists.
-- [ ] Authentication → Rate Limits: emails per hour raised from 30 to at least 500.
+- [ ] Authentication → Rate Limits: emails per hour raised from 30 to at least 3 000 for the Icons Cup weekend (11–13 Dec); sign-ins and OTP verifications per IP raised (mobile carriers share one address across thousands of phones).
+- [ ] Resend: plan with at least 100 000 emails a month before December (an email sign-up costs two); ask support to raise the 10 requests a second limit. The hook and the welcome queue retry a 429 (`src/lib/email/send.ts`), but a cap is a cap.
 - [ ] Authentication → URL Configuration: Site URL is `https://www.getluckyholeinone.com`; redirect URLs cover `www` and the bare domain.
 - [ ] Google provider: production callback URL registered in Google Cloud.
 - [ ] Send Email hook enabled and pointing at `/api/auth/send-email` with `SEND_EMAIL_HOOK_SECRET` (`docs/auth-email-setup.md`).
@@ -63,7 +64,8 @@ Preview:
 - [x] Only par 3s of 140 m or more are playable (`src/lib/holes.ts`; checkout refuses shorter holes, the app greys them out with the reason). Set by Johannes on 16 Sep 2026; 140 m counts.
 - [ ] Admin accounts: yours plus whoever reviews claims (`profiles.is_admin`, set in SQL, never through the app).
 - [ ] `support@getluckygolf.co.za` reaches a person, and someone owns the ops alert inbox.
-- [ ] Terms, privacy and responsible-play pages read by a lawyer; retention periods confirmed with Indwe.
+- [ ] Terms, privacy and responsible-play pages read by a lawyer, including the new section 5 (Icons Cup fan prize) and the eligibility split (18+ for everyone, South African residents for paid entries); retention periods confirmed with Indwe.
+- [ ] Icons: first tee set at `/admin/icons`; the freeze runs before the shot and its hash is published (`docs/icons.md`).
 - [ ] The witness email and the claim page copy read once by you, as the golfer and as the club manager.
 - [ ] Indwe knows the go-live date: every entry from that day is a real claim against the policy, including the first group's.
 

@@ -45,7 +45,7 @@ export const RULES = {
   membership:  { name: 'membership',  perUser: 60,  perIp: null, windowSeconds: TEN_MINUTES } as RateRule,
   admin:       { name: 'admin',       perUser: 600, perIp: null, windowSeconds: TEN_MINUTES } as RateRule,
   accountDelete: { name: 'account_delete', perUser: 5, perIp: 100, windowSeconds: ONE_HOUR } as RateRule,
-  authConfirm: { name: 'auth_confirm', perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only
+  authConfirm: { name: 'auth_confirm', perUser: 0,  perIp: 3000, windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only. A mobile carrier puts thousands of phones behind one address; this stops a script, not a stadium
   witness:     { name: 'witness',     perUser: 0,  perIp: 60,   windowSeconds: TEN_MINUTES } as RateRule, // public confirmation page: IP only
   feedback:    { name: 'feedback',    perUser: 20, perIp: 400,  windowSeconds: ONE_HOUR    } as RateRule, // a clubhouse shares one IP
   betaRedeem:  { name: 'beta_redeem', perUser: 0,  perIp: 20,   windowSeconds: TEN_MINUTES } as RateRule, // pre-auth: IP only

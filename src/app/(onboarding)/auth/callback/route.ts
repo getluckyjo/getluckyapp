@@ -15,8 +15,10 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code')
   const next = safeNext(searchParams.get('next'))
 
+  // A browser is arriving here, so an over-limit answer is a sign-in screen
+  // with a message, never raw JSON.
   const limited = await enforceRateLimit(RULES.authConfirm, { ip: clientIp(request) })
-  if (limited) return limited
+  if (limited) return NextResponse.redirect(`${origin}/auth?error=rate_limited`, 303)
 
   try {
     const supabase = await createClient()

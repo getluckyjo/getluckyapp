@@ -9,6 +9,12 @@
  * dead letter and ops are alerted. Handlers must be safe to run twice: a
  * runner can die between doing the work and marking it done.
  *
+ * Order matters in a spike. A witness request for a real hole-in-one must
+ * not queue behind ten thousand welcome emails, so the urgent kinds
+ * (URGENT_KINDS) are drained first, then the rest. Welcome emails are sent
+ * a few at a time in parallel (CONCURRENCY), inside Resend's 10 a second,
+ * and each send retries a 429 on its own (src/lib/email/send.ts).
+ *
  * Ops alerts do not go through here. An alert about the outbox being stuck
  * must not sit in the outbox.
  */
@@ -35,6 +41,12 @@ export const BACKOFF_SECONDS = [60, 300, 1_800, 7_200, 43_200] as const
 export const MAX_ATTEMPTS = BACKOFF_SECONDS.length + 1
 /** How long a claimed job is left alone before another runner may take it. */
 export const LEASE_SECONDS = 300
+/** Kinds a golfer or a claim is waiting on right now; drained before the rest. */
+export const URGENT_KINDS: JobKind[] = ['witness_request', 'feedback_email']
+/** Jobs run at a time within one drain. Three keeps Resend under its 10 a second with the auth hook alongside. */
+export const CONCURRENCY = 3
+/** Jobs claimed per drain. At CONCURRENCY and ~300 ms a send, 150 fits well inside the route's 55 s. */
+export const DEFAULT_LIMIT = 150
 
 const handlers: { [K in JobKind]: (admin: Admin, payload: JobPayloads[K]) => Promise<void> } = {
   async witness_request(admin, { betId }) {
@@ -67,20 +79,29 @@ export interface DrainResult { claimed: number; done: number; retried: number; d
 
 export async function drainOutbox(admin: Admin, opts: { now?: Date; limit?: number } = {}): Promise<DrainResult> {
   const now = opts.now ?? new Date()
-  const limit = opts.limit ?? 25
+  const limit = opts.limit ?? DEFAULT_LIMIT
   const result: DrainResult = { claimed: 0, done: 0, retried: 0, dead: 0 }
 
-  const { data: due, error } = await admin
-    .from('outbox')
-    .select('id, kind, payload, attempts')
-    .is('done_at', null)
-    .is('failed_at', null)
-    .lte('next_attempt_at', now.toISOString())
-    .order('next_attempt_at', { ascending: true })
-    .limit(limit)
-  if (error) throw error
+  // Urgent kinds first, then everything else, up to the limit in total.
+  const due: DueJob[] = []
+  for (const urgent of [true, false]) {
+    const room = limit - due.length
+    if (room <= 0) break
+    let query = admin
+      .from('outbox')
+      .select('id, kind, payload, attempts')
+      .is('done_at', null)
+      .is('failed_at', null)
+      .lte('next_attempt_at', now.toISOString())
+    query = urgent ? query.in('kind', URGENT_KINDS) : query.not('kind', 'in', `(${URGENT_KINDS.join(',')})`)
+    const { data, error } = await query.order('next_attempt_at', { ascending: true }).limit(room)
+    if (error) throw error
+    due.push(...((data ?? []) as DueJob[]))
+  }
 
-  for (const job of due ?? []) {
+  // Claim first, in order; then run the claimed jobs a few at a time.
+  const claimedJobs: DueJob[] = []
+  for (const job of due) {
     // Claim: whoever moves next_attempt_at first owns the job for LEASE_SECONDS.
     const attempt = job.attempts + 1
     const lease = new Date(now.getTime() + LEASE_SECONDS * 1000).toISOString()
@@ -92,34 +113,49 @@ export async function drainOutbox(admin: Admin, opts: { now?: Date; limit?: numb
       .select('id')
     if (!claimed || claimed.length === 0) continue
     result.claimed++
+    claimedJobs.push({ ...job, attempts: attempt })
+  }
 
-    try {
-      const handler = handlers[job.kind as JobKind]
-      if (!handler) throw new Error(`unknown job kind: ${job.kind}`)
-      await handler(admin, job.payload as never)
-      await admin.from('outbox').update({ done_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
-      result.done++
-      log.info('outbox.done', { id: job.id, kind: job.kind, attempt })
-    } catch (err) {
-      const message = errorMessage(err).slice(0, 500)
-      if (attempt >= MAX_ATTEMPTS) {
-        await admin.from('outbox').update({ failed_at: new Date().toISOString(), last_error: message }).eq('id', job.id)
-        result.dead++
-        await alertOps({
-          event: 'outbox.dead_letter',
-          path: 'claim',
-          summary: `Job ${job.id} (${job.kind}) failed ${attempt} times and will not be retried: ${message}`,
-          details: { id: job.id, kind: job.kind, payload: job.payload },
-        })
-      } else {
-        const delay = BACKOFF_SECONDS[Math.min(attempt - 1, BACKOFF_SECONDS.length - 1)]
-        await admin.from('outbox').update({ next_attempt_at: new Date(now.getTime() + delay * 1000).toISOString(), last_error: message }).eq('id', job.id)
-        result.retried++
-        log.warn('outbox.retry', { id: job.id, kind: job.kind, attempt, retry_in_s: delay, error: message })
-      }
+  let cursor = 0
+  const worker = async () => {
+    while (cursor < claimedJobs.length) {
+      const job = claimedJobs[cursor++]
+      await runJob(admin, job, now, result)
     }
   }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, claimedJobs.length) }, worker))
 
   if (result.claimed > 0) log.info('outbox.drained', { ...result })
   return result
+}
+
+interface DueJob { id: number; kind: string; payload: Json; attempts: number }
+
+async function runJob(admin: Admin, job: DueJob, now: Date, result: DrainResult): Promise<void> {
+  const attempt = job.attempts
+  try {
+    const handler = handlers[job.kind as JobKind]
+    if (!handler) throw new Error(`unknown job kind: ${job.kind}`)
+    await handler(admin, job.payload as never)
+    await admin.from('outbox').update({ done_at: new Date().toISOString(), last_error: null }).eq('id', job.id)
+    result.done++
+    log.info('outbox.done', { id: job.id, kind: job.kind, attempt })
+  } catch (err) {
+    const message = errorMessage(err).slice(0, 500)
+    if (attempt >= MAX_ATTEMPTS) {
+      await admin.from('outbox').update({ failed_at: new Date().toISOString(), last_error: message }).eq('id', job.id)
+      result.dead++
+      await alertOps({
+        event: 'outbox.dead_letter',
+        path: 'claim',
+        summary: `Job ${job.id} (${job.kind}) failed ${attempt} times and will not be retried: ${message}`,
+        details: { id: job.id, kind: job.kind, payload: job.payload },
+      })
+    } else {
+      const delay = BACKOFF_SECONDS[Math.min(attempt - 1, BACKOFF_SECONDS.length - 1)]
+      await admin.from('outbox').update({ next_attempt_at: new Date(now.getTime() + delay * 1000).toISOString(), last_error: message }).eq('id', job.id)
+      result.retried++
+      log.warn('outbox.retry', { id: job.id, kind: job.kind, attempt, retry_in_s: delay, error: message })
+    }
+  }
 }
