@@ -28,7 +28,7 @@ export interface VerificationReview extends VerificationDetail {
   }
   /** The payment that bought the swing; null for a free swing (no stake). `missing`: no ledger row found. */
   payment: {
-    status: 'complete' | 'amount_mismatch' | 'pending' | 'failed' | 'missing'
+    status: 'complete' | 'amount_mismatch' | 'pending' | 'failed' | 'unknown' | 'missing'
     amountCents: number | null
     reference: string | null
   } | null

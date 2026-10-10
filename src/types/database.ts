@@ -12,8 +12,10 @@
  * and keep the hand-maintained `members` block (the funnel's table, which
  * lives in the same project but is not defined by this repo's migrations).
  */
-/** payfast_payments.status (migration 005, widened by 021). */
-export type PaymentStatus = 'complete' | 'amount_mismatch' | 'pending' | 'failed'
+/** payfast_payments.status (migration 005, widened by 021 and 037). */
+export type PaymentStatus = 'complete' | 'amount_mismatch' | 'pending' | 'failed' | 'unknown'
+/** refunds.status (migration 037). */
+export type RefundStatus = 'requested' | 'sent' | 'failed'
 
 export type Json =
   | string
@@ -404,6 +406,7 @@ export interface Database {
           status: PaymentStatus
           raw_payload: Json | null
           bet_id: string | null
+          refunded_at: string | null
           created_at: string
         }
         Insert: {
@@ -418,6 +421,7 @@ export interface Database {
           status?: PaymentStatus
           raw_payload?: Json | null
           bet_id?: string | null
+          refunded_at?: string | null
           created_at?: string
         }
         Update: {
@@ -432,7 +436,43 @@ export interface Database {
           status?: PaymentStatus
           raw_payload?: Json | null
           bet_id?: string | null
+          refunded_at?: string | null
           created_at?: string
+        }
+        Relationships: []
+      }
+      refunds: {
+        Row: {
+          id: string
+          m_payment_id: string
+          pf_payment_id: string | null
+          amount_cents: number
+          reason: string
+          status: RefundStatus
+          pf_refund_id: string | null
+          failure_reason: string | null
+          requested_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          m_payment_id: string
+          pf_payment_id?: string | null
+          amount_cents: number
+          reason: string
+          status?: RefundStatus
+          pf_refund_id?: string | null
+          failure_reason?: string | null
+          requested_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          status?: RefundStatus
+          pf_refund_id?: string | null
+          failure_reason?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

@@ -1,7 +1,7 @@
-import type { Database } from './database'
+import type { Database, PaymentStatus } from './database'
 import type { BetTier } from '@/lib/tiers'
 
-export type { BetTier }
+export type { BetTier, PaymentStatus }
 export type BetRow = Database['public']['Tables']['bets']['Row']
 export type ProfileRow = Database['public']['Tables']['profiles']['Row']
 export type CourseRow = Database['public']['Tables']['courses']['Row']
@@ -137,11 +137,13 @@ export interface AdminPaymentRecord {
   holeNumber: number | null
   tier: BetTier | null
   amountCents: number
-  status: 'complete' | 'amount_mismatch' | 'pending' | 'failed'
+  status: PaymentStatus
   /** The bet this payment produced; null is the one that needs a person. */
   betId: string | null
   /** 'saved_card' when charged against a token, else the hosted/onsite checkout. */
   source: 'saved_card' | 'checkout'
+  /** When PayFast accepted a refund of it (migration 037); null otherwise. */
+  refundedAt: string | null
   createdAt: string
 }
 

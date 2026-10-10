@@ -50,7 +50,7 @@ describe('GET /api/payments/pending', () => {
     expect(res.status).toBe(200)
     const { pending } = await res.json()
     expect(pending).toEqual([{
-      m_payment_id: 'gl_a', tier: 'tier_1', amount_cents: 5000, created_at: '2026-09-16T09:16:28Z',
+      m_payment_id: 'gl_a', tier: 'tier_1', amount_cents: 5000, created_at: '2026-09-16T09:16:28Z', confirming: false,
       course: { id: COURSE_ID, name: 'Arabella Golf Club' },
       hole: { id: HOLE_ID, hole_number: 5 },
     }])
@@ -70,6 +70,15 @@ describe('GET /api/payments/pending', () => {
     db.seed('bets', { id: 'bet-9', user_id: USER_A.id, payment_intent_id: 'gl_a', status: 'miss' })
     const { pending } = await (await GET()).json()
     expect(pending).toEqual([])
+  })
+
+  it('lists an unknown saved-card charge as confirming, so Home never asks the golfer to pay again', async () => {
+    asUser()
+    ledgerRow({ m_payment_id: 'gl_u', status: 'unknown', pf_payment_id: null, raw_payload: { source: 'saved_card', error: 'timeout' }, created_at: '2026-09-16T09:20:00Z' })
+    ledgerRow({ m_payment_id: 'gl_p', status: 'pending' })   // in flight, not shown
+    ledgerRow({ m_payment_id: 'gl_f', status: 'failed' })    // nothing taken
+    const { pending } = await (await GET()).json()
+    expect(pending.map((p: { m_payment_id: string; confirming: boolean }) => [p.m_payment_id, p.confirming])).toEqual([['gl_u', true]])
   })
 
   it('empty when there is nothing', async () => {

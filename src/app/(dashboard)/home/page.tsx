@@ -20,6 +20,8 @@ interface BetRecord {
 interface PendingPayment {
   m_payment_id: string
   amount_cents: number
+  /** A saved-card charge PayFast has not answered for yet: show it as confirming, never as payable again. */
+  confirming?: boolean
   course: { id: string; name: string | null } | null
   hole: { id: string; hole_number: number | null } | null
 }
@@ -137,11 +139,13 @@ export default function HomePage() {
               >
                 <span className="home-claim-dot" aria-hidden />
                 <span>
-                  <span className="home-claim-title">Your paid shot is waiting</span>
+                  <span className="home-claim-title">{paidShot.confirming ? 'Confirming your payment' : 'Your paid shot is waiting'}</span>
                   <span className="home-claim-sub" style={{ display: 'block' }}>
                     {paidShot.course?.name ?? 'Your entry'}
                     {paidShot.hole?.hole_number ? ` · Hole ${paidShot.hole.hole_number}` : ''}
-                    {` · R${Math.round(paidShot.amount_cents / 100)} paid · Tap to record it`}
+                    {paidShot.confirming
+                      ? ` · R${Math.round(paidShot.amount_cents / 100)} · Checking with PayFast, no need to pay again`
+                      : ` · R${Math.round(paidShot.amount_cents / 100)} paid · Tap to record it`}
                   </span>
                 </span>
               </button>

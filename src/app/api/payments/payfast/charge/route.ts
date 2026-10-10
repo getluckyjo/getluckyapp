@@ -8,6 +8,7 @@ import { assertNotSuspended, claimErrorResponse } from '@/lib/claims/state-machi
 import { grantBetForPayment } from '@/lib/claims/grant'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { chargeToken } from '@/lib/payfast/api'
+import { SAVED_CARD_DAILY_CAP_CENTS, SAVED_CARD_MAX_STAKE_ZAR, savedCardAllowedForTier, savedCardSpentCents } from '@/lib/payfast/saved-card'
 import { checkTarget } from '@/lib/payfast/target'
 import { BET_TIERS } from '@/lib/tiers'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
@@ -34,7 +35,17 @@ const Body = z.object({
  * fields) can never attach this payment to the wrong hole. Then PayFast is
  * asked to charge the token; on success the row is 'complete' and the bet
  * is granted here and now; on refusal the row is 'failed' and the golfer is
- * offered the ordinary checkout.
+ * offered the ordinary checkout. When no answer comes back at all (a
+ * timeout, a dropped connection) the row is 'unknown': the money may have
+ * moved, so the golfer is told to check their shots before paying again,
+ * Home shows the payment as confirming, and the ITN or the reconciliation
+ * cron settles it. Marking it 'failed' here is what used to produce a
+ * double charge.
+ *
+ * A saved card has no 3-D Secure, so it is bounded: stakes up to
+ * SAVED_CARD_MAX_STAKE_ZAR only, and at most SAVED_CARD_DAILY_CAP_CENTS per
+ * golfer in a rolling 24 hours. Over either bound the answer is 403
+ * SAVED_CARD_LIMIT and the hosted checkout is the way to pay.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -56,6 +67,13 @@ export async function POST(request: NextRequest) {
     if (!body.ok) return body.response
     const { tier, courseId, holeId } = body.data
     const tierData = BET_TIERS.find(t => t.tier === tier)!
+    if (!savedCardAllowedForTier(tierData)) {
+      log.warn('payfast.charge.stake_over_limit', { user_id: user.id, tier: tierData.tier, stake_zar: tierData.stakeZAR })
+      return NextResponse.json(
+        { error: `Saved cards are for stakes up to R${SAVED_CARD_MAX_STAKE_ZAR}. Pay this one through PayFast checkout.`, code: 'SAVED_CARD_LIMIT' },
+        { status: 403 },
+      )
+    }
 
     const refused = await checkTarget(supabase, courseId, holeId)
     if (refused) return refused
@@ -66,6 +84,15 @@ export async function POST(request: NextRequest) {
 
     const mPaymentId = `gl_${randomUUID()}`
     const amountCents = tierData.stakeZAR * 100
+
+    const spentCents = await savedCardSpentCents(admin, user.id)
+    if (spentCents + amountCents > SAVED_CARD_DAILY_CAP_CENTS) {
+      log.warn('payfast.charge.daily_cap', { user_id: user.id, tier: tierData.tier, spent_cents: spentCents, amount_cents: amountCents, cap_cents: SAVED_CARD_DAILY_CAP_CENTS })
+      return NextResponse.json(
+        { error: `Saved-card payments are limited to R${(SAVED_CARD_DAILY_CAP_CENTS / 100).toLocaleString('en-ZA')} a day. Pay this one through PayFast checkout, or try the saved card again tomorrow.`, code: 'SAVED_CARD_LIMIT' },
+        { status: 403 },
+      )
+    }
 
     const { error: ledgerErr } = await admin.from('payfast_payments').insert({
       m_payment_id: mPaymentId,
@@ -86,9 +113,23 @@ export async function POST(request: NextRequest) {
     try {
       charge = await chargeToken(config, card.token, { amountCents, itemName: `Get Lucky Golf - R${tierData.stakeZAR} Entry`, mPaymentId })
     } catch (err) {
-      await admin.from('payfast_payments').update({ status: 'failed', raw_payload: { source: 'saved_card', error: err instanceof Error ? err.message : String(err) } }).eq('m_payment_id', mPaymentId)
-      log.warn('payfast.charge.unreachable', { user_id: user.id, m_payment_id: mPaymentId, error: err instanceof Error ? err.message : String(err) })
-      return NextResponse.json({ error: 'PayFast could not be reached. Please pay the usual way.', code: 'CHARGE_UNAVAILABLE' }, { status: 502 })
+      // No answer: the charge may have gone through. Never 'failed' here.
+      // Only a row still 'pending' is marked, so an ITN that beat us to it
+      // (it writes 'complete') is not overwritten.
+      const detail = err instanceof Error ? err.message : String(err)
+      const { error: unknownErr } = await admin
+        .from('payfast_payments')
+        .update({ status: 'unknown', raw_payload: { source: 'saved_card', error: detail } })
+        .eq('m_payment_id', mPaymentId)
+        .eq('status', 'pending')
+      if (unknownErr) {
+        await alertOps({ event: 'payfast.charge.unknown_write_failed', path: 'payfast_checkout', summary: `Saved-card charge ${mPaymentId} got no answer from PayFast and the ledger row could not be marked unknown; it is still pending. Check PayFast before the golfer pays again.`, details: { user_id: user.id, m_payment_id: mPaymentId }, err: unknownErr })
+      }
+      log.warn('payfast.charge.unknown', { user_id: user.id, m_payment_id: mPaymentId, error: detail })
+      return NextResponse.json(
+        { error: 'We could not confirm the charge. Check your shots in a minute before paying again.', code: 'CHARGE_UNKNOWN', m_payment_id: mPaymentId },
+        { status: 409 },
+      )
     }
 
     if (!charge.ok) {
