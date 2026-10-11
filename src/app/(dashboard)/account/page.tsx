@@ -266,7 +266,7 @@ export default function AccountPage() {
                 <span className="acct-row-sub">
                   {card
                     ? `Saved ${new Date(card.savedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })} · one-tap entries. Held by PayFast; we never see the number.`
-                    : 'Tick "Save my card" at your next entry and the one after is one tap.'}
+                    : 'Tick "Save my card" at your next entry and the one after is one tap. Credit cards only; PayFast cannot save a debit or cheque card.'}
                 </span>
               </span>
             </div>

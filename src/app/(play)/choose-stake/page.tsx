@@ -84,7 +84,9 @@ export default function ChooseStakePage() {
   const [errorMsg, setErrorMsg]     = useState('')
   // undefined while loading; null when the golfer has no saved card.
   const [savedCardState, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
-  const [saveCard, setSaveCard]     = useState(true)
+  // Off by default: PayFast only saves credit cards, and a debit card with
+  // the box ticked is refused in the modal. Ticking it is the golfer's call.
+  const [saveCard, setSaveCard]     = useState(false)
   const savedCard = user ? savedCardState : null
   // One tap is for stakes up to R250 (no 3-D Secure on a token charge); a
   // bigger stake goes through PayFast's checkout, same as with no card.
@@ -315,6 +317,9 @@ export default function ChooseStakePage() {
     setErrorMsg('')
     selectTier(selected)
 
+    // Tokenize the card at PayFast so the next entry is one tap.
+    const wantsSavedCard = !savedCard && saveCard
+
     try {
       // ── 1. Get signed form fields from our server ─────────────────────────
       const pfRes = await fetch('/api/payments/payfast', {
@@ -327,8 +332,7 @@ export default function ChooseStakePage() {
           // was actually paid for — the bet is built from that, not from here.
           courseId: selectedCourse?.id,
           holeId:   selectedHole?.id,
-          // Tokenize the card at PayFast so the next entry is one tap.
-          saveCard: !savedCard && saveCard,
+          saveCard: wantsSavedCard,
         }),
       })
       const pfData = await pfRes.json()
@@ -364,7 +368,12 @@ export default function ChooseStakePage() {
               router.push(`/payment-return?ref=${encodeURIComponent(pfData.m_payment_id)}`)
             } else {
               // Closed without paying. Nothing was charged; the sheet stays open.
-              track('payment_onsite_closed', { tier: selected })
+              // PayFast can only save a credit card: with "save my card" on, a
+              // debit or cheque card is refused in the modal as "invalid card
+              // details", with no hint of why. Say so here, where the golfer
+              // can untick the box and pay again.
+              track('payment_onsite_closed', { tier: selected, save_card: wantsSavedCard })
+              if (wantsSavedCard) setErrorMsg('Nothing was charged. If PayFast said your card details are invalid, it is likely a debit or cheque card: PayFast can only save credit cards. Untick "Save my card" and pay again.')
               setStep('idle')
             }
           })
@@ -620,7 +629,7 @@ export default function ChooseStakePage() {
                   ) : (
                     <label className="stake-save">
                       <input type="checkbox" checked={saveCard} onChange={e => setSaveCard(e.target.checked)} disabled={loading} />
-                      <span>Save my card with PayFast for one-tap entries next time. You can remove it under Account.</span>
+                      <span>Save my card with PayFast for one-tap entries next time. Credit cards only: a debit or cheque card pays, but cannot be saved. You can remove it under Account.</span>
                     </label>
                   )}
                 </>
