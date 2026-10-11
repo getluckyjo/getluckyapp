@@ -90,7 +90,7 @@ Variables). They are currently **commented out / sandbox** in
 | `PAYFAST_MERCHANT_KEY` | your live merchant key |
 | `PAYFAST_PASSPHRASE` | the passphrase you set in Step 1 |
 | `PAYFAST_SANDBOX` | `false` |
-| `NEXT_PUBLIC_SITE_URL` | `https://<your-production-domain>` (no trailing slash) |
+| `NEXT_PUBLIC_SITE_URL` | `https://www.getluckyholeinone.com` (the custom domain, never the `vercel.app` alias: it is the PayFast `notify_url` and the host in every emailed link; found pointing at the alias on 11 Oct 2026) |
 
 Also confirm these are set (used by the ITN handler to write the bet):
 
@@ -188,6 +188,20 @@ Watch for `payfast.charge.unknown` (one per unanswered charge) and
 `payfast.reconcile.unreachable` (PayFast's API down: rows pile up as unknown
 until it is back). The admin Payments page lists `Unknown (confirming)` as a
 status.
+
+## Multi-currency must be off
+
+PayFast's Multi-Currency Pricing (merchant dashboard → Settings →
+Multi-currency) shows the payment page in a currency chosen from the
+buyer's location, whatever `currency=ZAR` says in the signed fields. On
+11 October 2026 a rand checkout opened in euros for a buyer in South
+Africa whose phone PayFast placed abroad; a South African card cannot pay
+in a foreign currency, so PayFast refused it with "This South African
+credit card is not available for use for foreign currency transactions".
+Every stake is rand and only residents may stake, so the feature has
+nothing to offer: keep Multi-Currency Activation **off**. If a golfer
+reports a checkout in another currency, that switch is the first thing
+to check.
 
 ## Payments whose ITN never arrived
 
