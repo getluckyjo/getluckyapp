@@ -129,7 +129,7 @@ export default function RecordPage() {
     }
   }, [requestCamera])
 
-  const handleRecordingComplete = useCallback((blob: Blob, mimeType: string) => {
+  const handleRecordingComplete = useCallback(async (blob: Blob, mimeType: string) => {
     setVideoBlob(blob)
     const started = captureRef.current
     const endedAt = new Date().toISOString()
@@ -141,7 +141,8 @@ export default function RecordPage() {
           ...(started.position ? { lat: started.position.lat, lng: started.position.lng, accuracyM: started.position.accuracyM } : {}),
         }
       : undefined
-    startBackgroundUpload(blob, mimeType, betId ?? 'pending', capture) // runs in background — doesn't block
+    // Resolves once the shot is on the phone; the upload carries on behind.
+    await startBackgroundUpload(blob, mimeType, betId ?? 'pending', capture)
     router.push('/confirm')
   }, [setVideoBlob, startBackgroundUpload, betId, router])
 
@@ -180,7 +181,7 @@ export default function RecordPage() {
     mr.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: mimeTypeRef.current })
       streamRef.current?.getTracks().forEach(t => t.stop())
-      handleRecordingComplete(blob, mimeTypeRef.current)
+      void handleRecordingComplete(blob, mimeTypeRef.current)
     }
     mr.start(1000) // 1s chunks — less overhead than 100ms
     mediaRecorderRef.current = mr

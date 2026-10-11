@@ -56,6 +56,18 @@ declaration and claim. A retried declaration is a 200 no-op.
   once (`requireAdmin` reads `suspended_at`). The upload in the browser
   gives up after 45 s without progress or 5 min in all, so a stalled
   connection shows the retry instead of a spinner forever.
+- The shot stays on the phone until the server has it (11 October 2026,
+  audit U1). `src/lib/footage-store.ts` writes the blob, the recorder's
+  report and the session (course, hole, tier, prize) to IndexedDB the
+  moment recording stops, before the recorder screen is left; the upload
+  then runs behind as before. On the next start `BetProvider` reads the
+  newest shot inside 48 hours, puts the session back and, if the server
+  never sealed it, resumes the upload (a 409 `FOOTAGE_SEALED` from
+  `upload-url` means it did, and counts as done). The confirm and result
+  screens wait for that check before sending a golfer home. The record is
+  marked sealed when the hash lands, deleted when the session is reset
+  (play again, home after a claim), and pruned when stale. No IndexedDB
+  (a private window) means no recovery and nothing else changes.
 - `POST /api/videos/verify` (the fake "AI check" with a 2-second sleep) is
   deleted. The confirm screen's "Footage received" chip and the YES button
   now follow the real upload; YES is disabled until the footage is sealed.

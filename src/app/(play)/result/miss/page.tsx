@@ -18,16 +18,16 @@ import { useShareVideo } from '@/hooks/useShareVideo'
  */
 export default function TryAgainPage() {
   const router = useRouter()
-  const { selectedTier, betId, resetSession, videoBlob, selectedCourse, selectedHole } = useBet()
+  const { selectedTier, betId, resetSession, videoBlob, selectedCourse, selectedHole, hydrated } = useBet()
   const { profile } = useAuth()
   const [toast, setToast] = useState<string | null>(null)
 
-  // Guard: require an active bet session
+  // Guard: require an active bet session (after the phone's stored footage has been checked)
   useEffect(() => {
-    if (!betId) {
+    if (hydrated && !betId) {
       router.replace('/home')
     }
-  }, [betId, router])
+  }, [hydrated, betId, router])
 
   const {
     canShareFiles,

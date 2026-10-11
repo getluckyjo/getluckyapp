@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import type { CaptureInput } from '@/lib/claims/capture'
+import { deleteFootage, loadFootage, markFootageSealed, pickRecovery, saveFootage } from '@/lib/footage-store'
 
 // Re-export shared tier definitions so existing client imports keep working
 export { BET_TIERS } from '@/lib/tiers'
@@ -37,6 +38,8 @@ interface BetSession {
   paymentIntentId: string | null
   betId: string | null
   videoBlob: Blob | null
+  /** The recorder's report for the footage in hand, so a retry carries it too. */
+  capture: CaptureInput | null
   declaredResult: 'hole_in_one' | 'miss' | null
   uploadStatus: UploadStatus
   uploadProgress: number // 0–100
@@ -51,7 +54,14 @@ interface BetContextType extends BetSession {
   setVideoBlob: (blob: Blob) => void
   declareResult: (result: 'hole_in_one' | 'miss') => void
   resetSession: () => void
-  startBackgroundUpload: (blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) => void
+  /**
+   * Keeps the footage on the phone, then uploads it in the background.
+   * Resolves once the local copy is written (or found unwritable), before
+   * the upload: the caller can leave the recorder knowing the shot is safe.
+   */
+  startBackgroundUpload: (blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) => Promise<void>
+  /** False until the phone's stored footage has been checked; the guards on confirm and result wait for it. */
+  hydrated: boolean
 }
 
 const defaultSession: BetSession = {
@@ -63,6 +73,7 @@ const defaultSession: BetSession = {
   paymentIntentId: null,
   betId: null,
   videoBlob: null,
+  capture: null,
   declaredResult: null,
   uploadStatus: 'idle',
   uploadProgress: 0,
@@ -77,6 +88,10 @@ const BetContext = createContext<BetContextType | null>(null)
 
 export function BetProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<BetSession>(defaultSession)
+  const [hydrated, setHydrated] = useState(false)
+  // The session as of the last render, for the upload's local save.
+  const sessionRef = useRef(session)
+  useEffect(() => { sessionRef.current = session })
 
   function selectCourse(course: Course, hole: Hole) {
     setSession(s => ({ ...s, selectedCourse: course, selectedHole: hole }))
@@ -101,11 +116,20 @@ export function BetProvider({ children }: { children: ReactNode }) {
     setSession(s => ({ ...s, declaredResult: result }))
   }
   function resetSession() {
+    const betId = sessionRef.current.betId
+    if (betId) void deleteFootage(betId)
     setSession(defaultSession)
   }
 
-  function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) {
-    setSession(s => ({ ...s, uploadStatus: 'uploading', uploadProgress: 0 }))
+  async function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput, opts: { alreadyStored?: boolean } = {}) {
+    setSession(s => ({ ...s, capture: capture ?? s.capture, uploadStatus: 'uploading', uploadProgress: 0 }))
+
+    // The phone's copy first: from here a reload or a killed tab loses
+    // nothing, and the next start resumes the upload.
+    if (!opts.alreadyStored) {
+      const { selectedCourse, selectedHole, selectedTier, prize, prizeCurrency } = sessionRef.current
+      await saveFootage({ betId, blob, mimeType, capture: capture ?? null, session: { selectedCourse, selectedHole, selectedTier, prize, prizeCurrency }, savedAt: Date.now(), sealed: false })
+    }
 
     // Fire-and-forget — upload runs in the background
     ;(async () => {
@@ -115,7 +139,15 @@ export function BetProvider({ children }: { children: ReactNode }) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ betId, mimeType, ...(capture ? { capture } : {}) }),
         })
-        const { signedUrl } = await urlRes.json()
+        const urlJson = await urlRes.json().catch(() => ({}))
+        if (urlRes.status === 409 && urlJson?.code === 'FOOTAGE_SEALED') {
+          // The server already has this shot, hashed: an earlier attempt
+          // finished before the phone heard about it.
+          void markFootageSealed(betId)
+          setSession(s => ({ ...s, uploadStatus: 'done', uploadProgress: 100 }))
+          return
+        }
+        const { signedUrl } = urlJson
 
         if (signedUrl) {
           await new Promise<void>((resolve, reject) => {
@@ -162,6 +194,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
           throw new Error('No upload slot')
         }
 
+        void markFootageSealed(betId)
         setSession(s => ({ ...s, uploadStatus: 'done', uploadProgress: 100 }))
       } catch (err) {
         console.error('[upload] Background upload failed:', err)
@@ -170,10 +203,45 @@ export function BetProvider({ children }: { children: ReactNode }) {
     })()
   }
 
+  // After a restart: put back the newest shot the phone still holds, and
+  // finish its upload if the server never sealed it. Older ones go.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { restore, stale } = pickRecovery(await loadFootage(), Date.now())
+        for (const id of stale) void deleteFootage(id)
+        if (cancelled || !restore) return
+        const { session: saved } = restore
+        setSession(s => ({
+          ...s,
+          selectedCourse: (saved.selectedCourse as Course | null) ?? s.selectedCourse,
+          selectedHole: (saved.selectedHole as Hole | null) ?? s.selectedHole,
+          selectedTier: (saved.selectedTier as BetTier | null) ?? s.selectedTier,
+          prize: saved.prize ?? s.prize,
+          prizeCurrency: saved.prizeCurrency ?? s.prizeCurrency,
+          betId: restore.betId,
+          videoBlob: restore.blob,
+          capture: restore.capture,
+          uploadStatus: restore.sealed ? 'done' : s.uploadStatus,
+          uploadProgress: restore.sealed ? 100 : s.uploadProgress,
+        }))
+        if (!restore.sealed) void startBackgroundUpload(restore.blob, restore.mimeType, restore.betId, restore.capture ?? undefined, { alreadyStored: true })
+      } catch {
+        /* no stored footage, or no storage: the flow starts fresh */
+      } finally {
+        if (!cancelled) setHydrated(true)
+      }
+    })()
+    return () => { cancelled = true }
+    // Once, on mount: the stored footage does not change underneath us.
+  }, [])
+
   return (
     <BetContext.Provider
       value={{
         ...session,
+        hydrated,
         selectCourse,
         selectTier,
         setPrize,
