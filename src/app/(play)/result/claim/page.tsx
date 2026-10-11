@@ -39,18 +39,18 @@ interface UploadStep {
  */
 export default function ClaimPage() {
   const router = useRouter()
-  const { betId, resetSession, videoBlob, selectedTier, prize, prizeCurrency, selectedCourse, selectedHole } = useBet()
+  const { betId, resetSession, videoBlob, selectedTier, prize, prizeCurrency, selectedCourse, selectedHole, hydrated } = useBet()
   const { user } = useAuth()
   // tierByKey, not BET_TIERS: a free swing is a real bet with a real prize.
   const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
   const [toast, setToast] = useState<string | null>(null)
 
-  // Guard: require an active bet session
+  // Guard: require an active bet session (after the phone's stored footage has been checked)
   useEffect(() => {
-    if (!betId) {
+    if (hydrated && !betId) {
       router.replace('/home')
     }
-  }, [betId, router])
+  }, [hydrated, betId, router])
 
   const {
     canShareFiles,

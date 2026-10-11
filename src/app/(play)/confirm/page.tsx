@@ -16,7 +16,7 @@ import { useBet } from '@/context/BetContext'
  */
 export default function ConfirmPage() {
   const router = useRouter()
-  const { videoBlob, betId, selectedCourse, selectedHole, declareResult, uploadStatus, uploadProgress, startBackgroundUpload } = useBet()
+  const { videoBlob, betId, capture, selectedCourse, selectedHole, declareResult, uploadStatus, uploadProgress, startBackgroundUpload, hydrated } = useBet()
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const hasVideo = !!(videoBlob && videoBlob.size > 0)
@@ -25,12 +25,13 @@ export default function ConfirmPage() {
   const videoUrl = useMemo(() => (hasVideo && videoBlob ? URL.createObjectURL(videoBlob) : null), [videoBlob, hasVideo])
   useEffect(() => () => { if (videoUrl) URL.revokeObjectURL(videoUrl) }, [videoUrl])
 
-  // Guard: require a recorded video to reach this page
+  // Guard: require a recorded video to reach this page. After a reload the
+  // phone's stored copy comes back a moment later, so wait for that check.
   useEffect(() => {
-    if (!hasVideo) {
+    if (hydrated && !hasVideo) {
       router.replace('/home')
     }
-  }, [hasVideo, router])
+  }, [hydrated, hasVideo, router])
 
   function handleHoleInOne() {
     declareResult('hole_in_one')
@@ -89,7 +90,7 @@ export default function ConfirmPage() {
                   disabled={saveChip.tone !== 'error'}
                   onClick={() => {
                     if (saveChip.tone === 'error' && videoBlob && betId) {
-                      startBackgroundUpload(videoBlob, videoBlob.type || 'video/webm', betId)
+                      void startBackgroundUpload(videoBlob, videoBlob.type || 'video/webm', betId, capture ?? undefined)
                     }
                   }}
                 >

@@ -61,6 +61,7 @@ Preview:
 - [ ] The IP allow-list in `src/lib/payfast/ips.ts` matches PayFast's current published list.
 - [ ] Redeploy production. It starts (no sandbox refusal in the logs) and `/` loads signed out.
 - [ ] One real R50 entry, end to end, by you, from an account that is not the merchant's own: pay, see the ledger row, the bet, the footage seal, a miss. Refund it from the PayFast dashboard or leave it as the first miss.
+- [ ] On a phone, on clubhouse Wi-Fi: record a swing, reload the page while "Saving video" is still running, and see the replay come back and the save finish. Then once more with the app swiped away mid-upload. Once on iOS, once on Android.
 
 ## 4. Content and people
 
