@@ -51,7 +51,7 @@ export async function requireAdmin(): Promise<AdminAuth> {
     const adminClient = createAdminClient()
     const { data: profile, error: profileError } = await adminClient
       .from('profiles')
-      .select('is_admin')
+      .select('is_admin, suspended_at')
       .eq('id', user.id)
       .maybeSingle()
     // A database blip is not a verdict: say "could not be reached", not "not an admin".
@@ -59,6 +59,12 @@ export async function requireAdmin(): Promise<AdminAuth> {
 
     if (!profile?.is_admin) {
       log.warn('admin.auth_not_admin', { user_id: user.id, has_profile: !!profile })
+      return { ok: false, error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
+    }
+    // Suspension is the emergency stop for an admin too: the flag stays, the
+    // access goes, on every admin route, from the next request.
+    if (profile.suspended_at) {
+      log.warn('admin.auth_suspended', { user_id: user.id, suspended_at: profile.suspended_at })
       return { ok: false, error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }) }
     }
 

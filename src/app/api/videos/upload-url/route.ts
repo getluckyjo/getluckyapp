@@ -9,9 +9,12 @@ import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { CaptureSchema, captureColumns } from '@/lib/claims/capture'
 
+/** What the recorder produces and the bucket accepts (migration 042). Parameters such as `;codecs=vp9` are allowed and ignored. */
+const MIME = /^video\/(mp4|webm)(;.*)?$/i
+
 const Body = z.object({
   betId: uuid,
-  mimeType: z.string().max(100).default('video/webm'),
+  mimeType: z.string().max(100).regex(MIME, 'Footage must be video/mp4 or video/webm').default('video/webm'),
   /** What the recorder reported: timestamps, duration, position. Optional; stored for the reviewer. */
   capture: CaptureSchema.optional(),
 })
@@ -55,7 +58,14 @@ export async function POST(request: NextRequest) {
 
     assertOpen(bet)
 
-    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm'
+    // Sealed footage is final. The hash on the bet belongs to one object; a
+    // second slot (say shot.webm after shot.mp4) would let the pointer move
+    // to footage the hash never covered.
+    if (bet.video_sha256) {
+      return NextResponse.json({ error: 'The footage for this bet is already recorded.', code: 'FOOTAGE_SEALED' }, { status: 409 })
+    }
+
+    const ext = mimeType.toLowerCase().includes('mp4') ? 'mp4' : 'webm'
     const storagePath = `${user.id}/${betId}/shot.${ext}`
 
     const { data, error } = await supabase.storage
@@ -70,18 +80,24 @@ export async function POST(request: NextRequest) {
     // never after the footage is sealed: the attestation belongs to the bytes
     // that were hashed, not to a later retry.
     const { data: course } = await supabase.from('courses').select('lat, lng').eq('id', bet.course_id).maybeSingle()
-    const attestation = bet.video_sha256
-      ? {}
-      : captureColumns(capture, { course: course ?? null, userAgent: request.headers.get('user-agent') })
+    const attestation = captureColumns(capture, { course: course ?? null, userAgent: request.headers.get('user-agent') })
 
-    const { error: linkErr } = await createAdminClient()
+    // Compare-and-set: a seal that landed between the read above and this
+    // write wins, and the pointer stays on the hashed object.
+    const { data: linked, error: linkErr } = await createAdminClient()
       .from('bets')
       .update({ video_url: storagePath, updated_by: user.id, ...attestation })
       .eq('id', betId)
       .eq('user_id', user.id)
+      .is('video_sha256', null)
+      .select('id')
+      .maybeSingle()
     if (linkErr) {
       log.error('claim.video_link_failed', linkErr, { path: 'claim', user_id: user.id, bet_id: betId })
       return NextResponse.json({ error: 'Could not prepare upload' }, { status: 500 })
+    }
+    if (!linked) {
+      return NextResponse.json({ error: 'The footage for this bet is already recorded.', code: 'FOOTAGE_SEALED' }, { status: 409 })
     }
 
     return NextResponse.json({

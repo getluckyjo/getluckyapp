@@ -18,7 +18,7 @@ import { FakeDb, createFakeClient, jsonRequest, USER_A, USER_B, COURSE_ID, HOLE_
 import { PATCH as patchBet, GET as getBet } from '@/app/api/bets/[betId]/route'
 import { POST as submitClaim, GET as getVerification } from '@/app/api/verifications/[betId]/route'
 import { POST as uploadUrl } from '@/app/api/videos/upload-url/route'
-import { POST as sealVideo } from '@/app/api/videos/uploaded/route'
+import { POST as sealVideo, MAX_FOOTAGE_BYTES } from '@/app/api/videos/uploaded/route'
 import { farFromCourse } from '@/lib/claims/capture'
 import { THRESHOLDS } from '@/lib/risk/thresholds'
 
@@ -348,6 +348,33 @@ describe('POST /api/videos/uploaded — sealing the footage', () => {
     const res = await seal(bet.id as string)
     expect((await res.json()).alreadyRecorded).toBe(true)
     expect(bet.video_sha256).toBe('original-hash')
+  })
+
+  it('a seal that lands first wins: the second hashes but writes nothing, and reports the first', async () => {
+    const bet = ownBet({ video_url: `${USER_A.id}/x/shot.webm` })
+    asUser()
+    // The admin client this request uses: its read sees no hash, but by the
+    // time it writes, another request has sealed the bet.
+    const client = createFakeClient(db, { storageObjects: { [`${USER_A.id}/x/shot.webm`]: FOOTAGE } })
+    const realDownload = client.storage.from('shot-videos').download
+    adminClient.createAdminClient.mockImplementation(() => ({
+      ...client,
+      storage: { from: () => ({ download: async (path: string) => { bet.video_sha256 = 'first-seal'; return realDownload(path) } }) },
+    }))
+    const res = await seal(bet.id as string)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toMatchObject({ alreadyRecorded: true, sha256: 'first-seal' })
+    expect(bet.video_sha256).toBe('first-seal')
+    expect(bet.video_bytes).toBeUndefined()
+  })
+
+  it('413 for an object over the bucket cap, and nothing is recorded', async () => {
+    const bet = ownBet({ video_url: `${USER_A.id}/x/shot.webm` })
+    asUser()
+    adminClient.createAdminClient.mockImplementation(() => createFakeClient(db, { storageObjects: { [`${USER_A.id}/x/shot.webm`]: 'x'.repeat(MAX_FOOTAGE_BYTES + 1) } }))
+    const res = await seal(bet.id as string)
+    expect(res.status).toBe(413)
+    expect(bet.video_sha256).toBeUndefined()
   })
 
   it('404 when nothing landed in storage, 400 when no slot was issued, 404 for others\' bets', async () => {

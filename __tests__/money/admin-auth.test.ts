@@ -58,6 +58,15 @@ describe('requireAdmin', () => {
     if (!noProfile.ok) expect(noProfile.error.status).toBe(403)
   })
 
+  it('403 for a suspended admin: the flag stays, the access goes', async () => {
+    const { requireAdmin } = await load()
+    db.seed('profiles', { id: USER_A.id, is_admin: true, suspended_at: '2026-10-11T10:00:00Z' })
+    serverClient.createClient.mockResolvedValue(createFakeClient(db, { user: USER_A }))
+    const auth = await requireAdmin()
+    expect(auth.ok).toBe(false)
+    if (!auth.ok) expect(auth.error.status).toBe(403)
+  })
+
   it('passes an admin through with a service-role client', async () => {
     const { requireAdmin } = await load()
     db.seed('profiles', { id: USER_A.id, is_admin: true })

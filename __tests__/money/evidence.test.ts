@@ -112,11 +112,23 @@ describe('POST /api/videos/upload-url — capture attestation', () => {
     expect(bet).toMatchObject({ capture_started_at: null, capture_lat: null, capture_user_agent: 'TestPhone/1.0' })
   })
 
-  it('does not overwrite the report once the footage is sealed', async () => {
+  it('refuses a new slot once the footage is sealed: pointer, hash and report all stay', async () => {
     asUser()
-    const bet = ownBet({ video_sha256: 'sealed', capture_lat: -34, capture_lng: 22, capture_distance_m: 10 })
-    expect((await call({ betId: bet.id, capture: capture({ lat: 0, lng: 0 }) })).status).toBe(200)
-    expect(bet).toMatchObject({ capture_lat: -34, capture_distance_m: 10 })
+    const bet = ownBet({ video_url: `${USER_A.id}/x/shot.mp4`, video_sha256: 'sealed', capture_lat: -34, capture_lng: 22, capture_distance_m: 10 })
+    // The other format: the path storage's no-overwrite rule would not have blocked.
+    const res = await call({ betId: bet.id, mimeType: 'video/webm', capture: capture({ lat: 0, lng: 0 }) })
+    expect(res.status).toBe(409)
+    expect((await res.json()).code).toBe('FOOTAGE_SEALED')
+    expect(bet).toMatchObject({ video_url: `${USER_A.id}/x/shot.mp4`, video_sha256: 'sealed', capture_lat: -34, capture_distance_m: 10 })
+  })
+
+  it('accepts only mp4 and webm, with or without a codecs parameter', async () => {
+    asUser()
+    const bet = ownBet()
+    expect((await call({ betId: bet.id, mimeType: 'video/webm;codecs=vp9' })).status).toBe(200)
+    expect(bet.video_url).toBe(`${USER_A.id}/${bet.id}/shot.webm`)
+    for (const mimeType of ['video/quicktime', 'application/octet-stream', 'image/png', 'text/html'])
+      expect((await call({ betId: bet.id, mimeType })).status, mimeType).toBe(400)
   })
 
   it('rejects a malformed report', async () => {
