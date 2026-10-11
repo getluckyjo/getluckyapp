@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/admin-auth'
 import { apiError } from '@/lib/api/http'
-import { snapshotHash, snapshotLines } from '@/lib/fan-prize'
+import { snapshotHash, snapshotLines, type Backer } from '@/lib/fan-prize'
 import { loadIconEvent } from '../shared'
 
 /**
@@ -40,11 +40,13 @@ export async function GET() {
     if (iconsErr) throw iconsErr
     if (winnersErr) throw winnersErr
 
-    const recomputed = snapshotHash(snapshot.map(r => ({ userId: r.user_id, iconId: r.icon_id })))
+    const backers = snapshot.map(r => ({ userId: r.user_id, iconId: r.icon_id, eligible: r.eligible, ineligibleReason: r.ineligible_reason as Backer['ineligibleReason'] }))
+    const recomputed = snapshotHash(event.id, backers)
     const record = {
       event: { id: event.id, slug: event.slug, name: event.name, firstTeeAt: event.first_tee_at, winnersCount: event.winners_count },
       method: {
-        snapshotHash: 'SHA-256 over the lines "user_id:icon_id", one per backer, sorted by user_id, joined by "\\n".',
+        snapshotHash: 'SHA-256 over the line "event:<event id>" followed by one line per backer, "user_id:icon_id:eligibility" where eligibility is "eligible" or the reason (under_18, staff, suspended, no_profile), sorted by user_id in byte order, all joined by "\\n".',
+        seed: 'The seed is the public value named in seedSource, committed when the list was frozen and published with the snapshot hash, typed in as observed. The draw was run by a different admin from the one who froze the list.',
         draw: 'Among eligible backers of the winning Icon, rank = HMAC-SHA256(key = seed, message = user_id) as lowercase hex; sort ascending by rank; the first winnersCount are the winners.',
         drawHash: 'SHA-256 over the lines "snapshot:<snapshotSha256>", "icon:<winningIconId>", "seed:<seed>", then "<position>:<user_id>:<rank>" per winner, joined by "\\n".',
       },
@@ -54,7 +56,8 @@ export async function GET() {
         sha256: event.snapshot_sha256,
         recomputedSha256: recomputed,
         matches: recomputed === event.snapshot_sha256,
-        lines: snapshotLines(snapshot.map(r => ({ userId: r.user_id, iconId: r.icon_id }))),
+        seedSource: event.seed_source,
+        lines: snapshotLines(event.id, backers),
         ineligible: snapshot.filter(r => !r.eligible).map(r => ({ userId: r.user_id, reason: r.ineligible_reason })),
       },
       icons: (icons ?? []).map(i => ({ id: i.id, name: i.name, team: i.team })),

@@ -81,23 +81,33 @@ panel at the top of `/admin/icons` runs them.
    Icons tab shows "Picks close at first tee, Fri 11 Dec, 07:00" and locks
    the cards afterwards. Removals still go through, so deleting an account
    still cascades.
-2. **Freeze** (`POST /api/admin/icons/event/freeze`, once). Every pick is
-   copied to `icon_vote_snapshot` with the golfer's email and eligibility
-   (18+ verified, not an admin, not suspended, profile exists), and the
-   SHA-256 of the sorted `user_id:icon_id` lines goes on the event. Picks
-   close at once if first tee has not passed. **Publish the hash before
-   the shot is played** (a tweet, the Icons tab, an email to Indwe).
-3. **Draw** (`POST /api/admin/icons/event/draw`, once). Enter the Icon who
-   holed it and a seed nobody could have known at the freeze: the JSE All
-   Share close on the day, the evening's lottery numbers, a number read
-   out on air. Each eligible backer of that Icon is ranked by
-   HMAC-SHA256(seed, user_id); the lowest three win. The winners, their
-   ranks, the seed and a hash over the whole draw are written and cannot
-   be edited (`fan_prize_winners`, append-only).
+2. **Freeze** (`POST /api/admin/icons/event/freeze`, once). The admin
+   first names the **seed source**: which public value will be the seed,
+   observed when and where ("JSE All Share index close on Fri 11 Dec 2026
+   as published on jse.co.za, two decimals"). Then, in one database
+   transaction (`freeze_icon_event`, migration 043), every pick is copied
+   to `icon_vote_snapshot` with the golfer's email and eligibility (18+
+   verified, not an admin, not suspended, profile exists), the SHA-256 of
+   `event:<id>` and the sorted `user_id:icon_id:eligibility` lines goes on
+   the event with the seed source, and picks close. Either all of it
+   happens or none of it does; a vote cannot slip in while the list is
+   being copied. **Publish the hash and the seed source together before
+   the shot is played** (a tweet, the Icons tab, an email to Indwe). That
+   is what makes a chosen seed visible: anyone can look the value up.
+3. **Draw** (`POST /api/admin/icons/event/draw`, once, by a **different
+   admin** from the one who froze the list). Enter the Icon who holed it
+   and the value from the committed source. Each eligible backer of that
+   Icon is ranked by HMAC-SHA256(seed, user_id); the lowest three win. The
+   event and the winners are written together (`draw_icon_event`), which
+   also checks every winner is an eligible backer of that Icon in the
+   frozen list; the rows cannot be edited (`fan_prize_winners`,
+   append-only). A failure leaves the event undrawn and the draw can be
+   run again; it never leaves a drawn event with no winners.
 4. **Record** (`GET /api/admin/icons/event/record`). A JSON file with the
-   frozen list (ids only, no names or emails), both hashes recomputed
-   from the stored rows, the seed and the winners, and the method in
-   words. Send it to Indwe with the broadcast evidence.
+   frozen list (ids and eligibility only, no names or emails), both hashes
+   recomputed from the stored rows, the seed source, the seed and the
+   winners, and the method in words. Send it to Indwe with the broadcast
+   evidence.
 
 Every pick, change and removal is also logged in `icon_vote_events`
 (append-only), so the snapshot can be checked against the history. An

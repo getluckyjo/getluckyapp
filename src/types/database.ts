@@ -653,6 +653,7 @@ export interface Database {
           frozen_by: string | null
           snapshot_sha256: string | null
           snapshot_count: number | null
+          seed_source: string | null
           winning_icon_id: string | null
           draw_seed: string | null
           draw_sha256: string | null
@@ -668,6 +669,7 @@ export interface Database {
           frozen_by?: string | null
           snapshot_sha256?: string | null
           snapshot_count?: number | null
+          seed_source?: string | null
           winning_icon_id?: string | null
           draw_seed?: string | null
           draw_sha256?: string | null
@@ -904,6 +906,14 @@ export interface Database {
       approve_claim: {
         Args: { p_verification_id: string; p_actor_id: string; p_notes: string | null; p_checklist: Json | null }
         Returns: string
+      }
+      freeze_icon_event: {
+        Args: { p_event_id: string; p_actor_id: string; p_seed_source: string }
+        Returns: Json
+      }
+      draw_icon_event: {
+        Args: { p_event_id: string; p_actor_id: string; p_winning_icon_id: string; p_seed: string; p_draw_sha256: string; p_winners: Json }
+        Returns: Json
       }
       rate_limit_hit: {
         Args: { p_key: string; p_limit: number; p_window_seconds: number }

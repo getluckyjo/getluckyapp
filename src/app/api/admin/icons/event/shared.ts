@@ -1,5 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 
+/** A refusal from freeze_icon_event or draw_icon_event: the message is the code, the hint the sentence. */
+export function rpcRefusal(err: unknown): { code: string; hint: string; detail: string | null } | null {
+  const e = err as { code?: string; message?: string; hint?: string; details?: string } | null
+  if (!e || e.code !== 'P0001' || !e.message || !/^[A-Z_]+$/.test(e.message)) return null
+  return { code: e.message, hint: e.hint ?? e.message, detail: e.details || null }
+}
+
 export interface IconEventRow {
   id: string
   slug: string
@@ -10,6 +17,7 @@ export interface IconEventRow {
   frozen_by: string | null
   snapshot_sha256: string | null
   snapshot_count: number | null
+  seed_source: string | null
   winning_icon_id: string | null
   draw_seed: string | null
   draw_sha256: string | null
