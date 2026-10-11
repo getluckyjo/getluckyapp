@@ -203,6 +203,22 @@ nothing to offer: keep Multi-Currency Activation **off**. If a golfer
 reports a checkout in another currency, that switch is the first thing
 to check.
 
+## Saved cards are credit cards only
+
+"Save my card" is PayFast tokenization (`subscription_type=2`), and
+PayFast's Recurring Billing docs are explicit: "For Recurring Billing only
+the credit card option can be used." A debit or cheque card with the box
+ticked is refused inside the modal as "You have entered invalid card
+details. Please check your card details and try again. (30)", with nothing
+to say why; the same card pays normally with the box unticked. On
+11 October 2026 a Visa debit card failed five times this way. The
+checkbox and the Account page now say credit cards only, and when the
+modal closes unpaid with the box ticked the sheet tells the golfer to
+untick it and pay again. Routing the save-card flow through the hosted
+page would not help: the limit is PayFast's, not the modal's. When a golfer
+reports "invalid card details", ask what kind of card it is before anything
+else.
+
 ## Payments whose ITN never arrived
 
 A hosted-checkout payment gets its ledger row from the ITN. When the ITN
