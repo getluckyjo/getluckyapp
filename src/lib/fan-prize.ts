@@ -10,7 +10,7 @@
  *      list). `picksOpen()` is that rule; migration 036 enforces the same
  *      rule in the database whatever route tries to write.
  *   2. The backer list is frozen into icon_vote_snapshot and hashed:
- *      `snapshotHash()` is SHA-256 over "user_id:icon_id" lines sorted by
+ *      `snapshotHash()` is SHA-256 over "event:<id>" then "user_id:icon_id:eligibility" lines sorted by
  *      user id. The hash is published before the shot is played, so the
  *      list cannot be edited afterwards without the hash changing.
  *   3. After the ace, the admin enters the winning Icon and a seed that
@@ -42,18 +42,29 @@ export function picksOpen(event: IconEventState | null, now: Date = new Date()):
 export interface Backer {
   userId: string
   iconId: string
+  eligible: boolean
+  ineligibleReason: IneligibleReason | null
 }
 
-/** The lines the snapshot hash is computed over: one per backer, sorted by user id. */
-export function snapshotLines(rows: Backer[]): string[] {
-  return [...rows]
-    .sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0))
-    .map(r => `${r.userId}:${r.iconId}`)
+/**
+ * The lines the snapshot hash is computed over (v2, migration 043): the
+ * event first, then one line per backer with their eligibility, sorted by
+ * user id in byte order. Eligibility is in the hash so the published
+ * commitment fixes who was in the draw, not only who backed whom.
+ * `freeze_icon_event` computes the same lines in SQL.
+ */
+export function snapshotLines(eventId: string, rows: Backer[]): string[] {
+  return [
+    `event:${eventId}`,
+    ...[...rows]
+      .sort((a, b) => (a.userId < b.userId ? -1 : a.userId > b.userId ? 1 : 0))
+      .map(r => `${r.userId}:${r.iconId}:${r.eligible ? 'eligible' : (r.ineligibleReason ?? 'ineligible')}`),
+  ]
 }
 
 /** SHA-256 (hex) of the snapshot lines joined by newlines. Order of input does not matter. */
-export function snapshotHash(rows: Backer[]): string {
-  return createHash('sha256').update(snapshotLines(rows).join('\n')).digest('hex')
+export function snapshotHash(eventId: string, rows: Backer[]): string {
+  return createHash('sha256').update(snapshotLines(eventId, rows).join('\n')).digest('hex')
 }
 
 /** The rank the seed gives a backer: HMAC-SHA256(seed, user_id), hex. Lower wins. */

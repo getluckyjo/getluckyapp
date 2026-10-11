@@ -32,6 +32,7 @@
  * Views the routes read (VIEWS) are computed from the seeded tables on every
  * read, as Postgres does, so a test seeds the tables and the view follows.
  */
+import { snapshotHash, type IneligibleReason } from '@/lib/fan-prize'
 import { randomUUID } from 'node:crypto'
 
 type Row = Record<string, unknown>
@@ -495,6 +496,49 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
         Object.assign(v, { status: 'approved', reviewed_by: a.p_actor_id, updated_by: a.p_actor_id, reviewer_notes: a.p_notes ?? v.reviewer_notes ?? null, verified_at: now, review_checklist: a.p_checklist ?? v.review_checklist ?? null, updated_at: now })
         Object.assign(bet, { status: 'verified', updated_by: a.p_actor_id, updated_at: now })
         return { data: v.bet_id, error: null }
+      }
+      // Mirrors migration 043: the whole freeze, or none of it; the hash v2
+      // from the lib so the record route's recomputation can be checked.
+      if (fn === 'freeze_icon_event') {
+        const a = args as { p_event_id: string; p_actor_id: string; p_seed_source: string }
+        const refuse = (message: string, hint: string, details = ''): Result => ({ data: null, error: { code: 'P0001', message, hint, details, name: 'PostgrestError' } as PostgrestError })
+        const event = db.find('icon_events', r => r.id === a.p_event_id)
+        if (!event) return refuse('NO_EVENT', 'No event is set up.')
+        if (event.frozen_at) return refuse('ALREADY_FROZEN', 'The backer list is already frozen.', String(event.snapshot_sha256 ?? ''))
+        if (!a.p_seed_source || a.p_seed_source.trim().length < 8) return refuse('SEED_SOURCE_REQUIRED', 'Say which public value will be the seed before freezing.')
+        const rows = db.rows('icon_votes').map(v => {
+          const p = db.find('profiles', r => r.id === v.user_id) ?? null
+          const reason = !p ? 'no_profile' : p.is_admin ? 'staff' : p.suspended_at ? 'suspended' : !p.age_verified_at ? 'under_18' : null
+          return { event_id: a.p_event_id, user_id: v.user_id, icon_id: v.icon_id, email: (p?.email as string | undefined) ?? null, eligible: reason === null, ineligible_reason: reason, picked_at: v.updated_at ?? v.created_at }
+        })
+        for (const r of rows) db.seed('icon_vote_snapshot', r)
+        const sha = snapshotHash(a.p_event_id, rows.map(r => ({ userId: String(r.user_id), iconId: String(r.icon_id), eligible: r.eligible, ineligibleReason: r.ineligible_reason as IneligibleReason | null })))
+        const now = new Date().toISOString()
+        Object.assign(event, { frozen_at: now, frozen_by: a.p_actor_id, snapshot_sha256: sha, snapshot_count: rows.length, seed_source: a.p_seed_source.trim(), updated_at: now })
+        return { data: { frozen_at: now, snapshot_sha256: sha, snapshot_count: rows.length, eligible_count: rows.filter(r => r.eligible).length }, error: null }
+      }
+      if (fn === 'draw_icon_event') {
+        const a = args as { p_event_id: string; p_actor_id: string; p_winning_icon_id: string; p_seed: string; p_draw_sha256: string; p_winners: { position: number; user_id: string; rank: string }[] }
+        const refuse = (message: string, hint: string): Result => ({ data: null, error: { code: 'P0001', message, hint, details: '', name: 'PostgrestError' } as PostgrestError })
+        const event = db.find('icon_events', r => r.id === a.p_event_id)
+        if (!event) return refuse('NO_EVENT', 'No event is set up.')
+        if (!event.frozen_at) return refuse('NOT_FROZEN', 'Freeze the backer list before drawing.')
+        if (event.drawn_at) return refuse('ALREADY_DRAWN', 'The draw has already run.')
+        if (event.frozen_by && event.frozen_by === a.p_actor_id) return refuse('SAME_ADMIN', 'The admin who froze the list cannot run the draw. Ask another admin to run it.')
+        if (!db.find('icons', r => r.id === a.p_winning_icon_id)) return refuse('ICON_NOT_FOUND', 'That Icon is not in the field')
+        if (!Array.isArray(a.p_winners) || a.p_winners.length === 0) return refuse('NO_WINNERS', 'A draw needs at least one winner.')
+        if (a.p_winners.length > Number(event.winners_count)) return refuse('TOO_MANY_WINNERS', `The event has ${event.winners_count} prizes.`)
+        const snap = db.rows('icon_vote_snapshot').filter(r => r.event_id === a.p_event_id)
+        for (const w of a.p_winners) {
+          if (!snap.some(r => r.user_id === w.user_id && r.icon_id === a.p_winning_icon_id && r.eligible)) return refuse('WINNER_NOT_ELIGIBLE', 'A winner is not an eligible backer of that Icon in the frozen list.')
+        }
+        const now = new Date().toISOString()
+        Object.assign(event, { drawn_at: now, drawn_by: a.p_actor_id, winning_icon_id: a.p_winning_icon_id, draw_seed: a.p_seed, draw_sha256: a.p_draw_sha256, updated_at: now })
+        for (const w of a.p_winners) {
+          const row = snap.find(r => r.user_id === w.user_id)
+          db.seed('fan_prize_winners', { event_id: a.p_event_id, position: w.position, user_id: w.user_id, icon_id: a.p_winning_icon_id, email: row?.email ?? null, draw_rank: w.rank, created_at: now })
+        }
+        return { data: { drawn_at: now }, error: null }
       }
       if (fn === 'admin_totals') {
         const bets = db.rows('bets')

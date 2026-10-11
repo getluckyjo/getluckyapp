@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { log } from '@/lib/observability/log'
 import { drawHash, drawWinners } from '@/lib/fan-prize'
-import { loadIconEvent } from '../shared'
+import { loadIconEvent, rpcRefusal } from '../shared'
 
 const Body = z.object({
   winningIconId: uuid,
@@ -19,9 +19,12 @@ const Body = z.object({
 
 /**
  * POST /api/admin/icons/event/draw — draw the fan prize winners. Needs a
- * frozen list; runs once. The eligible backers of the winning Icon in the
- * snapshot are ranked by HMAC-SHA256(seed, user_id), lowest first, and the
- * first `winners_count` are written to fan_prize_winners with their rank.
+ * frozen list; runs once; by a different admin from the one who froze it.
+ * The eligible backers of the winning Icon in the snapshot are ranked by
+ * HMAC-SHA256(seed, user_id), lowest first, and the first `winners_count`
+ * are the winners. The event and the winner rows are written together in
+ * one transaction (`draw_icon_event`, migration 043), which also checks
+ * that every winner is an eligible backer of that Icon in the frozen list.
  * The draw's own SHA-256 goes on the event, so the published record and the
  * database can be checked against each other.
  */
@@ -39,6 +42,9 @@ export async function POST(request: Request) {
     }
     if (event.drawn_at) {
       return NextResponse.json({ error: 'The draw has already run.', code: 'ALREADY_DRAWN' }, { status: 409 })
+    }
+    if (event.frozen_by && event.frozen_by === auth.user.id) {
+      return NextResponse.json({ error: 'The admin who froze the list cannot run the draw. Ask another admin to run it.', code: 'SAME_ADMIN' }, { status: 409 })
     }
 
     const { data: icon, error: iconErr } = await admin.from('icons').select('id, name').eq('id', body.data.winningIconId).maybeSingle()
@@ -68,27 +74,23 @@ export async function POST(request: Request) {
     const sha256 = drawHash({ snapshotSha256: event.snapshot_sha256, winningIconId: icon.id, seed: body.data.seed, winners })
     const emailOf = new Map(backers.map(b => [b.user_id, b.email]))
 
-    const drawnAt = new Date().toISOString()
-    // The event first: a second draw racing this one loses here and writes nothing.
-    const { data: updated, error: updateErr } = await admin
-      .from('icon_events')
-      .update({ drawn_at: drawnAt, drawn_by: auth.user.id, winning_icon_id: icon.id, draw_seed: body.data.seed, draw_sha256: sha256 })
-      .eq('id', event.id)
-      .is('drawn_at', null)
-      .select('id')
-      .maybeSingle()
-    if (updateErr) throw updateErr
-    if (!updated) return NextResponse.json({ error: 'The draw was run by someone else just now.', code: 'ALREADY_DRAWN' }, { status: 409 })
-
-    const { error: insertErr } = await admin.from('fan_prize_winners').insert(winners.map(w => ({
-      event_id: event.id,
-      position: w.position,
-      user_id: w.userId,
-      icon_id: icon.id,
-      email: emailOf.get(w.userId) ?? null,
-      draw_rank: w.rank,
-    })))
-    if (insertErr) throw insertErr
+    // One transaction: the event and the winners, or neither. A second draw
+    // racing this one is refused inside it and writes nothing.
+    const { data, error } = await admin.rpc('draw_icon_event', {
+      p_event_id: event.id,
+      p_actor_id: auth.user.id,
+      p_winning_icon_id: icon.id,
+      p_seed: body.data.seed,
+      p_draw_sha256: sha256,
+      p_winners: winners.map(w => ({ position: w.position, user_id: w.userId, rank: w.rank })),
+    })
+    if (error) {
+      const refusal = rpcRefusal(error)
+      if (refusal?.code === 'ALREADY_DRAWN') return NextResponse.json({ error: 'The draw was run by someone else just now.', code: 'ALREADY_DRAWN' }, { status: 409 })
+      if (refusal) return NextResponse.json({ error: refusal.hint, code: refusal.code }, { status: refusal.code === 'NO_EVENT' || refusal.code === 'ICON_NOT_FOUND' ? 404 : 409 })
+      throw error
+    }
+    const drawnAt = (data as { drawn_at: string }).drawn_at
 
     log.info('admin.icons.drawn', { event_id: event.id, by: auth.user.id, icon_id: icon.id, eligible: backers.length, winners: winners.length, draw_sha256: sha256 })
     return NextResponse.json({

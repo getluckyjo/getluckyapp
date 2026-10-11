@@ -11,6 +11,8 @@ interface EventRow {
   frozen_at: string | null
   snapshot_sha256: string | null
   snapshot_count: number | null
+  seed_source: string | null
+  frozen_by: string | null
   winning_icon_id: string | null
   draw_seed: string | null
   draw_sha256: string | null
@@ -59,6 +61,7 @@ export default function FanPrizePanel({ icons, onChanged }: { icons: { id: strin
   const [freezeOpen, setFreezeOpen] = useState(false)
   const [freezeBusy, setFreezeBusy] = useState(false)
   const [freezeError, setFreezeError] = useState<string | null>(null)
+  const [seedSource, setSeedSource] = useState('')
   const [winningIcon, setWinningIcon] = useState('')
   const [seed, setSeed] = useState('')
   const [drawOpen, setDrawOpen] = useState(false)
@@ -109,7 +112,11 @@ export default function FanPrizePanel({ icons, onChanged }: { icons: { id: strin
     setFreezeBusy(true)
     setFreezeError(null)
     try {
-      const res = await fetch('/api/admin/icons/event/freeze', { method: 'POST' })
+      const res = await fetch('/api/admin/icons/event/freeze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ seedSource: seedSource.trim() }),
+      })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { setFreezeError(json.error ?? 'Could not freeze. Please try again.'); return }
       setFreezeOpen(false)
@@ -147,7 +154,7 @@ export default function FanPrizePanel({ icons, onChanged }: { icons: { id: strin
     <section className="adm-card" style={{ marginBottom: 16 }} aria-labelledby="fan-prize-title">
       <h2 id="fan-prize-title" className="adm-title" style={{ fontSize: 18, margin: '0 0 4px' }}>Fan prize</h2>
       <p className="adm-lead" style={{ margin: '0 0 12px' }}>
-        Three steps, each once. Picks close at first tee. Freeze the backer list before the shot and publish its hash. After the ace, draw with a seed nobody could have known.
+        Three steps, each once. Picks close at first tee. Freeze the backer list before the shot, naming the public value that will be the seed, and publish the hash and that name together. After the ace, a different admin draws with that value.
       </p>
 
       {loadError && <p role="alert" className="adm-error">{loadError}</p>}
@@ -174,12 +181,19 @@ export default function FanPrizePanel({ icons, onChanged }: { icons: { id: strin
                 <div className="adm-small">
                   Frozen {when(event.frozen_at)} · {event.snapshot_count?.toLocaleString('en-ZA')} backers, {state?.eligibleCount.toLocaleString('en-ZA')} eligible
                   <br />SHA-256 <code style={{ wordBreak: 'break-all' }}>{event.snapshot_sha256}</code>
+                  <br />Seed source, committed: <strong>{event.seed_source}</strong>
                 </div>
               ) : (
-                <div className="adm-small">Copies every pick as it stands, with eligibility (18+, not staff, not suspended), and closes picks. Cannot be undone.</div>
+                <>
+                  <div className="adm-small">Copies every pick as it stands, with eligibility (18+, not staff, not suspended), and closes picks. One transaction; cannot be undone.</div>
+                  <label className="adm-field" style={{ marginTop: 8 }}>
+                    Seed source <span className="adm-hint">which public value will be the seed, observed when and where; published with the hash</span>
+                    <textarea id="fan-prize-seed-source" value={seedSource} onChange={e => setSeedSource(e.target.value)} minLength={8} maxLength={300} rows={2} required className="adm-input" placeholder="JSE All Share index close on Fri 11 Dec 2026 as published on jse.co.za, written as the number with two decimals" />
+                  </label>
+                </>
               )}
             </div>
-            {!event.frozen_at && <button type="button" onClick={() => { setFreezeError(null); setFreezeOpen(true) }} className="adm-btn">Freeze list</button>}
+            {!event.frozen_at && <button type="button" disabled={seedSource.trim().length < 8} onClick={() => { setFreezeError(null); setFreezeOpen(true) }} className="adm-btn">Freeze list</button>}
             {event.frozen_at && <a href="/api/admin/icons/event/record" className="adm-btn" download>Download record</a>}
           </div>
 
@@ -206,11 +220,12 @@ export default function FanPrizePanel({ icons, onChanged }: { icons: { id: strin
                   </select>
                 </label>
                 <label className="adm-field" style={{ flex: '1 1 260px' }}>
-                  Seed <span className="adm-hint">a public number from the day, e.g. the JSE All Share close</span>
+                  Seed <span className="adm-hint">{event.seed_source ? `the value from the committed source: ${event.seed_source}` : 'a public number from the day, e.g. the JSE All Share close'}</span>
                   <input id="fan-prize-seed" value={seed} onChange={e => setSeed(e.target.value)} minLength={8} maxLength={200} required disabled={!event.frozen_at} placeholder="JSE ALSI close 11 Dec 2026: 98765.43" className="adm-input" />
                 </label>
                 <button type="submit" disabled={!event.frozen_at || !winningIcon || seed.trim().length < 8} className="adm-btn">Draw {event.winners_count}</button>
                 {!event.frozen_at && <span className="adm-small" style={{ flexBasis: '100%' }}>Freeze the list first.</span>}
+                {event.frozen_at && <span className="adm-small" style={{ flexBasis: '100%' }}>The draw must be run by a different admin from the one who froze the list.</span>}
               </form>
             )}
           </div>
@@ -220,7 +235,7 @@ export default function FanPrizePanel({ icons, onChanged }: { icons: { id: strin
       <ConfirmModal
         open={freezeOpen}
         title="Freeze the backer list?"
-        message="Picks close now, for everyone, and the list and its hash go on record. This cannot be undone or re-run."
+        message={`Picks close now, for everyone, and the list, its hash and the seed source ("${seedSource.trim()}") go on record. This cannot be undone or re-run.`}
         confirmLabel="Freeze list"
         variant="success"
         onConfirm={freeze}

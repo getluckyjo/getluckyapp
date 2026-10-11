@@ -34,8 +34,17 @@ const asAdmin = () => {
   db.seed('profiles', { id: ADMIN.id, name: 'Seed Admin', is_admin: true, email: ADMIN.email, age_verified_at: '2026-01-01T00:00:00Z' })
   asUser(ADMIN)
 }
+const ADMIN_2 = { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', email: 'admin2@example.com' }
+const asAdmin2 = () => {
+  db.seed('profiles', { id: ADMIN_2.id, name: 'Draw Admin', is_admin: true, email: ADMIN_2.email, age_verified_at: '2026-01-01T00:00:00Z' })
+  asUser(ADMIN_2)
+}
+const SEED_SOURCE = 'JSE All Share index close on Fri 11 Dec 2026 as published on jse.co.za, two decimals'
+const SEED = 'JSE ALSI close 11 Dec 2026: 98765.43'
 const params = (iconId: string) => ({ params: Promise.resolve({ iconId }) })
 const post = (url: string, body: unknown) => jsonRequest(url, body)
+const freezeWith = (body: unknown = { seedSource: SEED_SOURCE }) => freeze(post('http://x/api/admin/icons/event/freeze', body))
+const drawWith = (winningIconId: string, seed: string = SEED) => draw(post('http://x/api/admin/icons/event/draw', { winningIconId, seed }))
 const future = new Date(Date.now() + 86_400_000).toISOString()
 const past = new Date(Date.now() - 60_000).toISOString()
 
@@ -64,14 +73,18 @@ describe('the pure rules', () => {
     expect(picksOpen({ first_tee_at: '2026-12-11T05:00:00Z', frozen_at: null }, new Date('2026-12-11T04:59:59Z'))).toBe(true)
   })
 
-  it('hashes the backer list the same way in any order, and differently for any change', () => {
-    const a = [{ userId: u(2), iconId: ICON_A }, { userId: u(1), iconId: ICON_B }]
+  it('hashes the backer list the same way in any order, and differently for any change, including eligibility', () => {
+    const ok = { eligible: true, ineligibleReason: null } as const
+    const a = [{ userId: u(2), iconId: ICON_A, ...ok }, { userId: u(1), iconId: ICON_B, eligible: false, ineligibleReason: 'under_18' as const }]
     const b = [a[1], a[0]]
-    expect(snapshotLines(a)).toEqual([`${u(1)}:${ICON_B}`, `${u(2)}:${ICON_A}`])
-    expect(snapshotHash(a)).toBe(snapshotHash(b))
-    expect(snapshotHash(a)).toBe(createHash('sha256').update(`${u(1)}:${ICON_B}\n${u(2)}:${ICON_A}`).digest('hex'))
-    expect(snapshotHash([{ userId: u(2), iconId: ICON_B }, a[1]])).not.toBe(snapshotHash(a))
-    expect(snapshotHash([])).toBe(createHash('sha256').update('').digest('hex'))
+    expect(snapshotLines(EVENT, a)).toEqual([`event:${EVENT}`, `${u(1)}:${ICON_B}:under_18`, `${u(2)}:${ICON_A}:eligible`])
+    expect(snapshotHash(EVENT, a)).toBe(snapshotHash(EVENT, b))
+    expect(snapshotHash(EVENT, a)).toBe(createHash('sha256').update(`event:${EVENT}\n${u(1)}:${ICON_B}:under_18\n${u(2)}:${ICON_A}:eligible`).digest('hex'))
+    // A different Icon, a different eligibility, or a different event: a different commitment.
+    expect(snapshotHash(EVENT, [{ userId: u(2), iconId: ICON_B, ...ok }, a[1]])).not.toBe(snapshotHash(EVENT, a))
+    expect(snapshotHash(EVENT, [a[0], { ...a[1], eligible: true, ineligibleReason: null }])).not.toBe(snapshotHash(EVENT, a))
+    expect(snapshotHash(ICON_A, a)).not.toBe(snapshotHash(EVENT, a))
+    expect(snapshotHash(EVENT, [])).toBe(createHash('sha256').update(`event:${EVENT}`).digest('hex'))
   })
 
   it('draws the same winners from the same seed, different ones from another, never a repeat', () => {
@@ -171,20 +184,28 @@ describe('freeze and draw', () => {
     )
   }
 
-  it('freezes the list with eligibility and the hash, closes picks, and runs once', async () => {
+  it('freezes the list with eligibility, the hash and the committed seed source, closes picks, and runs once', async () => {
     asAdmin()
     seedBackers()
-    const res = await freeze()
+    // No seed source, no freeze: the commitment is part of the record.
+    expect((await freezeWith({})).status).toBe(400)
+    expect((await freezeWith({ seedSource: 'short' })).status).toBe(400)
+    expect(db.find('icon_events', e => e.id === EVENT)?.frozen_at).toBeNull()
+
+    const res = await freezeWith()
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.snapshotCount).toBe(9)
     expect(json.eligibleCount).toBe(4)
-    const expectedHash = snapshotHash(db.rows('icon_votes').map(v => ({ userId: String(v.user_id), iconId: String(v.icon_id) })))
+    expect(json.seedSource).toBe(SEED_SOURCE)
+    const snapRows = db.rows('icon_vote_snapshot')
+    const expectedHash = snapshotHash(EVENT, snapRows.map(r => ({ userId: String(r.user_id), iconId: String(r.icon_id), eligible: !!r.eligible, ineligibleReason: (r.ineligible_reason ?? null) as 'staff' | null })))
     expect(json.snapshotSha256).toBe(expectedHash)
 
     const event = db.find('icon_events', e => e.id === EVENT)!
     expect(event.frozen_at).toBeTruthy()
     expect(event.frozen_by).toBe(ADMIN.id)
+    expect(event.seed_source).toBe(SEED_SOURCE)
     expect(event.snapshot_sha256).toBe(expectedHash)
     const snap = db.rows('icon_vote_snapshot')
     expect(snap).toHaveLength(9)
@@ -200,39 +221,47 @@ describe('freeze and draw', () => {
 
     // A second freeze is refused with the hash already on record.
     asAdmin()
-    const again = await freeze()
+    const again = await freezeWith()
     expect(again.status).toBe(409)
     expect((await again.json()).snapshotSha256).toBe(expectedHash)
     expect(db.rows('icon_vote_snapshot')).toHaveLength(9)
   })
 
-  it('draws only among eligible backers of the winning Icon, reproducibly, once', async () => {
+  it('draws only among eligible backers of the winning Icon, reproducibly, once, by a second admin', async () => {
     asAdmin()
     seedBackers()
-    expect((await draw(post('http://x/api/admin/icons/event/draw', { winningIconId: ICON_A, seed: 'JSE ALSI close 11 Dec 2026: 98765.43' }))).status).toBe(409)   // not frozen
-    await freeze()
+    expect((await drawWith(ICON_A)).status).toBe(409)   // not frozen
+    await freezeWith()
 
-    const short = await draw(post('http://x/api/admin/icons/event/draw', { winningIconId: ICON_A, seed: 'short' }))
-    expect(short.status).toBe(400)
+    // The admin who froze the list cannot run the draw.
+    const same = await drawWith(ICON_A)
+    expect(same.status).toBe(409)
+    expect((await same.json()).code).toBe('SAME_ADMIN')
+    expect(db.find('icon_events', e => e.id === EVENT)?.drawn_at).toBeNull()
 
-    const res = await draw(post('http://x/api/admin/icons/event/draw', { winningIconId: ICON_A, seed: 'JSE ALSI close 11 Dec 2026: 98765.43' }))
+    asAdmin2()
+    expect((await drawWith(ICON_A, 'short')).status).toBe(400)
+
+    const res = await drawWith(ICON_A)
     expect(res.status).toBe(200)
     const json = await res.json()
     expect(json.eligibleCount).toBe(3)
     expect(json.winners).toHaveLength(3)
-    const expected = drawWinners('JSE ALSI close 11 Dec 2026: 98765.43', [u(1), u(2), u(3)], 3)
+    const expected = drawWinners(SEED, [u(1), u(2), u(3)], 3)
     expect(json.winners.map((w: { userId: string }) => w.userId)).toEqual(expected.map(w => w.userId))
     expect(json.winners.every((w: { userId: string }) => [u(1), u(2), u(3)].includes(w.userId))).toBe(true)
     expect(json.winners[0].email).toBeTruthy()
 
     const event = db.find('icon_events', e => e.id === EVENT)!
     expect(event.drawn_at).toBeTruthy()
+    expect(event.drawn_by).toBe(ADMIN_2.id)
     expect(event.winning_icon_id).toBe(ICON_A)
-    expect(event.draw_seed).toBe('JSE ALSI close 11 Dec 2026: 98765.43')
-    expect(event.draw_sha256).toBe(drawHash({ snapshotSha256: String(event.snapshot_sha256), winningIconId: ICON_A, seed: 'JSE ALSI close 11 Dec 2026: 98765.43', winners: expected }))
+    expect(event.draw_seed).toBe(SEED)
+    expect(event.draw_sha256).toBe(drawHash({ snapshotSha256: String(event.snapshot_sha256), winningIconId: ICON_A, seed: SEED, winners: expected }))
     expect(db.rows('fan_prize_winners').map(w => w.position)).toEqual([1, 2, 3])
+    expect(db.rows('fan_prize_winners').every(w => w.email)).toBe(true)
 
-    const again = await draw(post('http://x/api/admin/icons/event/draw', { winningIconId: ICON_B, seed: 'JSE ALSI close 11 Dec 2026: 98765.43' }))
+    const again = await drawWith(ICON_B)
     expect(again.status).toBe(409)
     expect((await again.json()).code).toBe('ALREADY_DRAWN')
   })
@@ -241,8 +270,9 @@ describe('freeze and draw', () => {
     asAdmin()
     db.seed('profiles', { id: u(5), email: 'staff@example.com', age_verified_at: '2026-01-01', is_admin: true, suspended_at: null })
     db.seed('icon_votes', { user_id: u(5), icon_id: ICON_B, created_at: past, updated_at: past })
-    await freeze()
-    const res = await draw(post('http://x/api/admin/icons/event/draw', { winningIconId: ICON_B, seed: 'JSE ALSI close 11 Dec 2026: 98765.43' }))
+    await freezeWith()
+    asAdmin2()
+    const res = await drawWith(ICON_B)
     expect(res.status).toBe(409)
     expect((await res.json()).code).toBe('NO_BACKERS')
     expect(db.find('icon_events', e => e.id === EVENT)?.drawn_at).toBeNull()
@@ -252,14 +282,18 @@ describe('freeze and draw', () => {
     asAdmin()
     seedBackers()
     expect((await record()).status).toBe(409)
-    await freeze()
-    await draw(post('http://x/api/admin/icons/event/draw', { winningIconId: ICON_A, seed: 'JSE ALSI close 11 Dec 2026: 98765.43' }))
+    await freezeWith()
+    asAdmin2()
+    expect((await drawWith(ICON_A)).status).toBe(200)
     const res = await record()
     expect(res.status).toBe(200)
     expect(res.headers.get('content-disposition')).toContain('fan-prize-icons-cup-sa-2026.json')
     const json = JSON.parse(await res.text())
     expect(json.snapshot.matches).toBe(true)
-    expect(json.snapshot.lines).toHaveLength(9)
+    expect(json.snapshot.seedSource).toBe(SEED_SOURCE)
+    expect(json.snapshot.lines).toHaveLength(10)
+    expect(json.snapshot.lines[0]).toBe(`event:${EVENT}`)
+    expect(json.snapshot.lines.filter((l: string) => l.endsWith(':eligible'))).toHaveLength(4)
     expect(json.snapshot.ineligible).toHaveLength(5)
     expect(json.draw.winners).toHaveLength(3)
     expect(JSON.stringify(json)).not.toContain('@example.com')
