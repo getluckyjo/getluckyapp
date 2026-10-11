@@ -84,7 +84,9 @@ export default function ChooseStakePage() {
   const [errorMsg, setErrorMsg]     = useState('')
   // undefined while loading; null when the golfer has no saved card.
   const [savedCardState, setSavedCard] = useState<SavedCard | null | undefined>(undefined)
-  const [saveCard, setSaveCard]     = useState(true)
+  // Off by default: PayFast only saves credit cards, and a debit card with
+  // the box ticked is refused in the modal. Ticking it is the golfer's call.
+  const [saveCard, setSaveCard]     = useState(false)
   const savedCard = user ? savedCardState : null
   // One tap is for stakes up to R250 (no 3-D Secure on a token charge); a
   // bigger stake goes through PayFast's checkout, same as with no card.

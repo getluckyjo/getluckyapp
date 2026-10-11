@@ -212,9 +212,9 @@ ticked is refused inside the modal as "You have entered invalid card
 details. Please check your card details and try again. (30)", with nothing
 to say why; the same card pays normally with the box unticked. On
 11 October 2026 a Visa debit card failed five times this way. The
-checkbox and the Account page now say credit cards only, and when the
-modal closes unpaid with the box ticked the sheet tells the golfer to
-untick it and pay again. Routing the save-card flow through the hosted
+checkbox is unticked by default, it and the Account page say credit cards
+only, and when the modal closes unpaid with the box ticked the sheet tells
+the golfer to untick it and pay again. Routing the save-card flow through the hosted
 page would not help: the limit is PayFast's, not the modal's. When a golfer
 reports "invalid card details", ask what kind of card it is before anything
 else.
