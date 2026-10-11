@@ -10,6 +10,9 @@ import { apiError, parseBody, uuid } from '@/lib/api/http'
 
 const Body = z.object({ betId: uuid })
 
+/** The bucket's own cap (migration 042); the recorder makes clips of a few megabytes. */
+export const MAX_FOOTAGE_BYTES = 50 * 1024 * 1024
+
 /**
  * POST /api/videos/uploaded
  * Body: { betId }
@@ -58,21 +61,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Footage not found in storage' }, { status: 404 })
     }
 
-    const bytes = Buffer.from(await blob.arrayBuffer())
-    const sha256 = createHash('sha256').update(bytes).digest('hex')
+    if (blob.size > MAX_FOOTAGE_BYTES) {
+      log.warn('claim.video_too_large', { user_id: user.id, bet_id: betId, bytes: blob.size })
+      return NextResponse.json({ error: 'Footage is too large to record', code: 'FOOTAGE_TOO_LARGE' }, { status: 413 })
+    }
 
-    const { error } = await admin
+    // Hashed chunk by chunk from the blob's stream: no second copy of the
+    // footage in memory beside the one the storage client returned.
+    const hash = createHash('sha256')
+    let bytes = 0
+    for await (const chunk of blob.stream() as unknown as AsyncIterable<Uint8Array>) {
+      hash.update(chunk)
+      bytes += chunk.byteLength
+    }
+    const sha256 = hash.digest('hex')
+
+    // Write-once at the database too: the hash lands only if nothing sealed
+    // the bet meanwhile and the pointer still names the object just hashed.
+    const { data: sealed, error } = await admin
       .from('bets')
-      .update({ video_sha256: sha256, video_bytes: bytes.length, video_uploaded_at: new Date().toISOString(), updated_by: user.id })
+      .update({ video_sha256: sha256, video_bytes: bytes, video_uploaded_at: new Date().toISOString(), updated_by: user.id })
       .eq('id', betId)
       .eq('user_id', user.id)
+      .eq('video_url', bet.video_url)
+      .is('video_sha256', null)
+      .select('video_sha256')
+      .maybeSingle()
     if (error) {
       log.error('claim.video_hash_write_failed', error, { path: 'claim', user_id: user.id, bet_id: betId })
       return NextResponse.json({ error: 'Could not record footage' }, { status: 500 })
     }
+    if (!sealed) {
+      // A concurrent seal got there first; its hash is the record.
+      const { data: now } = await admin.from('bets').select('video_sha256').eq('id', betId).maybeSingle()
+      return NextResponse.json({ ok: true, sha256: now?.video_sha256 ?? null, alreadyRecorded: true })
+    }
 
-    log.info('claim.video_recorded', { user_id: user.id, bet_id: betId, sha256, bytes: bytes.length })
-    return NextResponse.json({ ok: true, sha256, bytes: bytes.length })
+    log.info('claim.video_recorded', { user_id: user.id, bet_id: betId, sha256, bytes })
+    return NextResponse.json({ ok: true, sha256, bytes })
   } catch (err) {
     return apiError('claim.video_uploaded_unhandled', err, { path: 'claim' })
   }

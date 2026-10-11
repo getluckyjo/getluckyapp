@@ -68,6 +68,11 @@ const defaultSession: BetSession = {
   uploadProgress: 0,
 }
 
+/** No upload progress for this long and the attempt is abandoned so the retry can show. */
+export const UPLOAD_STALL_MS = 45_000
+/** The whole upload, however slowly it moves. Clubhouse Wi-Fi at 100 kB/s still sends a 2-minute clip inside this. */
+export const UPLOAD_TIMEOUT_MS = 5 * 60_000
+
 const BetContext = createContext<BetContextType | null>(null)
 
 export function BetProvider({ children }: { children: ReactNode }) {
@@ -116,16 +121,31 @@ export function BetProvider({ children }: { children: ReactNode }) {
           await new Promise<void>((resolve, reject) => {
             const xhr = new XMLHttpRequest()
             xhr.open('PUT', signedUrl)
-            xhr.setRequestHeader('Content-Type', mimeType)
+            // The bare type: the bucket's allow-list (migration 042) names
+            // video/mp4 and video/webm, not every codecs variant.
+            xhr.setRequestHeader('Content-Type', mimeType.split(';')[0].trim())
+            // A connection that stays open without moving is a failure too:
+            // no byte for UPLOAD_STALL_MS, or UPLOAD_TIMEOUT_MS in all, ends
+            // the attempt so the retry can show instead of a spinner forever.
+            let stall: ReturnType<typeof setTimeout> | undefined
+            const armStall = () => {
+              if (stall) clearTimeout(stall)
+              stall = setTimeout(() => xhr.abort(), UPLOAD_STALL_MS)
+            }
+            const settle = (fn: () => void) => { if (stall) clearTimeout(stall); fn() }
+            xhr.timeout = UPLOAD_TIMEOUT_MS
             xhr.upload.onprogress = (e) => {
+              armStall()
               if (e.lengthComputable) {
                 const pct = Math.round((e.loaded / e.total) * 100)
                 setSession(s => ({ ...s, uploadProgress: pct }))
               }
             }
-            xhr.onload = () =>
-              xhr.status < 300 ? resolve() : reject(new Error(`Upload ${xhr.status}`))
-            xhr.onerror = () => reject(new Error('Network error'))
+            xhr.onload = () => settle(() => (xhr.status < 300 ? resolve() : reject(new Error(`Upload ${xhr.status}`))))
+            xhr.onerror = () => settle(() => reject(new Error('Network error')))
+            xhr.ontimeout = () => settle(() => reject(new Error('Upload timed out')))
+            xhr.onabort = () => settle(() => reject(new Error('Upload stalled')))
+            armStall()
             xhr.send(blob)
           })
 

@@ -44,6 +44,18 @@ declaration and claim. A retried declaration is a 200 no-op.
   **This fixes the bug where no claim ever had footage attached.**
 - New `POST /api/videos/uploaded`: after the upload, the server downloads the
   object, records SHA-256, size and its own timestamp. Write-once.
+- Sealed means sealed (11 October 2026, after the independent audit): once
+  `video_sha256` is set, `upload-url` answers 409 `FOOTAGE_SEALED` instead of
+  issuing another slot, so the pointer can no longer move from `shot.mp4` to
+  a fresh `shot.webm` under the first hash; both writes are compare-and-set
+  on `video_sha256 is null`, and the hash write also requires `video_url`
+  to still name the object that was hashed. The bucket accepts only
+  `video/mp4` and `video/webm` up to 50 MB (migration 042), the route
+  refuses any other type, and the hash is computed from the object's stream
+  rather than a second copy. A suspended admin loses every admin route at
+  once (`requireAdmin` reads `suspended_at`). The upload in the browser
+  gives up after 45 s without progress or 5 min in all, so a stalled
+  connection shows the retry instead of a spinner forever.
 - `POST /api/videos/verify` (the fake "AI check" with a 2-second sleep) is
   deleted. The confirm screen's "Footage received" chip and the YES button
   now follow the real upload; YES is disabled until the footage is sealed.
