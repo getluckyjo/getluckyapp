@@ -148,6 +148,7 @@ Measured, not estimated:
 | Gold on green `#335231` | **3.87:1** | Fails for body text. Visible in the stake multiplier chips. |
 | Gray `#999` on cream | **2.66:1** | Fails — and it is the secondary text colour in 12+ places. |
 | Green `#335231` on cream | 8.20:1 | Good. |
+| Green on cream at 0.7 opacity | 3.63:1 | Fails. The V2 build faded secondary text this way in 21 rules (labels, hints, legal lines, the tab bar). Raised to 0.85 (5.15:1) on 12 October 2026 after the independent audit's axe scan flagged auth, terms, privacy and responsible-play. |
 
 Reduced-motion preferences are honoured for a deleted marketing page but not for any of the
 fifteen animations in the app itself.

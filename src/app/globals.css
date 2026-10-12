@@ -530,7 +530,7 @@ body {
   margin-top: 12px;
   font-family: var(--font-heading); font-size: 13px; font-weight: 800;
   letter-spacing: 0.04em; text-transform: uppercase;
-  color: var(--green); opacity: 0.72; white-space: nowrap; line-height: 16px;
+  color: var(--green); opacity: 0.85; white-space: nowrap; line-height: 16px;
   transition: opacity 0.15s;
 }
 .tabbar-tab.is-active .tabbar-label { opacity: 1; font-size: 14px; letter-spacing: 0.02em; }
@@ -724,6 +724,8 @@ body {
 }
 .v2-legal a { color: var(--green); font-weight: 700; text-decoration: none; }
 .v2-legal a:hover { text-decoration: underline; }
+/* Faded green text is never below 0.85 opacity: on the cream surface that is the
+   lowest that keeps AA contrast (4.5:1); 0.7 reads at 3.6:1 (audit, 11 Oct 2026). */
 /* The note in place of the Google tile inside an app's web view (auth page). */
 .v2-hint {
   font-family: 'Inter', sans-serif; font-size: var(--text-sm); line-height: 1.5;
@@ -783,7 +785,7 @@ body {
 .signin-or {
   display: flex; align-items: center; gap: 12px; width: 100%; margin: 2px 0 -4px;
   font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--green); opacity: 0.75;
+  color: var(--green); opacity: 0.85;
 }
 .signin-or i { flex: 1; height: 1px; background: var(--bar-off); }
 .signin-social { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; width: 100%; }
@@ -794,7 +796,7 @@ body {
   display: flex; flex-direction: column; gap: 10px; width: 100%;
   animation: fadeUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-.signin-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.7; margin-bottom: -4px; }
+.signin-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.85; margin-bottom: -4px; }
 .signin-email input {
   width: 100%; min-height: 50px; padding: 0 16px; box-sizing: border-box;
   background: var(--white); border: 2px solid transparent; border-radius: 6px;
@@ -1115,7 +1117,7 @@ body {
   box-shadow: 3px 3px 0 rgba(0,0,0,0.25);
 }
 .lb-you-cta:active { transform: translate(1px, 1px); box-shadow: 2px 2px 0 rgba(0,0,0,0.25); }
-.lb-note { margin: 14px 0 0; text-align: center; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--green); opacity: 0.65; }
+.lb-note { margin: 14px 0 0; text-align: center; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--green); opacity: 0.85; }
 
 /* ── RESPONSIVE: SMALL PHONES ── */
 @media (max-width: 374px) {
@@ -1259,7 +1261,7 @@ body {
 .stake-amount small { font-family: 'Inter', sans-serif; font-size: var(--text-sm); font-weight: 500; opacity: 0.7; letter-spacing: 0; }
 .stake-mult {
   font-family: 'Inter', sans-serif; font-size: var(--text-sm); font-weight: 600;
-  color: var(--green); opacity: 0.6; white-space: nowrap;
+  color: var(--green); opacity: 0.85; white-space: nowrap;
 }
 .stake-win {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -1298,7 +1300,7 @@ body {
 }
 .stake-promo-toggle:disabled { opacity: 0.6; cursor: default; }
 .stake-promo { display: flex; flex-direction: column; gap: 6px; }
-.stake-promo-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.7; }
+.stake-promo-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.85; }
 .stake-promo-row { display: flex; gap: 8px; align-items: stretch; }
 /* Two classes, so it outranks .acct-input, which comes later in this file. */
 .stake-promo-row .stake-promo-input { flex: 1; min-width: 0; background: var(--white); text-transform: uppercase; letter-spacing: 0.06em; }
@@ -1311,7 +1313,7 @@ body {
 .stake-sheet-title { font-family: var(--font-heading); font-size: clamp(22px, 6.5vw, 26px); text-transform: uppercase; line-height: 1.1; color: var(--green); }
 .stake-rows { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 14px; }
 .stake-rows > div { display: flex; justify-content: space-between; align-items: baseline; gap: 14px; font-family: 'Inter', sans-serif; font-size: var(--text-body); }
-.stake-rows dt { color: var(--green); opacity: 0.7; white-space: nowrap; }
+.stake-rows dt { color: var(--green); opacity: 0.85; white-space: nowrap; }
 .stake-rows dd { margin: 0; color: var(--green); font-weight: 600; text-align: right; }
 .stake-rows-win { padding-top: 8px; border-top: 1px solid var(--surface); }
 .stake-rows-win dd { font-family: var(--font-heading); font-weight: 800; font-size: 26px; line-height: 1; }
@@ -1321,7 +1323,7 @@ body {
   font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.45; color: var(--green); cursor: pointer;
 }
 .stake-save input { flex-shrink: 0; width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--green); }
-.stake-sheet-legal { margin: 12px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.5; color: var(--green); opacity: 0.75; text-align: center; }
+.stake-sheet-legal { margin: 12px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.5; color: var(--green); opacity: 0.85; text-align: center; }
 .stake-sheet-legal a { color: inherit; font-weight: 700; text-decoration: none; }
 
 /* ── SCREEN: RECORD (V2) ── */
@@ -1442,7 +1444,7 @@ body {
 .vf-step.is-failed .vf-step-title { color: #b8000f; }
 .vf-step-text { display: flex; flex-direction: column; padding-top: 4px; font-family: 'Inter', sans-serif; }
 .vf-step-title { font-size: var(--text-md); font-weight: 700; color: var(--green); line-height: 1.25; }
-.vf-step-desc { font-size: var(--text-sm); color: var(--green); opacity: 0.75; margin-top: 2px; }
+.vf-step-desc { font-size: var(--text-sm); color: var(--green); opacity: 0.85; margin-top: 2px; }
 .vf-step.is-pending .vf-step-title, .vf-step.is-pending .vf-step-desc { opacity: 0.55; }
 @keyframes vfPulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(214,251,75,0.6); }
@@ -1462,7 +1464,7 @@ body {
 .cf-video-empty { width: 100%; height: 100%; background: linear-gradient(160deg, #1e3d12, #0d2a08); }
 .cf-meta {
   margin: 0 0 8px; font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700;
-  letter-spacing: 0.12em; text-transform: uppercase; color: var(--green); opacity: 0.7;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--green); opacity: 0.85;
 }
 .cf-chips {
   position: absolute; top: 10px; left: 10px; right: 10px; z-index: 2;
@@ -1489,7 +1491,7 @@ body {
 @media (max-height: 720px) { .cf-video { aspect-ratio: 16 / 10; } }
 .cf-note {
   margin: 14px 0 0; font-family: 'Inter', sans-serif; font-size: var(--text-xs); line-height: 1.5;
-  color: var(--green); opacity: 0.7; text-align: center;
+  color: var(--green); opacity: 0.85; text-align: center;
 }
 
 /* ── SCREEN: CLAIM (V2) ── */
@@ -1519,7 +1521,7 @@ body {
   background: var(--lime); color: var(--green);
   font-family: var(--font-heading); font-size: 13px; text-transform: uppercase; letter-spacing: 0.03em;
 }
-.cl-hint { margin: 10px 0 18px; font-family: 'Inter', sans-serif; font-size: var(--text-xs); color: var(--green); opacity: 0.7; }
+.cl-hint { margin: 10px 0 18px; font-family: 'Inter', sans-serif; font-size: var(--text-xs); color: var(--green); opacity: 0.85; }
 .cl-later {
   display: block; margin: 16px auto 0; padding: 8px 0; background: none; border: none; cursor: pointer;
   font-family: 'Inter', sans-serif; font-size: var(--text-sm); color: var(--green); text-decoration: underline; text-underline-offset: 3px;
@@ -1574,7 +1576,7 @@ body {
   flex-shrink: 0; padding: 6px 12px; border-radius: 999px; background: var(--lime);
   font-size: var(--text-sm); font-weight: 700;
 }
-.pr-note { margin: -8px 0 18px; font-family: 'Inter', sans-serif; font-size: var(--text-sm); color: var(--green); opacity: 0.7; }
+.pr-note { margin: -8px 0 18px; font-family: 'Inter', sans-serif; font-size: var(--text-sm); color: var(--green); opacity: 0.85; }
 .miss-actions .btn-lime { text-decoration: none; }
 
 /* ── LEGAL PAGES + NOT FOUND (V2) ── */
@@ -1585,7 +1587,7 @@ body {
 }
 .legal-effective {
   font-family: 'Inter', sans-serif; font-size: var(--text-sm); font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); opacity: 0.7; margin: 0 0 18px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--green); opacity: 0.85; margin: 0 0 18px;
 }
 .legal-body { font-family: 'Inter', sans-serif; color: var(--green); }
 .legal-body p, .legal-body li { font-size: var(--text-md); line-height: 1.6; margin: 0 0 14px; opacity: 0.9; }
@@ -1687,7 +1689,7 @@ body {
 
 .acct-form { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 12px; }
 .acct-field { display: flex; flex-direction: column; gap: 6px; }
-.acct-field > span { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.7; }
+.acct-field > span { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--green); opacity: 0.85; }
 .acct-input {
   width: 100%; min-height: 46px; padding: 0 14px; box-sizing: border-box;
   background: var(--surface); color: var(--green);
@@ -1780,7 +1782,7 @@ body {
 }
 .club-cta { padding-bottom: 6px; }
 .club-cta .btn-lime { text-decoration: none; }
-.club-legal { margin: 12px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.55; color: var(--green); opacity: 0.7; text-align: center; }
+.club-legal { margin: 12px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.55; color: var(--green); opacity: 0.85; text-align: center; }
 
 /* ── SCREEN: AGE CHECK + PAYMENT SETUP (V2) ── */
 .ac-form { display: flex; flex-direction: column; }
@@ -1852,7 +1854,7 @@ body {
   border: 2px solid var(--bar-off); background: var(--white); transition: border-color 0.15s, background 0.15s;
 }
 .ps-option.is-selected .ps-radio { border-color: var(--green); background: var(--green); box-shadow: inset 0 0 0 4px var(--white); }
-.ps-secure { margin: 14px 0 0; text-align: center; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--green); opacity: 0.65; }
+.ps-secure { margin: 14px 0 0; text-align: center; font-family: 'Inter', sans-serif; font-size: 11px; color: var(--green); opacity: 0.85; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    PWA CHROME — offline page, update toast
@@ -2089,7 +2091,7 @@ button, [role="button"], [role="tab"] {
 .fb-textarea:focus { outline: none; border-color: var(--green); }
 .fb-meta { font-size: 12px; opacity: 0.6; margin: 8px 0 12px; }
 .fb-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.acct-version { text-align: center; font-size: 11px; letter-spacing: 0.04em; color: var(--green); opacity: 0.5; margin-top: 10px; font-family: 'Space Mono', monospace; }
+.acct-version { text-align: center; font-size: 11px; letter-spacing: 0.04em; color: var(--green); opacity: 0.85; margin-top: 10px; font-family: 'Space Mono', monospace; }
 
 /* ── Icons: Back an Icon ─────────────────────────────────────────────── */
 .ic-mine {
@@ -2151,7 +2153,7 @@ button, [role="button"], [role="tab"] {
   background: var(--lime); color: var(--green);
 }
 .ic-team.is-world .ic-captain { background: #2b7de9; color: var(--white); }
-.ic-sponsor { margin: 8px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.55; color: var(--green); opacity: 0.7; text-align: center; }
+.ic-sponsor { margin: 8px 0 0; font-family: 'Inter', sans-serif; font-size: 11px; line-height: 1.55; color: var(--green); opacity: 0.85; text-align: center; }
 .ic-prize {
   display: flex; flex-direction: column; gap: 4px;
   background: var(--green); color: var(--white); border-radius: 14px;
@@ -2208,7 +2210,7 @@ button, [role="button"], [role="tab"] {
 .inst-qr { display: flex; flex-direction: column; align-items: center; gap: 8px; background: var(--white); border-radius: 16px; padding: 18px; margin: 0 0 14px; font-family: 'Inter', sans-serif; font-size: var(--text-sm); color: var(--green); }
 .inst-qr img { width: 220px; height: 220px; }
 .inst-share { margin: 4px 0 18px; }
-.inst-foot { font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.55; color: var(--green); opacity: 0.7; text-align: center; margin: 8px 0 0; }
+.inst-foot { font-family: 'Inter', sans-serif; font-size: 12px; line-height: 1.55; color: var(--green); opacity: 0.85; text-align: center; margin: 8px 0 0; }
 .inst-foot a { color: var(--green); font-weight: 700; text-decoration: none; }
 
 /* ── GOLF DAY (src/app/(play)/golf-day/[slug]) ──
@@ -2268,7 +2270,7 @@ button, [role="button"], [role="tab"] {
 .gd-pick { display: grid; gap: 10px; }
 /* The join code field, for a golf day that asks for one (migration 038). */
 .gd-code { display: flex; flex-direction: column; gap: 6px; }
-.gd-code-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gd-ink); opacity: 0.75; }
+.gd-code-label { font-family: 'Inter', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gd-ink); opacity: 0.85; }
 .gd-code input {
   width: 100%; min-height: 50px; padding: 0 16px; box-sizing: border-box;
   background: var(--gd-paper); color: var(--gd-ink); border: 2px solid var(--gd-ink); border-radius: 6px;
