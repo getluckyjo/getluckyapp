@@ -8,7 +8,7 @@ import { assertNotSuspended, claimErrorResponse } from '@/lib/claims/state-machi
 import { grantBetForPayment } from '@/lib/claims/grant'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { chargeToken } from '@/lib/payfast/api'
-import { SAVED_CARD_DAILY_CAP_CENTS, SAVED_CARD_MAX_STAKE_ZAR, savedCardAllowedForTier, savedCardSpentCents } from '@/lib/payfast/saved-card'
+import { SAVED_CARD_DAILY_CAP_CENTS, SAVED_CARD_MAX_STAKE_ZAR, SAVED_CARD_WINDOW_MS, savedCardAllowedForTier } from '@/lib/payfast/saved-card'
 import { checkTarget } from '@/lib/payfast/target'
 import { BET_TIERS } from '@/lib/tiers'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
@@ -85,25 +85,27 @@ export async function POST(request: NextRequest) {
     const mPaymentId = `gl_${randomUUID()}`
     const amountCents = tierData.stakeZAR * 100
 
-    const spentCents = await savedCardSpentCents(admin, user.id)
-    if (spentCents + amountCents > SAVED_CARD_DAILY_CAP_CENTS) {
-      log.warn('payfast.charge.daily_cap', { user_id: user.id, tier: tierData.tier, spent_cents: spentCents, amount_cents: amountCents, cap_cents: SAVED_CARD_DAILY_CAP_CENTS })
+    // The daily cap check and the pending ledger row are one locked step
+    // in the database (reserve_saved_card_charge, migration 044): two
+    // requests for the same golfer cannot both see the allowance before
+    // either row exists.
+    const { error: ledgerErr } = await admin.rpc('reserve_saved_card_charge', {
+      p_user_id: user.id,
+      p_m_payment_id: mPaymentId,
+      p_course_id: courseId,
+      p_hole_id: holeId,
+      p_tier: tierData.tier,
+      p_amount_cents: amountCents,
+      p_cap_cents: SAVED_CARD_DAILY_CAP_CENTS,
+      p_window: `${SAVED_CARD_WINDOW_MS / 1000} seconds`,
+    })
+    if (ledgerErr && ledgerErr.code === 'P0001' && ledgerErr.message === 'SAVED_CARD_LIMIT') {
+      log.warn('payfast.charge.daily_cap', { user_id: user.id, tier: tierData.tier, spent_cents: Number(ledgerErr.details) || null, amount_cents: amountCents, cap_cents: SAVED_CARD_DAILY_CAP_CENTS })
       return NextResponse.json(
         { error: `Saved-card payments are limited to R${(SAVED_CARD_DAILY_CAP_CENTS / 100).toLocaleString('en-ZA')} a day. Pay this one through PayFast checkout, or try the saved card again tomorrow.`, code: 'SAVED_CARD_LIMIT' },
         { status: 403 },
       )
     }
-
-    const { error: ledgerErr } = await admin.from('payfast_payments').insert({
-      m_payment_id: mPaymentId,
-      user_id: user.id,
-      course_id: courseId,
-      hole_id: holeId,
-      tier: tierData.tier,
-      amount_cents: amountCents,
-      status: 'pending',
-      raw_payload: { source: 'saved_card' },
-    })
     if (ledgerErr) {
       await alertOps({ event: 'payfast.charge.ledger_write_failed', path: 'payfast_checkout', summary: 'Could not write the pending ledger row before a saved-card charge; nothing was charged.', details: { user_id: user.id, m_payment_id: mPaymentId }, err: ledgerErr })
       return apiError('payfast.charge.ledger_write_failed', ledgerErr, { path: 'payfast_checkout', message: 'Could not start the payment. Please try again.' })

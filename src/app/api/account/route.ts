@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import { apiError } from '@/lib/api/http'
-import { deleteAccount, deletionStatus, type DeletionBlock } from '@/lib/account/delete'
+import { DeletionFailed, deleteAccount, deletionStatus, type DeletionBlock } from '@/lib/account/delete'
 
 const BLOCK_MESSAGES: Record<DeletionBlock, string> = {
   ACCOUNT_SUSPENDED: 'This account is suspended. Please contact support to close it.',
@@ -48,10 +48,20 @@ export async function DELETE(request: NextRequest) {
 
     const outcome = await deleteAccount(createAdminClient(), user.id)
     if (!outcome.ok) {
-      return NextResponse.json({ error: BLOCK_MESSAGES[outcome.reason], code: outcome.reason }, { status: 409 })
+      const removed = outcome.objectsRemoved > 0 ? ' Some of your footage had already been removed before this was found; the account itself is unchanged.' : ''
+      return NextResponse.json({ error: BLOCK_MESSAGES[outcome.reason] + removed, code: outcome.reason, objectsRemoved: outcome.objectsRemoved }, { status: 409 })
     }
     return NextResponse.json({ ok: true, ...outcome.result })
   } catch (err) {
-    return apiError('account.delete_unhandled', err, { message: 'Your account could not be deleted. Nothing has been removed; please try again.' })
+    // Say what actually happened: the guard could not be read (nothing
+    // touched), storage failed part-way (some footage may be gone, the
+    // account is still here), or the account delete itself failed after
+    // the footage went.
+    const message = err instanceof DeletionFailed
+      ? (err.objectsRemoved > 0
+        ? 'Your account could not be deleted. Some of your footage has been removed; your account and history are still here. Please try again.'
+        : 'Your account could not be deleted. Nothing has been removed; please try again.')
+      : 'Your account could not be deleted. Nothing has been removed; please try again.'
+    return apiError('account.delete_unhandled', err, { message })
   }
 }

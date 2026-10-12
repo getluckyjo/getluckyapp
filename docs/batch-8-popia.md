@@ -16,9 +16,15 @@ calls `DELETE /api/account`. The server (`src/lib/account/delete.ts`):
    `documents_received`, `under_review` or `approved`. Those records are
    the insurer's or a fraud review's; support closes such accounts by hand.
    A declared win with no documents, or a rejected claim, does not block.
+   The guard fails closed: a read that errors is a 500 and nothing is
+   touched, never "no suspension" or "no bets" (independent audit S9,
+   11 October 2026).
 2. Removes every object under `<user id>/` in `shot-videos` and
-   `verification-docs`, walking sub-folders. If storage fails, nothing
-   else happens and the golfer sees "nothing has been removed; try again".
+   `verification-docs`, walking sub-folders. If storage fails part-way the
+   account stays and the golfer is told some footage may already be gone;
+   if it fails before anything went, "nothing has been removed; try again".
+   The guard then runs once more: a claim opened in the meantime still
+   stops the account going (409, saying the footage went).
 3. Deletes the auth user. The schema's cascades take the profile, bets and
    verifications with it. `payfast_payments` keeps the money and loses
    the person (`user_id` and `bet_id` set null, as designed in Batch 3).
