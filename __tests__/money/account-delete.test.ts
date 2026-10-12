@@ -160,6 +160,57 @@ describe('DELETE /api/account', () => {
     expect(db.rows('profiles').some(p => p.id === USER_A.id)).toBe(true)
   })
 
+  it('fails closed: a guard read that errors deletes nothing, GET and DELETE alike', async () => {
+    asUser()
+    db.putObject('shot-videos', `${USER_A.id}/x/shot.mp4`)
+    for (const table of ['profiles', 'bets'] as const) {
+      adminWith({ failTable: { [table]: { code: '57P01', message: 'connection lost' } } })
+      expect((await GET()).status, table).toBe(500)
+      const res = await del()
+      expect(res.status, table).toBe(500)
+      expect(await res.json()).toMatchObject({ error: expect.stringContaining('Nothing has been removed') })
+      expect(db.deletedUsers).toEqual([])
+      expect(db.objectPaths('shot-videos')).toHaveLength(1)
+    }
+    // The verification read too, when there is a claimed bet to look up.
+    const b = bet(USER_A.id, { status: 'claimed' })
+    db.seed('verifications', { bet_id: b.id, status: 'under_review' })
+    adminWith({ failTable: { verifications: { code: '57P01', message: 'connection lost' } } })
+    expect((await del()).status).toBe(500)
+    expect(db.deletedUsers).toEqual([])
+    expect(db.objectPaths('shot-videos')).toHaveLength(1)
+  })
+
+  it('a claim opened after the first check still stops the account going, and says the footage went', async () => {
+    asUser()
+    db.putObject('shot-videos', `${USER_A.id}/x/shot.mp4`)
+    // Storage removal is the moment between the two guard checks: a claim lands then.
+    const client = createFakeClient(db)
+    const realRemove = client.storage.from('shot-videos').remove
+    adminClient.createAdminClient.mockImplementation(() => ({
+      ...client,
+      storage: { from: (bucket: string) => ({ ...client.storage.from(bucket), remove: async (paths: string[]) => { const b = bet(USER_A.id, { status: 'verified' }); void b; return realRemove(paths) } }) },
+    }))
+    const res = await del()
+    expect(res.status).toBe(409)
+    const json = await res.json()
+    expect(json.code).toBe('CLAIM_OPEN')
+    expect(json.objectsRemoved).toBe(1)
+    expect(json.error).toContain('already been removed')
+    expect(db.deletedUsers).toEqual([])
+    expect(db.rows('profiles').some(p => p.id === USER_A.id)).toBe(true)
+  })
+
+  it('500 when the auth user cannot be deleted, and the message says the footage already went', async () => {
+    asUser()
+    adminWith({ deleteUserError: 'auth down' })
+    db.putObject('shot-videos', `${USER_A.id}/x/shot.mp4`)
+    const res = await del()
+    expect(res.status).toBe(500)
+    expect(await res.json()).toMatchObject({ error: expect.stringContaining('Some of your footage has been removed') })
+    expect(db.rows('profiles').some(p => p.id === USER_A.id)).toBe(true)
+  })
+
   it('500 when the auth user cannot be deleted', async () => {
     asUser()
     adminWith({ deleteUserError: 'auth down' })

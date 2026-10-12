@@ -907,6 +907,10 @@ export interface Database {
         Args: { p_verification_id: string; p_actor_id: string; p_notes: string | null; p_checklist: Json | null }
         Returns: string
       }
+      reserve_saved_card_charge: {
+        Args: { p_user_id: string; p_m_payment_id: string; p_course_id: string; p_hole_id: string; p_tier: string; p_amount_cents: number; p_cap_cents: number; p_window: string }
+        Returns: number
+      }
       freeze_icon_event: {
         Args: { p_event_id: string; p_actor_id: string; p_seed_source: string }
         Returns: Json

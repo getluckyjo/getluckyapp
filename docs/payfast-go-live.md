@@ -157,7 +157,11 @@ stakes up to **R250** only (bigger stakes go through the hosted checkout, which
 has 3-D Secure), and at most **R2,500** per golfer in any rolling 24 hours,
 counting complete, pending and unknown saved-card rows. Over either bound the
 charge route answers `403 SAVED_CARD_LIMIT` and the stake screen shows the
-ordinary checkout button instead.
+ordinary checkout button instead. The cap check and the pending ledger row
+are one locked step in the database (`reserve_saved_card_charge`, migration
+044, a per-golfer advisory lock): two taps arriving together cannot both see
+the allowance before either row exists (independent audit S10, 11 October
+2026).
 
 ## Unknown charges
 

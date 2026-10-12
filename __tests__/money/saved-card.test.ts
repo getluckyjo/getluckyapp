@@ -193,6 +193,18 @@ describe('POST /api/payments/payfast/charge', () => {
     expect((await post(good)).status).toBe(403)   // and now over it
   })
 
+  it('the cap check and the pending row are one locked database step, not a read and a write', async () => {
+    asUser(USER_A); seed()
+    const client = createFakeClient(db)
+    adminClient.createAdminClient.mockImplementation(() => client)
+    expect((await post(good)).status).toBe(200)
+    const reserve = client.rpcCalls.filter(c => c.fn === 'reserve_saved_card_charge')
+    expect(reserve).toHaveLength(1)
+    expect(reserve[0].args).toMatchObject({ p_user_id: USER_A.id, p_amount_cents: 5000, p_cap_cents: SAVED_CARD_DAILY_CAP_CENTS, p_tier: 'tier_1', p_window: '86400 seconds' })
+    // The route never inserts the row itself any more.
+    expect(db.rows('payfast_payments').filter(r => (r.raw_payload as { source?: string }).source === 'saved_card')).toHaveLength(1)
+  })
+
   it('refuses a hole under 140m before touching the card or the ledger', async () => {
     asUser(USER_A); seed({ metres: 120 })
     const fetchMock = payfastOk()
