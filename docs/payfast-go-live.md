@@ -207,6 +207,25 @@ nothing to offer: keep Multi-Currency Activation **off**. If a golfer
 reports a checkout in another currency, that switch is the first thing
 to check.
 
+## Apple Pay
+
+PayFast's Onsite modal (the overlay the app opens on the stake sheet) takes
+cards, Instant EFT and Masterpass only. Apple Pay, Google Pay, Capitec Pay
+and the other wallets exist on PayFast's **hosted page** alone, and only
+once the method is switched on for the merchant: PayFast dashboard →
+Settings → Payment methods → Apple Pay. There is no API to take an Apple
+Pay token directly, so a native Apple Pay sheet inside the app without
+PayFast's page is not possible with PayFast.
+
+What the app does (13 October 2026): on a device where Apple Pay is set up
+(Safari on iPhone, iPad or Mac; `window.ApplePaySession`), the stake sheet
+shows Apple's own black button under the usual one. It posts the checkout
+with `hosted: true`, the server skips the Onsite identifier, and the golfer
+goes to PayFast's hosted page, where the Apple Pay button opens the native
+sheet. The return trip comes back through `/payment-return` as any hosted
+payment does. Everyone else keeps the modal. The button is drawn by Safari
+(`-webkit-appearance: -apple-pay-button`), so it never renders elsewhere.
+
 ## Saved cards are credit cards only
 
 "Save my card" is PayFast tokenization (`subscription_type=2`), and

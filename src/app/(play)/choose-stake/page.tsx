@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import { track } from '@/lib/analytics'
@@ -24,6 +24,8 @@ interface PromoSwing { code: string }
 
 declare global {
   interface Window {
+    /** Safari on an Apple device with Apple Pay set up; absent everywhere else. */
+    ApplePaySession?: { canMakePayments(): boolean }
     /** PayFast's Onsite modal, defined by onsite/engine.js once loaded. */
     payfast_do_onsite_payment?: (
       opts: { uuid: string; return_url?: string; cancel_url?: string },
@@ -31,6 +33,8 @@ declare global {
     ) => void
   }
 }
+
+const subscribeNever = () => () => {}
 
 /** Load PayFast's Onsite script once; resolves when the modal function exists. */
 function loadOnsiteEngine(src: string, timeoutMs = 6000): Promise<void> {
@@ -87,6 +91,10 @@ export default function ChooseStakePage() {
   // Off by default: PayFast only saves credit cards, and a debit card with
   // the box ticked is refused in the modal. Ticking it is the golfer's call.
   const [saveCard, setSaveCard]     = useState(false)
+  // Apple Pay lives on PayFast's hosted page, not in the Onsite modal, so
+  // on a device that has it the sheet offers a second button that goes
+  // there. Read once from the browser; false on the server and elsewhere.
+  const applePay = useSyncExternalStore(subscribeNever, () => !!window.ApplePaySession?.canMakePayments?.(), () => false)
   const savedCard = user ? savedCardState : null
   // One tap is for stakes up to R250 (no 3-D Secure on a token charge); a
   // bigger stake goes through PayFast's checkout, same as with no card.
@@ -311,8 +319,9 @@ export default function ChooseStakePage() {
     setConfirming(true)
   }
 
-  async function handleConfirmPayment() {
+  async function handleConfirmPayment(opts: { hosted?: boolean } = {}) {
     if (!selected) return
+    const hosted = !!opts.hosted
     setStep('opening')
     setErrorMsg('')
     selectTier(selected)
@@ -333,6 +342,7 @@ export default function ChooseStakePage() {
           courseId: selectedCourse?.id,
           holeId:   selectedHole?.id,
           saveCard: wantsSavedCard,
+          hosted,
         }),
       })
       const pfData = await pfRes.json()
@@ -354,10 +364,12 @@ export default function ChooseStakePage() {
       }))
 
       track('stake_chosen', { tier: selected })
-      track('payment_started', { tier: selected })
+      track('payment_started', { tier: selected, hosted })
+      if (hosted) track('payment_apple_pay', { tier: selected })
 
       // ── 3a. PayFast's modal on this page, when we have an identifier ─────
-      if (pfData.onsite?.uuid && pfData.onsite?.engineUrl) {
+      // (not when the golfer chose Apple Pay: that is on the hosted page only)
+      if (!hosted && pfData.onsite?.uuid && pfData.onsite?.engineUrl) {
         try {
           await loadOnsiteEngine(pfData.onsite.engineUrl)
           setStep('paying')
@@ -607,21 +619,27 @@ export default function ChooseStakePage() {
                     <LockIcon />
                     {step === 'paying' ? 'Charging your card…' : `Pay ${formatRand(activeTier.stakeZAR)} with saved card`}
                   </button>
-                  <button type="button" className="btn-tile btn-tile--block stake-alt" onClick={handleConfirmPayment} disabled={loading}>
+                  <button type="button" className="btn-tile btn-tile--block stake-alt" onClick={() => handleConfirmPayment()} disabled={loading}>
                     {step === 'opening' ? 'Opening PayFast…' : 'Pay another way'}
                   </button>
+                  {applePay && (
+                    <button type="button" className="stake-apple-pay" aria-label={`Pay ${formatRand(activeTier.stakeZAR)} with Apple Pay`} onClick={() => handleConfirmPayment({ hosted: true })} disabled={loading} />
+                  )}
                 </>
               ) : (
                 <>
                   <button
                     type="button"
                     className="btn-lime btn-lime--block"
-                    onClick={handleConfirmPayment}
+                    onClick={() => handleConfirmPayment()}
                     disabled={loading}
                   >
                     <LockIcon />
                     {step === 'paying' ? 'Complete your payment…' : loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
                   </button>
+                  {applePay && (
+                    <button type="button" className="stake-apple-pay" aria-label={`Pay ${formatRand(activeTier.stakeZAR)} with Apple Pay`} onClick={() => handleConfirmPayment({ hosted: true })} disabled={loading} />
+                  )}
                   {savedCard ? (
                     <p className="stake-free-note">
                       Stakes above R{SAVED_CARD_MAX_STAKE_ZAR} go through PayFast checkout, with your bank&apos;s extra check. Your saved card still works for smaller stakes.
