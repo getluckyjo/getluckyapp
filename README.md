@@ -77,6 +77,9 @@ the access token comes from). Every one of them refuses the production ref.
 | `NEXT_PUBLIC_FEEDBACK` | build | `on` shows the floating feedback button on every screen (closed-beta use). Unset: no button; the `/api/feedback` route still exists |
 | `RETENTION_DAYS` | server | footage of misses and documents of rejected claims are purged after this many days, default 90 |
 | `FREE_SWING_PAUSED` | server | `on` stops free swings before the database is asked anything (`/api/bets/free` answers 503 "fully booked for today"), for the day the database is the problem. The ordinary switch and the daily cap are on the admin dashboard (migration 038). Unset or anything else: no effect |
+| `STITCH_CLIENT_ID`, `STITCH_CLIENT_SECRET` | server | Apple Pay and Google Pay through Stitch (`docs/stitch-go-live.md`). Unset: the wallets are off and nothing changes. Production refuses a `test-` client |
+| `STITCH_APPLE_MERCHANT_IDENTIFIER`, `APPLE_PAY_DOMAIN_ASSOCIATION`, `STITCH_WEBHOOK_SECRET`, `STITCH_DISPLAY_NAME` | server | the Apple merchant id Stitch assigns, the domain file it supplies (served at `/.well-known/…`), the Svix secret from `clientWebhookAdd`, the payee name (default Get Lucky Golf) |
+| `NEXT_PUBLIC_STITCH_APPLE_PAY`, `NEXT_PUBLIC_STITCH_GATEWAY_MERCHANT_ID`, `NEXT_PUBLIC_GOOGLE_PAY_MERCHANT_ID`, `NEXT_PUBLIC_GOOGLE_PAY_ENV`, `NEXT_PUBLIC_STITCH_GOOGLE_GATEWAY` | build | `on` puts the in-app Apple Pay sheet on the stake sheet; the gateway merchant id puts Google Pay there (PRODUCTION also needs the Google Pay Console merchant id) |
 | `NEXT_PUBLIC_TURNSTILE_SITE_KEY` | build | Cloudflare Turnstile's site key. Set, the sign-in screen shows the widget and sends its token with the emailed code; Supabase checks it (Authentication → Attack Protection → Turnstile, with the secret key set there). Unset: no widget, nothing changes |
 
 A preview deployment refuses to start if it points at the production database

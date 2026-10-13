@@ -376,6 +376,12 @@ export interface Database {
         }
         Relationships: []
       }
+      stitch_webhook_events: {
+        Row: { id: string; event_type: string; reference: string | null; status: string | null; received_at: string }
+        Insert: { id: string; event_type: string; reference?: string | null; status?: string | null; received_at?: string }
+        Update: { id?: string; event_type?: string; reference?: string | null; status?: string | null; received_at?: string }
+        Relationships: []
+      }
       payment_cards: {
         Row: {
           user_id: string
@@ -414,6 +420,8 @@ export interface Database {
           raw_payload: Json | null
           bet_id: string | null
           refunded_at: string | null
+          provider: 'payfast' | 'stitch'
+          provider_ref: string | null
           created_at: string
         }
         Insert: {
@@ -429,6 +437,8 @@ export interface Database {
           raw_payload?: Json | null
           bet_id?: string | null
           refunded_at?: string | null
+          provider?: 'payfast' | 'stitch'
+          provider_ref?: string | null
           created_at?: string
         }
         Update: {
@@ -444,6 +454,8 @@ export interface Database {
           raw_payload?: Json | null
           bet_id?: string | null
           refunded_at?: string | null
+          provider?: 'payfast' | 'stitch'
+          provider_ref?: string | null
           created_at?: string
         }
         Relationships: []

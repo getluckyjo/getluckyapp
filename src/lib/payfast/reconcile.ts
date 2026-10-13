@@ -59,6 +59,7 @@ export async function reconcileUnknownPayments(admin: Admin, config: ApiConfig, 
   const { data, error } = await admin
     .from('payfast_payments')
     .select('m_payment_id, user_id, tier, amount_cents, raw_payload, created_at')
+    .eq('provider', 'payfast')
     .eq('status', 'unknown')
     .lte('created_at', cutoff)
     .order('created_at', { ascending: true })

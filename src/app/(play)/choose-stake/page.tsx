@@ -4,6 +4,8 @@ import { useState, useEffect, useSyncExternalStore } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import { track } from '@/lib/analytics'
+import WalletButtons, { type WalletOutcome } from '@/components/pay/WalletButtons'
+import { threeDsReturnUrl, walletPublicConfig } from '@/lib/stitch/public'
 import AppHeader from '@/components/layout/AppHeader'
 import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS, BetTier } from '@/context/BetContext'
@@ -91,10 +93,12 @@ export default function ChooseStakePage() {
   // Off by default: PayFast only saves credit cards, and a debit card with
   // the box ticked is refused in the modal. Ticking it is the golfer's call.
   const [saveCard, setSaveCard]     = useState(false)
-  // Apple Pay lives on PayFast's hosted page, not in the Onsite modal, so
-  // on a device that has it the sheet offers a second button that goes
-  // there. Read once from the browser; false on the server and elsewhere.
-  const applePay = useSyncExternalStore(subscribeNever, () => !!window.ApplePaySession?.canMakePayments?.(), () => false)
+  // Apple Pay and Google Pay through Stitch open their sheet right here
+  // (WalletButtons). Until Stitch is switched on for Apple Pay, a device
+  // that has it gets a button to PayFast's hosted page instead, where the
+  // sheet lives. Read once from the browser; false on the server and elsewhere.
+  const wallets = walletPublicConfig()
+  const applePayHosted = useSyncExternalStore(subscribeNever, () => !wallets.applePay && !!window.ApplePaySession?.canMakePayments?.(), () => false)
   const savedCard = user ? savedCardState : null
   // One tap is for stakes up to R250 (no 3-D Secure on a token charge); a
   // bigger stake goes through PayFast's checkout, same as with no card.
@@ -310,6 +314,39 @@ export default function ChooseStakePage() {
       setErrorMsg('Your saved card could not be charged. Pay another way below.')
       setStep('idle')
     }
+  }
+
+  // The wallet charge route answered. Same destinations as the saved card:
+  // paid → record; paid but no bet yet, or a 3-D Secure step → the return
+  // page settles it; refused or unconfirmed → say so on the sheet.
+  function handleWalletOutcome({ wallet, status, data }: WalletOutcome) {
+    if (!selected) return
+    const event = wallet === 'apple_pay' ? 'payment_apple_pay' : 'payment_google_pay'
+    if (status === 200 && data.betId && data.m_payment_id) {
+      confirmPayment(data.m_payment_id)
+      setBetId(data.betId)
+      track(event, { tier: selected })
+      router.push('/record')
+      return
+    }
+    if (status === 202 && data.m_payment_id) {
+      confirmPayment(data.m_payment_id)
+      track(event, { tier: selected, three_ds: !!data.interactionUrl })
+      if (data.interactionUrl) {
+        setStep('paying')
+        window.location.assign(threeDsReturnUrl(data.interactionUrl, window.location.origin, data.m_payment_id))
+        return
+      }
+      router.push(`/payment-return?ref=${encodeURIComponent(data.m_payment_id)}`)
+      return
+    }
+    if (status === 409 && data.m_payment_id && data.code !== 'CHARGE_UNKNOWN') {
+      confirmPayment(data.m_payment_id)
+      router.push(`/payment-return?ref=${encodeURIComponent(data.m_payment_id)}`)
+      return
+    }
+    setErrorMsg(data.error ?? 'The payment did not go through. Pay another way below.')
+    setStep('idle')
   }
 
   function handleSelectTier(tier: BetTier) {
@@ -622,7 +659,19 @@ export default function ChooseStakePage() {
                   <button type="button" className="btn-tile btn-tile--block stake-alt" onClick={() => handleConfirmPayment()} disabled={loading}>
                     {step === 'opening' ? 'Opening PayFast…' : 'Pay another way'}
                   </button>
-                  {applePay && (
+                  {selected && selectedCourse && selectedHole && (
+                    <WalletButtons
+                      amountZAR={activeTier.stakeZAR}
+                      tier={selected}
+                      courseId={selectedCourse.id}
+                      holeId={selectedHole.id}
+                      disabled={loading}
+                      onOutcome={handleWalletOutcome}
+                      onError={(_wallet, message) => { setErrorMsg(message); setStep('idle') }}
+                      onBusy={busy => { if (busy && selected) { setErrorMsg(''); selectTier(selected) } }}
+                    />
+                  )}
+                  {applePayHosted && (
                     <button type="button" className="stake-apple-pay" aria-label={`Pay ${formatRand(activeTier.stakeZAR)} with Apple Pay`} onClick={() => handleConfirmPayment({ hosted: true })} disabled={loading} />
                   )}
                 </>
@@ -637,7 +686,19 @@ export default function ChooseStakePage() {
                     <LockIcon />
                     {step === 'paying' ? 'Complete your payment…' : loading ? 'Opening PayFast…' : `Pay ${formatRand(activeTier.stakeZAR)} & play`}
                   </button>
-                  {applePay && (
+                  {selected && selectedCourse && selectedHole && (
+                    <WalletButtons
+                      amountZAR={activeTier.stakeZAR}
+                      tier={selected}
+                      courseId={selectedCourse.id}
+                      holeId={selectedHole.id}
+                      disabled={loading}
+                      onOutcome={handleWalletOutcome}
+                      onError={(_wallet, message) => { setErrorMsg(message); setStep('idle') }}
+                      onBusy={busy => { if (busy && selected) { setErrorMsg(''); selectTier(selected) } }}
+                    />
+                  )}
+                  {applePayHosted && (
                     <button type="button" className="stake-apple-pay" aria-label={`Pay ${formatRand(activeTier.stakeZAR)} with Apple Pay`} onClick={() => handleConfirmPayment({ hosted: true })} disabled={loading} />
                   )}
                   {savedCard ? (

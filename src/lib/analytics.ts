@@ -21,6 +21,7 @@ export type AnalyticsEvent =
   | 'payment_onsite_opened'
   | 'payment_onsite_closed'
   | 'payment_apple_pay'
+  | 'payment_google_pay'
   | 'payment_saved_card'
   | 'free_swing_started'
   | 'promo_code_applied'
