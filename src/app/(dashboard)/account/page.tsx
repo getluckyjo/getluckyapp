@@ -10,6 +10,7 @@ import { track } from '@/lib/analytics'
 import { createClient } from '@/lib/supabase/client'
 import { getInitials } from '@/lib/format'
 import { buildLabel } from '@/lib/version'
+import { walletPublicConfig } from '@/lib/stitch/public'
 
 const Chevron = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -96,19 +97,56 @@ export default function AccountPage() {
     }
   }
 
-  // ── Saved card (PayFast tokenization) ──
-  const [cardState, setCard] = useState<{ label: string; savedAt: string } | null | undefined>(undefined)
+  // ── Saved card (PayFast tokenization at checkout, or a card added here and held by Stitch) ──
+  type SavedCard = { label: string; provider: 'payfast' | 'stitch'; savedAt: string }
+  const [cardState, setCard] = useState<SavedCard | null | undefined>(undefined)
   const [removingCard, setRemovingCard] = useState(false)
+  const [addingCard, setAddingCard] = useState(false)
+  const cardsOn = walletPublicConfig().cards
   const card = user ? cardState : null
+  const [cardRefresh, setCardRefresh] = useState(0)
   useEffect(() => {
     if (!user) return
     let cancelled = false
     fetch('/api/payments/card')
       .then(r => (r.ok ? r.json() : { card: null }))
-      .then((data: { card: { label: string; savedAt: string } | null }) => { if (!cancelled) setCard(data.card ?? null) })
+      .then((data: { card: SavedCard | null }) => { if (!cancelled) setCard(data.card ?? null) })
       .catch(() => { if (!cancelled) setCard(null) })
     return () => { cancelled = true }
-  }, [user])
+  }, [user, cardRefresh])
+
+  // Back from Stitch's page (/api/payments/card/stitch/return lands here with ?card=…).
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const outcome = params.get('card')
+    if (!outcome) return
+    window.history.replaceState(null, '', window.location.pathname)
+    const copy: Record<string, string> = {
+      saved: 'Card saved. Your next entry is one tap.',
+      cancelled: 'No card was saved.',
+      pending: 'Your card is being confirmed. It will show here in a moment.',
+      error: 'Something went wrong adding your card. Please try again.',
+    }
+    const timer = setTimeout(() => {
+      showToast(copy[outcome] ?? copy.error)
+      if (outcome === 'saved' || outcome === 'pending') setCardRefresh(n => n + 1)
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
+
+  async function addCard() {
+    setAddingCard(true)
+    try {
+      const res = await fetch('/api/payments/card/stitch', { method: 'POST' })
+      const data = await res.json().catch(() => ({})) as { url?: string; error?: string }
+      if (!res.ok || !data.url) throw new Error(data.error ?? 'Could not start adding a card.')
+      track('card_add_started')
+      window.location.assign(data.url)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not start adding a card. Please try again.')
+      setAddingCard(false)
+    }
+  }
 
   async function removeCard() {
     setRemovingCard(true)
@@ -254,19 +292,25 @@ export default function AccountPage() {
           <section className="acct-card">
             <header className="acct-card-head">
               <h2>Payment</h2>
-              {card && (
+              {card ? (
                 <button type="button" className="acct-edit" onClick={removeCard} disabled={removingCard}>
                   {removingCard ? 'Removing…' : 'Remove'}
                 </button>
-              )}
+              ) : cardsOn && user && cardState !== undefined ? (
+                <button type="button" className="acct-edit" onClick={addCard} disabled={addingCard}>
+                  {addingCard ? 'Opening…' : 'Add a card'}
+                </button>
+              ) : null}
             </header>
             <div className="acct-row">
               <span>
                 <span className="acct-row-title">{card ? card.label : 'No saved card'}</span>
                 <span className="acct-row-sub">
                   {card
-                    ? `Saved ${new Date(card.savedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })} · one-tap entries. Held by PayFast; we never see the number.`
-                    : 'Tick "Save my card" at your next entry and the one after is one tap. Credit cards only; PayFast cannot save a debit or cheque card.'}
+                    ? `Saved ${new Date(card.savedAt).toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' })} · one-tap entries. Held by ${card.provider === 'stitch' ? 'Stitch' : 'PayFast'}; we never see the number.`
+                    : cardsOn
+                      ? 'No Apple Pay or Google Pay? Add a card here once and every entry is one tap. Your bank confirms it on a secure page; we never see the number.'
+                      : 'Tick "Save my card" at your next entry and the one after is one tap. Credit cards only; PayFast cannot save a debit or cheque card.'}
                 </span>
               </span>
             </div>

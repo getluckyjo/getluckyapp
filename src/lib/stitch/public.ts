@@ -19,6 +19,9 @@
  *   NEXT_PUBLIC_STITCH_GOOGLE_GATEWAY          the gateway name Google knows
  *                                              Stitch by; 'stitch' unless
  *                                              Stitch says otherwise
+ *   NEXT_PUBLIC_STITCH_CARDS=on                "Add a card" under Account,
+ *                                              held by Stitch, for golfers
+ *                                              with neither wallet
  */
 
 export interface GooglePayPublicConfig {
@@ -31,6 +34,8 @@ export interface GooglePayPublicConfig {
 export interface WalletPublicConfig {
   applePay: boolean
   googlePay: GooglePayPublicConfig | null
+  /** "Add a card" under Account, held by Stitch: NEXT_PUBLIC_STITCH_CARDS=on. */
+  cards: boolean
   merchantName: string
 }
 
@@ -42,6 +47,7 @@ export function walletPublicConfig(env: Record<string, string | undefined> = {
   NEXT_PUBLIC_GOOGLE_PAY_MERCHANT_ID: process.env.NEXT_PUBLIC_GOOGLE_PAY_MERCHANT_ID,
   NEXT_PUBLIC_GOOGLE_PAY_ENV: process.env.NEXT_PUBLIC_GOOGLE_PAY_ENV,
   NEXT_PUBLIC_STITCH_GOOGLE_GATEWAY: process.env.NEXT_PUBLIC_STITCH_GOOGLE_GATEWAY,
+  NEXT_PUBLIC_STITCH_CARDS: process.env.NEXT_PUBLIC_STITCH_CARDS,
   NEXT_PUBLIC_VERCEL_ENV: process.env.NEXT_PUBLIC_VERCEL_ENV,
 }): WalletPublicConfig {
   const applePay = (env.NEXT_PUBLIC_STITCH_APPLE_PAY ?? '').trim().toLowerCase() === 'on'
@@ -54,7 +60,8 @@ export function walletPublicConfig(env: Record<string, string | undefined> = {
   const googlePay: GooglePayPublicConfig | null = gatewayMerchantId && (environment === 'TEST' || merchantId)
     ? { gateway: (env.NEXT_PUBLIC_STITCH_GOOGLE_GATEWAY ?? '').trim() || 'stitch', gatewayMerchantId, merchantId, environment }
     : null
-  return { applePay, googlePay, merchantName: MERCHANT_NAME }
+  const cards = (env.NEXT_PUBLIC_STITCH_CARDS ?? '').trim().toLowerCase() === 'on'
+  return { applePay, googlePay, cards, merchantName: MERCHANT_NAME }
 }
 
 /** Rand with two decimals, the string both sheets want and the server sends Stitch. */

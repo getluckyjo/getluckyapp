@@ -71,11 +71,14 @@ const UNIQUE: Record<string, (string | string[])[]> = {
   icon_vote_snapshot: [['event_id', 'user_id']],
   fan_prize_winners: [['event_id', 'position'], ['event_id', 'user_id']],
   stitch_webhook_events: ['id'],
+  stitch_consent_requests: ['id'],
+  payment_cards: ['user_id'],
 }
 
 /** Column defaults the database applies and the routes rely on (migration 045: every ledger row has a provider). */
 const DEFAULTS: Record<string, Row> = {
   payfast_payments: { provider: 'payfast', provider_ref: null },
+  payment_cards: { provider: 'payfast' },
 }
 
 /** Midnight at the start of a golf day in South Africa (+02:00), as migration 029 reads plays_on. */
@@ -505,7 +508,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
       }
       // Mirrors migration 044: the cap check and the pending row as one step.
       if (fn === 'reserve_saved_card_charge') {
-        const a = args as { p_user_id: string; p_m_payment_id: string; p_course_id: string; p_hole_id: string; p_tier: string; p_amount_cents: number; p_cap_cents: number; p_window: string }
+        const a = args as { p_user_id: string; p_m_payment_id: string; p_course_id: string; p_hole_id: string; p_tier: string; p_amount_cents: number; p_cap_cents: number; p_window: string; p_provider?: string }
         const refuse = (message: string, hint: string, details = ''): Result => ({ data: null, error: { code: 'P0001', message, hint, details, name: 'PostgrestError' } as PostgrestError })
         if (!a.p_amount_cents || a.p_amount_cents <= 0) return refuse('BAD_AMOUNT', 'A charge needs a positive amount.')
         const windowMs = Number(String(a.p_window).replace(/\s*seconds?$/, '')) * 1000
@@ -514,7 +517,7 @@ export function createFakeClient(db: FakeDb, opts: FakeClientOptions = {}) {
           .filter(r => r.user_id === a.p_user_id && (r.raw_payload as { source?: string } | null)?.source === 'saved_card' && ['complete', 'pending', 'unknown'].includes(String(r.status)) && Date.parse(String(r.created_at)) >= since)
           .reduce((sum, r) => sum + (Number(r.amount_cents) || 0), 0)
         if (spent + a.p_amount_cents > a.p_cap_cents) return refuse('SAVED_CARD_LIMIT', 'Over the saved-card daily cap.', String(spent))
-        db.seed('payfast_payments', { m_payment_id: a.p_m_payment_id, user_id: a.p_user_id, course_id: a.p_course_id, hole_id: a.p_hole_id, tier: a.p_tier, amount_cents: a.p_amount_cents, status: 'pending', raw_payload: { source: 'saved_card' } })
+        db.seed('payfast_payments', { m_payment_id: a.p_m_payment_id, user_id: a.p_user_id, course_id: a.p_course_id, hole_id: a.p_hole_id, tier: a.p_tier, amount_cents: a.p_amount_cents, status: 'pending', provider: a.p_provider ?? 'payfast', raw_payload: { source: 'saved_card' } })
         return { data: spent, error: null }
       }
       // Mirrors migration 043: the whole freeze, or none of it; the hash v2

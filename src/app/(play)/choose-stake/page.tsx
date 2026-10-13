@@ -274,12 +274,24 @@ export default function ChooseStakePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tier: selected, courseId: selectedCourse.id, holeId: selectedHole.id }),
       })
-      const data = await res.json().catch(() => ({})) as { betId?: string; m_payment_id?: string; error?: string; code?: string }
+      const data = await res.json().catch(() => ({})) as { betId?: string; m_payment_id?: string; interactionUrl?: string | null; error?: string; code?: string }
       if (res.ok && data.betId && data.m_payment_id) {
         confirmPayment(data.m_payment_id)
         setBetId(data.betId)
         track('payment_saved_card', { tier: selected })
         router.push('/record')
+        return
+      }
+      if (res.status === 202 && data.m_payment_id) {
+        // A card held by Stitch whose bank wants its 3-D Secure step: off to
+        // the bank, back to the return page, which settles it.
+        confirmPayment(data.m_payment_id)
+        track('payment_saved_card', { tier: selected, three_ds: !!data.interactionUrl })
+        if (data.interactionUrl) {
+          window.location.assign(threeDsReturnUrl(data.interactionUrl, window.location.origin, data.m_payment_id))
+          return
+        }
+        router.push(`/payment-return?ref=${encodeURIComponent(data.m_payment_id)}`)
         return
       }
       if (res.status === 404) {
@@ -710,6 +722,11 @@ export default function ChooseStakePage() {
                       <input type="checkbox" checked={saveCard} onChange={e => setSaveCard(e.target.checked)} disabled={loading} />
                       <span>Save my card with PayFast for one-tap entries next time. Credit cards only: a debit or cheque card pays, but cannot be saved. You can remove it under Account.</span>
                     </label>
+                  )}
+                  {!savedCard && wallets.cards && (
+                    <p className="stake-free-note">
+                      No Apple Pay or Google Pay? <a href="/account">Add a card under Account</a> once and every entry is one tap.
+                    </p>
                   )}
                 </>
               )}

@@ -382,11 +382,18 @@ export interface Database {
         Update: { id?: string; event_type?: string; reference?: string | null; status?: string | null; received_at?: string }
         Relationships: []
       }
+      stitch_consent_requests: {
+        Row: { id: string; user_id: string; status: 'pending' | 'granted' | 'closed' | 'failed' | 'expired' | 'revoked'; created_at: string; updated_at: string }
+        Insert: { id: string; user_id: string; status?: 'pending' | 'granted' | 'closed' | 'failed' | 'expired' | 'revoked'; created_at?: string; updated_at?: string }
+        Update: { id?: string; user_id?: string; status?: 'pending' | 'granted' | 'closed' | 'failed' | 'expired' | 'revoked'; created_at?: string; updated_at?: string }
+        Relationships: []
+      }
       payment_cards: {
         Row: {
           user_id: string
           token: string
           label: string
+          provider: 'payfast' | 'stitch'
           created_at: string
           last_used_at: string | null
         }
@@ -394,6 +401,7 @@ export interface Database {
           user_id: string
           token: string
           label?: string
+          provider?: 'payfast' | 'stitch'
           created_at?: string
           last_used_at?: string | null
         }
@@ -401,6 +409,7 @@ export interface Database {
           user_id?: string
           token?: string
           label?: string
+          provider?: 'payfast' | 'stitch'
           created_at?: string
           last_used_at?: string | null
         }
@@ -920,7 +929,7 @@ export interface Database {
         Returns: string
       }
       reserve_saved_card_charge: {
-        Args: { p_user_id: string; p_m_payment_id: string; p_course_id: string; p_hole_id: string; p_tier: string; p_amount_cents: number; p_cap_cents: number; p_window: string }
+        Args: { p_user_id: string; p_m_payment_id: string; p_course_id: string; p_hole_id: string; p_tier: string; p_amount_cents: number; p_cap_cents: number; p_window: string; p_provider?: 'payfast' | 'stitch' }
         Returns: number
       }
       freeze_icon_event: {
