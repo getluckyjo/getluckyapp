@@ -109,6 +109,13 @@ const Body = z.object({
   userName: z.string().max(100).default(''),
   /** Tokenize the card at PayFast so the next entry is one tap (migration 021). */
   saveCard: z.boolean().default(false),
+  /**
+   * Go to PayFast's hosted page instead of the Onsite modal. The modal
+   * takes cards, Instant EFT and Masterpass only; Apple Pay, Google Pay and
+   * the other wallets live on the hosted page, so the Apple Pay button on
+   * the stake sheet asks for this.
+   */
+  hosted: z.boolean().default(false),
 })
 
 // ---------------------------------------------------------------------------
@@ -143,7 +150,7 @@ export async function POST(request: NextRequest) {
 
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
-    const { tier, courseId, holeId, userName, saveCard } = body.data
+    const { tier, courseId, holeId, userName, saveCard, hosted } = body.data
     const tierData = BET_TIERS.find(t => t.tier === tier)!
 
     // ── The target must be a real, active, long-enough par-3 at a partner course ──
@@ -193,9 +200,9 @@ export async function POST(request: NextRequest) {
     if (saveCard) data.subscription_type = '2'
 
     const signature = generateSignature(data, config.passphrase)
-    const onsite = await onsiteIdentifier(config, pfParamString(data, signature), mPaymentId)
+    const onsite = hosted ? null : await onsiteIdentifier(config, pfParamString(data, signature), mPaymentId)
 
-    log.info('payfast.checkout.created', { user_id: user.id, tier: tierData.tier, amount, course_id: courseId, hole_id: holeId, sandbox: config.sandbox, m_payment_id: mPaymentId, onsite: !!onsite, origin, save_card: saveCard })
+    log.info('payfast.checkout.created', { user_id: user.id, tier: tierData.tier, amount, course_id: courseId, hole_id: holeId, sandbox: config.sandbox, m_payment_id: mPaymentId, onsite: !!onsite, hosted, origin, save_card: saveCard })
 
     return NextResponse.json({
       redirectUrl:  config.processUrl,

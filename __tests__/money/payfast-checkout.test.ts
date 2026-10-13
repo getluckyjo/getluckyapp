@@ -258,6 +258,20 @@ describe('the signed checkout', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('hosted: true (the Apple Pay button) skips the Onsite identifier and answers the hosted-page fields', async () => {
+    asUser(USER_A); seedTarget()
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ uuid: 'abc-123' }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const res = await checkout({ ...good, hosted: true })
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.onsite).toBeNull()
+    expect(json.redirectUrl).toBe('https://sandbox.payfast.co.za/eng/process')
+    expect(json.formFields.currency).toBe('ZAR')
+    expect(json.formFields.payment_method).toBeUndefined()   // every method PayFast has on, Apple Pay included
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('429 RATE_LIMITED after ten checkouts in ten minutes for one user', async () => {
     asUser(USER_A); seedTarget()
     for (let i = 0; i < 10; i++) expect((await checkout(good)).status, `checkout ${i + 1}`).toBe(200)
