@@ -66,6 +66,7 @@ Preview:
 ## 4. Content and people
 
 - [ ] Every partner course: `is_partner` on, its par-3 holes active with distances, latitude and longitude set (Admin → Courses), and at least one club contact.
+- [ ] Card on file: migration 046 applied; `NEXT_PUBLIC_STITCH_CARDS=on` once Stitch has allowlisted `www.getluckyholeinone.com` as a redirect domain and the webhook subscription includes `payment-consent-request`.
 - [ ] Wallets: migration 045 applied; Stitch live client, Apple merchant id, domain file, webhook secret and the Google Pay ids set per `docs/stitch-go-live.md`; one real R50 Apple Pay entry on a phone. Without them the wallets stay off and PayFast carries everything.
 - [ ] Saved cards: migration 021 applied; PayFast Settings → Recurring Billing enabled with ad hoc payments (see `docs/payfast-go-live.md`).
 - [x] Only par 3s of 140 m or more are playable (`src/lib/holes.ts`; checkout refuses shorter holes, the app greys them out with the reason). Set by Johannes on 16 Sep 2026; 140 m counts.

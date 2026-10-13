@@ -8,6 +8,9 @@ import { assertNotSuspended, claimErrorResponse } from '@/lib/claims/state-machi
 import { grantBetForPayment } from '@/lib/claims/grant'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { chargeToken } from '@/lib/payfast/api'
+import { resolveStitchConfig } from '@/lib/stitch/config'
+import { initiateCardTransaction } from '@/lib/stitch/cards'
+import type { WalletOutcome } from '@/lib/stitch/api'
 import { SAVED_CARD_DAILY_CAP_CENTS, SAVED_CARD_MAX_STAKE_ZAR, SAVED_CARD_WINDOW_MS, savedCardAllowedForTier } from '@/lib/payfast/saved-card'
 import { checkTarget } from '@/lib/payfast/target'
 import { BET_TIERS } from '@/lib/tiers'
@@ -46,16 +49,16 @@ const Body = z.object({
  * SAVED_CARD_MAX_STAKE_ZAR only, and at most SAVED_CARD_DAILY_CAP_CENTS per
  * golfer in a rolling 24 hours. Over either bound the answer is 403
  * SAVED_CARD_LIMIT and the hosted checkout is the way to pay.
+ *
+ * The card row names its provider (migration 046). A PayFast token is
+ * charged as above. A Stitch consent (a card added under Account) goes to
+ * Stitch's initiateTransaction with the same ledger-first rule and the
+ * same bounds; when Stitch's bank wants a 3-D Secure step the answer is
+ * 202 THREE_DS with the bank's URL, the row stays pending, and the
+ * webhook or the return page settles it.
  */
 export async function POST(request: NextRequest) {
   try {
-    const cfg = resolvePayfastConfig()
-    if (!cfg.ok) {
-      await alertOps({ event: 'payfast.charge.misconfigured', path: 'payfast_checkout', summary: `Saved-card charge refused: ${cfg.reason}` })
-      return NextResponse.json({ error: 'Payments are not available right now.', code: 'PAYMENTS_UNAVAILABLE' }, { status: 503 })
-    }
-    const config = cfg.config
-
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
@@ -79,8 +82,17 @@ export async function POST(request: NextRequest) {
     if (refused) return refused
 
     const admin = createAdminClient()
-    const { data: card } = await admin.from('payment_cards').select('token').eq('user_id', user.id).maybeSingle()
+    const { data: card } = await admin.from('payment_cards').select('token, provider').eq('user_id', user.id).maybeSingle()
     if (!card) return NextResponse.json({ error: 'No saved card', code: 'NO_SAVED_CARD' }, { status: 404 })
+    const provider: 'payfast' | 'stitch' = card.provider === 'stitch' ? 'stitch' : 'payfast'
+
+    const pf = provider === 'payfast' ? resolvePayfastConfig() : null
+    const st = provider === 'stitch' ? resolveStitchConfig() : null
+    const cfgProblem = pf && !pf.ok ? pf.reason : st && !st.ok ? st.reason : null
+    if (cfgProblem) {
+      await alertOps({ event: `${provider}.charge.misconfigured`, path: 'payfast_checkout', summary: `Saved-card charge refused: ${cfgProblem}` })
+      return NextResponse.json({ error: 'Payments are not available right now.', code: 'PAYMENTS_UNAVAILABLE' }, { status: 503 })
+    }
 
     const mPaymentId = `gl_${randomUUID()}`
     const amountCents = tierData.stakeZAR * 100
@@ -98,6 +110,10 @@ export async function POST(request: NextRequest) {
       p_amount_cents: amountCents,
       p_cap_cents: SAVED_CARD_DAILY_CAP_CENTS,
       p_window: `${SAVED_CARD_WINDOW_MS / 1000} seconds`,
+      // Only a Stitch card names its provider: the PayFast call keeps the
+      // eight-argument shape, so it works before and after migration 046's
+      // function lands (a Stitch card cannot exist before it).
+      ...(provider === 'stitch' ? { p_provider: 'stitch' as const } : {}),
     })
     if (ledgerErr && ledgerErr.code === 'P0001' && ledgerErr.message === 'SAVED_CARD_LIMIT') {
       log.warn('payfast.charge.daily_cap', { user_id: user.id, tier: tierData.tier, spent_cents: Number(ledgerErr.details) || null, amount_cents: amountCents, cap_cents: SAVED_CARD_DAILY_CAP_CENTS })
@@ -110,6 +126,12 @@ export async function POST(request: NextRequest) {
       await alertOps({ event: 'payfast.charge.ledger_write_failed', path: 'payfast_checkout', summary: 'Could not write the pending ledger row before a saved-card charge; nothing was charged.', details: { user_id: user.id, m_payment_id: mPaymentId }, err: ledgerErr })
       return apiError('payfast.charge.ledger_write_failed', ledgerErr, { path: 'payfast_checkout', message: 'Could not start the payment. Please try again.' })
     }
+
+    if (provider === 'stitch' && st?.ok) {
+      return chargeStitchConsent({ admin, config: st.config, request, user, card, mPaymentId, amountCents, tier: tierData.tier })
+    }
+    if (!pf?.ok) throw new Error('unreachable: PayFast config resolved above')
+    const config = pf.config
 
     let charge
     try {
@@ -170,4 +192,79 @@ export async function POST(request: NextRequest) {
     if (known) return known
     return apiError('payfast.charge.failed', err, { path: 'payfast_checkout', message: 'Could not charge your saved card. Please try again.' })
   }
+}
+
+interface StitchChargeArgs {
+  admin: ReturnType<typeof createAdminClient>
+  config: Parameters<typeof initiateCardTransaction>[0]
+  request: NextRequest
+  user: { id: string; email?: string; created_at?: string; user_metadata?: Record<string, unknown> }
+  card: { token: string }
+  mPaymentId: string
+  amountCents: number
+  tier: string
+}
+
+/** The Stitch half of the charge: the pending row already exists. */
+async function chargeStitchConsent({ admin, config, request, user, card, mPaymentId, amountCents, tier }: StitchChargeArgs) {
+  let outcome: WalletOutcome
+  try {
+    outcome = await initiateCardTransaction(config, {
+      token: card.token,
+      amountCents,
+      reference: mPaymentId,
+      nonce: randomUUID(),
+      payer: { id: user.id, email: user.email ?? null, name: typeof user.user_metadata?.full_name === 'string' ? user.user_metadata.full_name : null, ip: clientIp(request) || null, createdAt: user.created_at ?? null },
+    })
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err)
+    const { error: unknownErr } = await admin
+      .from('payfast_payments')
+      .update({ status: 'unknown', raw_payload: { source: 'saved_card', provider: 'stitch', error: detail } })
+      .eq('m_payment_id', mPaymentId)
+      .eq('status', 'pending')
+    if (unknownErr) {
+      await alertOps({ event: 'stitch.charge.unknown_write_failed', path: 'payfast_checkout', summary: `Card-on-file charge ${mPaymentId} got no answer from Stitch and the ledger row could not be marked unknown; it is still pending.`, details: { user_id: user.id, m_payment_id: mPaymentId }, err: unknownErr })
+    }
+    log.warn('stitch.charge.unknown', { user_id: user.id, m_payment_id: mPaymentId, wallet: 'card', error: detail })
+    return NextResponse.json(
+      { error: 'We could not confirm the charge. Check your shots in a minute before paying again.', code: 'CHARGE_UNKNOWN', m_payment_id: mPaymentId },
+      { status: 409 },
+    )
+  }
+
+  if (outcome.state === 'failure') {
+    await admin.from('payfast_payments').update({ status: 'failed', provider_ref: outcome.id, raw_payload: { source: 'saved_card', provider: 'stitch', reason: outcome.reason, description: outcome.description } }).eq('m_payment_id', mPaymentId).eq('status', 'pending')
+    log.warn('stitch.charge.declined', { user_id: user.id, m_payment_id: mPaymentId, wallet: 'card', reason: outcome.reason, description: outcome.description })
+    return NextResponse.json(
+      { error: outcome.description ? `Your saved card was not charged: ${outcome.description}` : 'Your saved card was not charged.', code: 'CARD_DECLINED' },
+      { status: 402 },
+    )
+  }
+
+  if (outcome.state === 'pending') {
+    await admin.from('payfast_payments').update({ provider_ref: outcome.id, raw_payload: { source: 'saved_card', provider: 'stitch', pending: outcome.reason, three_ds: !!outcome.interactionUrl } }).eq('m_payment_id', mPaymentId).eq('status', 'pending')
+    log.info('stitch.charge.pending', { user_id: user.id, m_payment_id: mPaymentId, wallet: 'card', reason: outcome.reason, three_ds: !!outcome.interactionUrl })
+    return NextResponse.json(
+      { code: outcome.interactionUrl ? 'THREE_DS' : 'PAYMENT_PENDING', m_payment_id: mPaymentId, interactionUrl: outcome.interactionUrl },
+      { status: 202 },
+    )
+  }
+
+  const { error: completeErr } = await admin
+    .from('payfast_payments')
+    .update({ status: 'complete', provider_ref: outcome.id, raw_payload: { source: 'saved_card', provider: 'stitch', stitch_id: outcome.id } })
+    .eq('m_payment_id', mPaymentId)
+  if (completeErr) {
+    await alertOps({ event: 'stitch.charge.complete_write_failed', path: 'payfast_checkout', summary: `Card-on-file charge ${mPaymentId} succeeded at Stitch but the ledger could not be marked complete; the webhook will. Watch for the bet.`, details: { user_id: user.id, m_payment_id: mPaymentId }, err: completeErr })
+  }
+  await admin.from('payment_cards').update({ last_used_at: new Date().toISOString() }).eq('user_id', user.id)
+
+  const granted = await grantBetForPayment(admin, mPaymentId, { source: 'return', createdIpHash: hashIdentifier('ip', clientIp(request)) })
+  if (!granted.ok) {
+    log.warn('stitch.charge.bet_not_granted', { user_id: user.id, m_payment_id: mPaymentId, reason: granted.reason })
+    return NextResponse.json({ error: 'Paid, but your shot could not be set up yet.', code: granted.reason, m_payment_id: mPaymentId }, { status: 409 })
+  }
+  log.info('stitch.charge.completed', { user_id: user.id, m_payment_id: mPaymentId, bet_id: granted.betId, wallet: 'card', tier, amount_cents: amountCents })
+  return NextResponse.json({ betId: granted.betId, m_payment_id: mPaymentId })
 }

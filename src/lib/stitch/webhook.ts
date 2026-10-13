@@ -77,3 +77,26 @@ export function parseTransactionEvent(body: unknown): StitchTransactionEvent | n
   if (typeof d.id !== 'string' || typeof d.status !== 'string') return null
   return b as unknown as StitchTransactionEvent
 }
+
+/** A Stitch `payment-consent-request` webhook: the card on file was granted, revoked, expired or failed. */
+export interface StitchConsentEvent {
+  id: string
+  type: 'payment-consent-request'
+  data: {
+    id: string
+    status: string
+    nonce?: string | null
+    card?: unknown
+  }
+}
+
+export function parseConsentEvent(body: unknown): StitchConsentEvent | null {
+  if (!body || typeof body !== 'object') return null
+  const b = body as Record<string, unknown>
+  if (b.type !== 'payment-consent-request' || typeof b.id !== 'string') return null
+  const data = b.data
+  if (!data || typeof data !== 'object') return null
+  const d = data as Record<string, unknown>
+  if (typeof d.id !== 'string' || typeof d.status !== 'string') return null
+  return b as unknown as StitchConsentEvent
+}

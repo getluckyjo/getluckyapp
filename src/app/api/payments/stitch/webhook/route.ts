@@ -3,8 +3,10 @@ import type { NextRequest } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolveStitchConfig } from '@/lib/stitch/config'
 import { amountToCents } from '@/lib/stitch/api'
-import { parseTransactionEvent, verifySvixSignature } from '@/lib/stitch/webhook'
+import { parseConsentEvent, parseTransactionEvent, verifySvixSignature } from '@/lib/stitch/webhook'
 import { settleStitchTransaction } from '@/lib/stitch/settle'
+import { consentCardOf, consentStateOf } from '@/lib/stitch/cards'
+import { attachConsent, closeConsent, detachConsent } from '@/lib/stitch/consent-store'
 import { log } from '@/lib/observability/log'
 
 export const dynamic = 'force-dynamic'
@@ -26,6 +28,11 @@ export const dynamic = 'force-dynamic'
  * ops alert, never a bet. Everything is conditional on the row's current
  * status, so the charge route, this webhook and the cron cannot overwrite
  * each other's answer.
+ *
+ * `payment-consent-request` events are the card on file (migration 046):
+ * GRANTED attaches the card to the golfer who started that consent;
+ * REVOKED or EXPIRED removes it; FAILED or CANCELLED closes the request.
+ * A consent we never started is noted and ignored.
  */
 export async function POST(request: NextRequest) {
   const cfg = resolveStitchConfig()
@@ -56,13 +63,14 @@ export async function POST(request: NextRequest) {
   const admin = createAdminClient()
   const type = body && typeof body === 'object' && typeof (body as { type?: unknown }).type === 'string' ? (body as { type: string }).type : 'unknown'
   const event = parseTransactionEvent(body)
+  const consent = event ? null : parseConsentEvent(body)
 
   // Remember the delivery first; a duplicate id is a redelivery and stops here.
   const { error: dedupeErr } = await admin.from('stitch_webhook_events').insert({
     id: verdict.id,
     event_type: type,
-    reference: event?.data.externalReference ?? null,
-    status: event?.data.status ?? null,
+    reference: event?.data.externalReference ?? consent?.data.id ?? null,
+    status: event?.data.status ?? consent?.data.status ?? null,
   })
   if (dedupeErr) {
     if (dedupeErr.code === '23505') {
@@ -72,6 +80,21 @@ export async function POST(request: NextRequest) {
     // Could not record it: say so and let Svix retry, rather than act twice.
     log.error('stitch.webhook.dedupe_write_failed', dedupeErr, { path: 'payfast_itn', svix_id: verdict.id })
     return NextResponse.json({ error: 'Try again' }, { status: 500 })
+  }
+
+  if (consent) {
+    const { data: req } = await admin.from('stitch_consent_requests').select('id, user_id, status').eq('id', consent.data.id).maybeSingle()
+    if (!req) {
+      log.info('stitch.webhook.consent_not_ours', { svix_id: verdict.id, consent_id: consent.data.id, status: consent.data.status })
+      return NextResponse.json({ ok: true, ignored: true })
+    }
+    const state = consentStateOf(consent.data.status)
+    let result: string = 'noop'
+    if (state === 'granted') result = await attachConsent(admin, { consentId: req.id, userId: req.user_id, card: consentCardOf(consent.data.card), source: 'webhook' })
+    else if (state === 'revoked' || state === 'expired') result = (await detachConsent(admin, req.id, state)) ? 'detached' : state
+    else if (state === 'failed') { await closeConsent(admin, req.id, 'failed'); result = 'closed' }
+    log.info('stitch.webhook.consent_processed', { svix_id: verdict.id, consent_id: req.id, user_id: req.user_id, status: consent.data.status, result })
+    return NextResponse.json({ ok: true, result })
   }
 
   if (!event) {

@@ -30,6 +30,7 @@ export type AnalyticsEvent =
   | 'golf_day_calendar_added'
   | 'golf_day_swing_started'
   | 'card_removed'
+  | 'card_add_started'
   | 'bet_created'
   | 'result_declared'
   | 'claim_submitted'

@@ -106,13 +106,14 @@ export async function validateApplePayMerchant(config: StitchConfig, input: { va
 
 // ── Wallet transactions ───────────────────────────────────────────────────
 
-const INITIATE_WALLET = `
-mutation initiateWalletTransaction($input: TransactionInitiateInput!) {
+const INITIATE = `
+mutation initiateTransaction($input: TransactionInitiateInput!) {
   initiateTransaction(input: $input) {
     __typename
     id
     ... on ApplePayTransaction { interactionUrl state { __typename ... on TransactionPending { reason } ... on TransactionFailure { reason reasonDescription } } }
     ... on GooglePayTransaction { interactionUrl state { __typename ... on TransactionPending { reason } ... on TransactionFailure { reason reasonDescription } } }
+    ... on CardTransaction { interactionUrl state { __typename ... on TransactionPending { reason } ... on TransactionFailure { reason reasonDescription } } }
   }
 }`
 
@@ -166,11 +167,16 @@ export async function initiateWalletTransaction(config: StitchConfig, input: Wal
       metadata: { product: 'hole_in_one_entry', reference: input.reference },
     },
   }
+  return runInitiate(config, variables, { reference: input.reference, wallet: input.wallet, amount_cents: input.amountCents })
+}
+
+/** Send an initiateTransaction and map its answer; shared by the wallets and the card on file. */
+export async function runInitiate(config: StitchConfig, variables: Record<string, unknown>, fields: { reference: string; wallet: string; amount_cents: number }): Promise<WalletOutcome> {
   let data: InitiateData
   try {
-    data = await graphql<InitiateData>(config, ['transaction_initiate'], INITIATE_WALLET, variables)
+    data = await graphql<InitiateData>(config, ['transaction_initiate'], INITIATE, variables)
   } catch (err) {
-    log.warn('stitch.wallet.initiate_error', { reference: input.reference, wallet: input.wallet, error: err instanceof Error ? err.message : String(err) })
+    log.warn('stitch.wallet.initiate_error', { ...fields, error: err instanceof Error ? err.message : String(err) })
     throw err
   }
   const tx = data.initiateTransaction
@@ -179,7 +185,7 @@ export async function initiateWalletTransaction(config: StitchConfig, input: Wal
     typename === 'TransactionSuccess' ? { state: 'success', id: tx.id }
     : typename === 'TransactionPending' ? { state: 'pending', id: tx.id, interactionUrl: tx.interactionUrl ?? null, reason: tx.state?.reason ?? null }
     : { state: 'failure', id: tx.id ?? null, reason: tx.state?.reason ?? null, description: tx.state?.reasonDescription ?? null }
-  log.info('stitch.wallet.initiated', { reference: input.reference, wallet: input.wallet, amount_cents: input.amountCents, state: outcome.state, reason: 'reason' in outcome ? outcome.reason : null, stitch_id: tx.id ?? null })
+  log.info('stitch.wallet.initiated', { ...fields, state: outcome.state, reason: 'reason' in outcome ? outcome.reason : null, stitch_id: tx.id ?? null })
   return outcome
 }
 

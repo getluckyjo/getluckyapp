@@ -460,7 +460,8 @@ describe('reconciliation', () => {
 
 describe('the browser half', () => {
   it('is off without the public flags; Google Pay needs a merchant id in PRODUCTION', () => {
-    expect(walletPublicConfig({})).toEqual({ applePay: false, googlePay: null, merchantName: 'Get Lucky Golf' })
+    expect(walletPublicConfig({})).toEqual({ applePay: false, googlePay: null, cards: false, merchantName: 'Get Lucky Golf' })
+    expect(walletPublicConfig({ NEXT_PUBLIC_STITCH_CARDS: 'on' }).cards).toBe(true)
     expect(walletPublicConfig({ NEXT_PUBLIC_STITCH_APPLE_PAY: 'on', NEXT_PUBLIC_STITCH_GATEWAY_MERCHANT_ID: 'gm_1' })).toMatchObject({ applePay: true, googlePay: { gateway: 'stitch', gatewayMerchantId: 'gm_1', merchantId: null, environment: 'TEST' } })
     expect(walletPublicConfig({ NEXT_PUBLIC_STITCH_GATEWAY_MERCHANT_ID: 'gm_1', NEXT_PUBLIC_VERCEL_ENV: 'production' }).googlePay).toBeNull()
     expect(walletPublicConfig({ NEXT_PUBLIC_STITCH_GATEWAY_MERCHANT_ID: 'gm_1', NEXT_PUBLIC_GOOGLE_PAY_MERCHANT_ID: 'BCR2DN...', NEXT_PUBLIC_VERCEL_ENV: 'production', NEXT_PUBLIC_STITCH_GOOGLE_GATEWAY: 'stitchmoney' }).googlePay)

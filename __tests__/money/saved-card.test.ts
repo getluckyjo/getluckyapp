@@ -299,7 +299,7 @@ describe('/api/payments/card', () => {
     expect(await (await getCard()).json()).toEqual({ card: null })
     db.seed('payment_cards', { user_id: USER_A.id, token: TOKEN, label: 'Saved card', created_at: '2026-09-17T06:00:00Z', last_used_at: null })
     const { card } = await (await getCard()).json()
-    expect(card).toEqual({ label: 'Saved card', savedAt: '2026-09-17T06:00:00Z', lastUsedAt: null })
+    expect(card).toEqual({ label: 'Saved card', provider: 'payfast', savedAt: '2026-09-17T06:00:00Z', lastUsedAt: null })
     expect(JSON.stringify(card)).not.toContain(TOKEN)
   })
 

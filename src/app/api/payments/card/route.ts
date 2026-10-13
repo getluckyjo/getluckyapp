@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { cancelToken } from '@/lib/payfast/api'
+import { resolveStitchConfig } from '@/lib/stitch/config'
+import { revokeConsent } from '@/lib/stitch/cards'
 import { apiError } from '@/lib/api/http'
 import { log } from '@/lib/observability/log'
 
@@ -15,9 +17,9 @@ export async function GET() {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    const { data, error } = await supabase.from('payment_cards').select('label, created_at, last_used_at').eq('user_id', user.id).maybeSingle()
+    const { data, error } = await supabase.from('payment_cards').select('label, provider, created_at, last_used_at').eq('user_id', user.id).maybeSingle()
     if (error) throw error
-    return NextResponse.json({ card: data ? { label: data.label, savedAt: data.created_at, lastUsedAt: data.last_used_at } : null })
+    return NextResponse.json({ card: data ? { label: data.label, provider: data.provider ?? 'payfast', savedAt: data.created_at, lastUsedAt: data.last_used_at } : null })
   } catch (err) {
     return apiError('payments.card.read_failed', err, { message: 'Could not check your saved card.' })
   }
@@ -25,9 +27,10 @@ export async function GET() {
 
 /**
  * DELETE /api/payments/card — forget the saved card. The agreement is
- * cancelled at PayFast too, so the token can never be charged again even if
- * it were to leak; if PayFast cannot be reached the row still goes, and the
- * cancellation is logged for ops to repeat.
+ * cancelled at the provider too (PayFast's token, or Stitch's consent), so
+ * it can never be charged again even if it were to leak; if the provider
+ * cannot be reached the row still goes, and the cancellation is logged for
+ * ops to repeat.
  */
 export async function DELETE() {
   try {
@@ -36,21 +39,33 @@ export async function DELETE() {
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const admin = createAdminClient()
-    const { data: card } = await admin.from('payment_cards').select('token').eq('user_id', user.id).maybeSingle()
+    const { data: card } = await admin.from('payment_cards').select('token, provider').eq('user_id', user.id).maybeSingle()
     if (!card) return NextResponse.json({ removed: false })
 
-    const cfg = resolvePayfastConfig()
-    if (cfg.ok) {
-      try {
-        const result = await cancelToken(cfg.config, card.token)
-        if (!result.ok) log.warn('payments.card.cancel_refused', { user_id: user.id, status: result.status, message: result.message })
-      } catch (err) {
-        log.warn('payments.card.cancel_unreachable', { user_id: user.id, error: err instanceof Error ? err.message : String(err) })
+    if (card.provider === 'stitch') {
+      const cfg = resolveStitchConfig()
+      if (cfg.ok) {
+        try {
+          await revokeConsent(cfg.config, card.token)
+        } catch (err) {
+          log.warn('payments.card.revoke_unreachable', { user_id: user.id, provider: 'stitch', error: err instanceof Error ? err.message : String(err) })
+        }
+      }
+      await admin.from('stitch_consent_requests').update({ status: 'revoked', updated_at: new Date().toISOString() }).eq('id', card.token)
+    } else {
+      const cfg = resolvePayfastConfig()
+      if (cfg.ok) {
+        try {
+          const result = await cancelToken(cfg.config, card.token)
+          if (!result.ok) log.warn('payments.card.cancel_refused', { user_id: user.id, status: result.status, message: result.message })
+        } catch (err) {
+          log.warn('payments.card.cancel_unreachable', { user_id: user.id, error: err instanceof Error ? err.message : String(err) })
+        }
       }
     }
     const { error } = await admin.from('payment_cards').delete().eq('user_id', user.id)
     if (error) throw error
-    log.info('payments.card.removed', { user_id: user.id })
+    log.info('payments.card.removed', { user_id: user.id, provider: card.provider ?? 'payfast' })
     return NextResponse.json({ removed: true })
   } catch (err) {
     return apiError('payments.card.remove_failed', err, { message: 'Could not remove your saved card. Please try again.' })

@@ -131,6 +131,55 @@ With the test client in Preview:
 Then the live client in Production, redeploy (the `NEXT_PUBLIC_` values are
 baked at build), and one real R50 entry.
 
+## A card on the account (the fallback without a wallet)
+
+A golfer with neither Apple Pay nor Google Pay can add a card once, under
+Account → Payment → **Add a card**, and every entry after that is one
+tap. Migration 046.
+
+1. `POST /api/payments/card/stitch` creates a Stitch **payment consent
+   request** (`paymentConsentRequestCreate`, scope
+   `client_recurringpaymentconsentrequest`, an hour's expiry) and records
+   its id against the golfer in `stitch_consent_requests`.
+2. The golfer goes to Stitch's hosted page (`url` + our `redirect_uri`),
+   types the card, and the bank runs 3-D Secure there. We never see the
+   number.
+3. Back on `GET /api/payments/card/stitch/return?id=…&status=…` nothing in
+   the query string is believed: the id must be one this golfer started,
+   and Stitch is asked (`node(id)` → `PaymentConsentGranted`). Granted →
+   one `payment_cards` row, `provider = 'stitch'`, `token` = the consent
+   id, label "Visa •••• 1234". Closed or failed → nothing. Stitch
+   unreachable → Account says "being confirmed" and the webhook finishes.
+4. The `payment-consent-request` webhook (same endpoint, same secret;
+   add `"payment-consent-request"` to the subscription's `filterTypes`)
+   attaches on GRANTED, removes the card on REVOKED or EXPIRED, closes the
+   request on FAILED or CANCELLED.
+5. One tap: the existing `/api/payments/payfast/charge` reads the card
+   row's provider. A Stitch card is charged with `initiateTransaction`
+   and `token` = the consent id, ledger row first (`provider = 'stitch'`),
+   the same R250 stake and R2,500-a-day bounds. If Stitch's client-level
+   3-D Secure rule asks for a step, the answer is 202 THREE_DS and the
+   golfer goes to the bank and back to `/payment-return`.
+6. Remove: `DELETE /api/payments/card` revokes the consent at Stitch
+   (`paymentConsentRequestRevoke`) and deletes the row; the row goes even
+   when Stitch cannot be reached, and the failure is logged.
+
+Switch it on with `NEXT_PUBLIC_STITCH_CARDS=on` (build-time). It needs
+the same `STITCH_CLIENT_ID` and secret as the wallets, plus:
+
+- **The redirect domain allowlisted at Stitch**: `www.getluckyholeinone.com`
+  for the live client and the preview host for the test client. Test
+  clients allow `https://localhost:3000` by default; note the https, so
+  local testing wants a tunnel or an allowlisted preview.
+- **3-D Secure on consent charges**: ask Stitch what the client's rule is.
+  Our bounds assume no step on the one-tap charge; if the client enforces
+  it, every one-tap entry detours through the bank and back, which works
+  but is not one tap.
+
+The PayFast "Save my card" checkbox stays as it is; a golfer has one
+saved card, whichever provider holds it, and the start route refuses a
+second until the first is removed.
+
 ## Fees and settlement
 
 Stitch Express: 2.95% ex VAT per wallet transaction (confirm on the
@@ -141,7 +190,8 @@ statements reconcile apart.
 ## What Stitch does not do here
 
 - **Cards typed in.** Still PayFast's modal (3-D Secure, Instant EFT).
-- **The PayFast saved card.** Still PayFast's token; unchanged.
+- **The PayFast saved card.** Still PayFast's token; unchanged. A card
+  added under Account is Stitch's (above).
 - **Refunds.** The admin refund route is PayFast only. A Stitch refund is
   done from the Stitch dashboard for now; mark the ledger row by hand
   (`refunded_at`). A route can follow once there is one to do.
