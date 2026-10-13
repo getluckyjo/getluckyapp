@@ -6,6 +6,8 @@ import { requireCron } from '@/lib/cron-auth'
 import { drainOutbox } from '@/lib/outbox'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { reconcileUnknownPayments, type ReconcileResult } from '@/lib/payfast/reconcile'
+import { resolveStitchConfig, stitchEnabled } from '@/lib/stitch/config'
+import { reconcileStitchPayments, type StitchReconcileResult } from '@/lib/stitch/reconcile'
 import { log } from '@/lib/observability/log'
 
 export const dynamic = 'force-dynamic'
@@ -37,7 +39,23 @@ export async function GET(request: NextRequest) {
         reconcile = { error: true }
       }
     }
-    return NextResponse.json({ ...drained, reconcile })
+    // Wallet charges (Stitch) that got no answer, the same way. Off when
+    // Stitch is not configured at all; an error never fails the drain.
+    let stitch: StitchReconcileResult | { skipped: string } | { error: true }
+    const scfg = stitchEnabled() ? resolveStitchConfig() : null
+    if (!scfg) {
+      stitch = { skipped: 'stitch_off' }
+    } else if (!scfg.ok) {
+      stitch = { skipped: 'stitch_misconfigured' }
+    } else {
+      try {
+        stitch = await reconcileStitchPayments(admin, scfg.config)
+      } catch (err) {
+        log.error('stitch.reconcile.unhandled', err, { path: 'payfast_checkout' })
+        stitch = { error: true }
+      }
+    }
+    return NextResponse.json({ ...drained, reconcile, stitch })
   } catch (err) {
     return apiError('outbox.unhandled', err, { path: 'claim' })
   }

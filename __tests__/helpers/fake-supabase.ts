@@ -70,6 +70,12 @@ const UNIQUE: Record<string, (string | string[])[]> = {
   icon_events: ['slug'],
   icon_vote_snapshot: [['event_id', 'user_id']],
   fan_prize_winners: [['event_id', 'position'], ['event_id', 'user_id']],
+  stitch_webhook_events: ['id'],
+}
+
+/** Column defaults the database applies and the routes rely on (migration 045: every ledger row has a provider). */
+const DEFAULTS: Record<string, Row> = {
+  payfast_payments: { provider: 'payfast', provider_ref: null },
 }
 
 /** Midnight at the start of a golf day in South Africa (+02:00), as migration 029 reads plays_on. */
@@ -196,7 +202,7 @@ export class FakeDb {
   }
 
   seed(table: string, ...rows: Row[]): Row[] {
-    const stored = rows.map(r => ({ id: randomUUID(), created_at: new Date().toISOString(), ...r }))
+    const stored = rows.map(r => ({ id: randomUUID(), created_at: new Date().toISOString(), ...(DEFAULTS[table] ?? {}), ...r }))
     this.rows(table).push(...stored)
     return stored
   }
@@ -380,7 +386,7 @@ export class Builder implements PromiseLike<Result> {
         const incoming = Array.isArray(this.payload) ? this.payload : [this.payload as Row]
         const stored: Row[] = []
         for (const p of incoming) {
-          const row = { id: randomUUID(), created_at: new Date().toISOString(), ...p }
+          const row = { id: randomUUID(), created_at: new Date().toISOString(), ...(DEFAULTS[this.table] ?? {}), ...p }
           this.db.beforeInsert?.(this.table, row)
           const err = BEFORE_INSERT[this.table]?.(this.db, row) ?? this.uniqueViolation(row)
           if (err) return { data: null, error: err }
@@ -412,7 +418,7 @@ export class Builder implements PromiseLike<Result> {
           Object.assign(existing, p)
           return this.returning ? this.shape([existing]) : { data: null, error: null }
         }
-        const row = { id: randomUUID(), created_at: new Date().toISOString(), ...p }
+        const row = { id: randomUUID(), created_at: new Date().toISOString(), ...(DEFAULTS[this.table] ?? {}), ...p }
         const err = this.uniqueViolation(row)
         if (err) return { data: null, error: err }
         this.db.rows(this.table).push(row)

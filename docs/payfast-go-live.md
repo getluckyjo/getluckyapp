@@ -217,7 +217,11 @@ Settings → Payment methods → Apple Pay. There is no API to take an Apple
 Pay token directly, so a native Apple Pay sheet inside the app without
 PayFast's page is not possible with PayFast.
 
-What the app does (13 October 2026): on a device where Apple Pay is set up
+**Since 13 October 2026 the in-app Apple Pay and Google Pay sheets come
+from Stitch, not PayFast: see `docs/stitch-go-live.md`.** Until Stitch is
+switched on, what follows still applies.
+
+What the app does: on a device where Apple Pay is set up
 (Safari on iPhone, iPad or Mac; `window.ApplePaySession`), the stake sheet
 shows Apple's own black button under the usual one. It posts the checkout
 with `hosted: true`, the server skips the Onsite identifier, and the golfer
