@@ -54,6 +54,8 @@ describe('GET /api/courses', () => {
       'Atlantic Beach Golf Estate', 'Zimbali Country Club', 'Arabella Golf Club', 'Bellville Golf Club',
     ])
     expect(courses.map((c: { is_partner: boolean }) => c.is_partner)).toEqual([true, true, false, false])
+    // Cached on the phone and at the edge, stale for a day while revalidating.
+    expect(res.headers.get('Cache-Control')).toBe('public, max-age=300, s-maxage=300, stale-while-revalidate=86400')
   })
 
   it('flags holes shorter than 140m as not playable and lists the playable ones first', async () => {

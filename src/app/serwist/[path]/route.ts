@@ -23,6 +23,9 @@ export const { dynamic, dynamicParams, revalidate, generateStaticParams, GET } =
     '**/static/development/**',
     '**/*.hot-update.*',
     'public/marketing/**',
+    // A golf day's hero and logo are for the players of that day, not every
+    // golfer's install; the runtime image cache keeps them once seen.
+    'public/golf-days/**',
     'public/splash/**',
     'public/icons/**',
     'public/GLG_Indwe_FSP_Banner.png',

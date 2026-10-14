@@ -60,12 +60,21 @@ export const REMOTE_PHOTOS: [keyword: string, slug: string, url: string][] = [
 ]
 
 const localPath = (slug: string) => `/marketing/courses/${slug}.jpg`
+/** The 260 px WebP next to each photo, written by `npm run photos:thumbs`. */
+const thumbPath = (slug: string) => `/marketing/courses/thumbs/${slug}.webp`
 
 /** The committed photo for a course name, or null. */
 export function localCoursePhoto(name: string): string | null {
   const n = name.toLowerCase()
   const hit = LOCAL_PHOTOS.find(([kw]) => n.includes(kw))
   return hit ? localPath(hit[1]) : null
+}
+
+/** The committed thumbnail for a course name, or null. */
+export function localCourseThumb(name: string): string | null {
+  const n = name.toLowerCase()
+  const hit = LOCAL_PHOTOS.find(([kw]) => n.includes(kw))
+  return hit ? thumbPath(hit[1]) : null
 }
 
 /** The original photo on satop100courses.com for a course name, or null. */
@@ -82,4 +91,12 @@ export function remoteCoursePhoto(name: string): string | null {
 export function coursePhotoCandidates(name: string, dbUrl: string | null | undefined): string[] {
   const list = [localCoursePhoto(name), remoteCoursePhoto(name), dbUrl ?? null]
   return [...new Set(list.filter((u): u is string => !!u))]
+}
+
+/**
+ * The same list for an 86 px card, thumbnail first: ten kilobytes instead
+ * of three hundred, which on a golf course is a list instead of a spinner.
+ */
+export function courseThumbCandidates(name: string, dbUrl: string | null | undefined): string[] {
+  return [...new Set([localCourseThumb(name), ...coursePhotoCandidates(name, dbUrl)].filter((u): u is string => !!u))]
 }

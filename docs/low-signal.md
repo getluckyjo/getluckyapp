@@ -114,6 +114,42 @@ rate-limit counters and the profile read go to the database together,
 and the user and IP counters are bumped in parallel. One round trip
 fewer per request on a slow link.
 
+## The app opens with no signal
+
+The manifest starts the installed app at `/home?source=pwa`, not `/`:
+the root page reads the session cookie and redirects, which needs the
+network, so a cold launch from the icon in a dead spot showed the
+browser's error page. `/home` renders a signed-out state by itself and is
+in the worker's page cache, whose key drops `source`, `utm_*` and
+`fbclid`. `/` is network-only with the `/~offline` fallback.
+
+Once a golfer is signed in, `PlayRoutesWarmup` (mounted in `PwaChrome`)
+asks the worker to fetch the play screens as that golfer and keep each
+plain 200 in the page cache (`WARM_PAGES`), and prefetches their route
+payloads, once per session after the first paint. From the tee to the
+claim, every screen then opens without the network; the data calls on
+them are the retrying ones above.
+
+`NetworkBanner` says "No signal · your shot stays on your phone" when
+the browser reports offline, and "Slow connection · we keep trying" on a
+2G estimate or two timeouts in a row.
+
+## Lighter screens
+
+The course list shows the phone's last copy at once (`glg:courses:v1`,
+a day old at most) and refreshes it with a retrying GET; `/api/courses`
+returns only the columns the screen reads and is cached at the edge
+(`s-maxage=300`). The cards load 260 px WebP thumbnails
+(`npm run photos:thumbs`, `public/marketing/courses/thumbs/`), a tenth
+of the full photos. Sentry's browser bundle loads after the page has
+settled, with errors from the first seconds held and replayed. The claim
+screen validates witnesses with a hand-written check that the test holds
+to the zod schema, so zod stays on the server; a certificate photo is
+redrawn at 1600 px before it is uploaded, the upload has a 90 s timeout
+with a retry, and what was typed and uploaded is kept on the phone per
+bet until the claim is in. The display font is WOFF2 (29 KB, was 97 KB)
+and the brand SVGs are minified.
+
 ## Telemetry
 
 `footage_recorded { bytes, seconds, mime, ios }` on every recording. The
@@ -127,6 +163,13 @@ phone mid-upload, unlock, the progress resumes; airplane mode mid-upload,
 the chip says waiting, off again, it finishes; tap Home mid-upload,
 `bets.video_sha256` is still written; declare a miss while uploading, it
 still seals; kill the app mid-upload, relaunch, it resumes.
+
+Install, kill the app, airplane mode, launch from the icon: the app
+shell, not the browser's error page; Play shows the course list from the
+phone's copy; `/record` opens and the camera works. Back online, the
+course list refreshes. On the claim screen, pick a certificate photo,
+type a witness, background the app for a minute, return: both are still
+there.
 
 Saved-card Pay with the connection dropped as the request leaves (airplane
 mode right after the tap): the sheet says no connection, the tap again

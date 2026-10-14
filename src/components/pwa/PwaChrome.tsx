@@ -6,6 +6,8 @@ import SessionTracker from './SessionTracker'
 import InstallPrompt from './InstallPrompt'
 import FeedbackButton from './FeedbackButton'
 import UploadManagerBoot from './UploadManagerBoot'
+import NetworkBanner from './NetworkBanner'
+import PlayRoutesWarmup from './PlayRoutesWarmup'
 // Catches Chrome's install dialog from boot, for screens that offer it later.
 import '@/lib/pwa/install'
 
@@ -19,7 +21,8 @@ const FEEDBACK_ENABLED = process.env.NEXT_PUBLIC_FEEDBACK === 'on'
 
 /**
  * Everything the installed app mounts once, over every screen: the service
- * worker and its update toast, analytics, and the session-start beacon.
+ * worker and its update toast, the upload manager, the play-screen warm-up,
+ * the no-signal banner, analytics, and the session-start beacon.
  * Install prompts and the feedback button are added by the same component
  * so the root layout stays a one-liner.
  */
@@ -28,6 +31,8 @@ export default function PwaChrome() {
     <>
       <ServiceWorkerManager />
       <UploadManagerBoot />
+      <PlayRoutesWarmup />
+      <NetworkBanner />
       <SessionTracker />
       <InstallPrompt />
       {FEEDBACK_ENABLED && <FeedbackButton />}

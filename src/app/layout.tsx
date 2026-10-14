@@ -64,7 +64,7 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* The display face is on every screen's first paint; fetch it before the CSS asks. */}
-        <link rel="preload" href="/fonts/PosterGothicRoundATF-Heavy.otf" as="font" type="font/otf" crossOrigin="anonymous" />
+        <link rel="preload" href="/fonts/PosterGothicRoundATF-Heavy.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
         {/* Body fonts from Google, loaded by <FontLoader/> after hydration so
             the stylesheet never blocks first paint (display=swap covers the
             gap); the noscript copy keeps it for browsers without JS. */}
