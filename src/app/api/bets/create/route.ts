@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { BET_TIERS } from '@/lib/tiers'
-import { assertNotSuspended, claimErrorResponse } from '@/lib/claims/state-machine'
+import { claimErrorResponse } from '@/lib/claims/state-machine'
+import { ageRefusal, assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
 import { grantBetForPayment } from '@/lib/claims/grant'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { RULES, clientIp } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { hashIdentifier } from '@/lib/risk/hash'
@@ -26,33 +26,18 @@ const Body = z.object({
 export async function POST(request: NextRequest) {
   try {
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-    const limited = await enforceRateLimit(RULES.betCreate, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
+    const gate = await gatePlayRequest(request, RULES.betCreate)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
     const { paymentIntentId } = body.data
 
-    await assertNotSuspended(supabase, user.id)
+    assertProfileNotSuspended(profile)
 
     // ── Age gate: no real-money bet without a passed 18+ verification ──
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('age_verified_at')
-      .eq('id', user.id)
-      .single()
-
-    if (!profile?.age_verified_at) {
-      return NextResponse.json(
-        { error: 'Age verification required', code: 'AGE_NOT_VERIFIED' },
-        { status: 403 },
-      )
-    }
+    const underage = ageRefusal(profile)
+    if (underage) return underage
 
     // ── Idempotency guard: return the existing bet if this payment already
     // produced one. payment_intent_id is our reference and is never rewritten

@@ -3,6 +3,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
+import { NetError, fetchJson, netErrorMessage } from '@/lib/net/fetch-json'
+import { browserOnline, whenOnline } from '@/lib/net/online'
 import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
@@ -58,39 +60,52 @@ export default function PaymentReturnPage() {
   async function createBetWhenPaymentConfirms(
     payload: { courseId?: string; holeId?: string; tier?: string; m_payment_id: string },
   ): Promise<{ betId: string }> {
-    const delaysMs = [0, 1500, 2500, 4000, 6000, 8000, 10000]
+    // Longer at the tail than before: on a course the signal, not PayFast,
+    // is usually what is slow, and a lost request counts as "still waiting".
+    const delaysMs = [0, 1500, 2500, 4000, 6000, 8000, 10000, 15000, 20000]
+    // The first attempt waits for signal rather than failing at once.
+    await whenOnline(browserOnline, 30_000)
 
     for (let attempt = 0; attempt < delaysMs.length; attempt++) {
       if (delaysMs[attempt]) await new Promise(r => setTimeout(r, delaysMs[attempt]))
 
       // Course, hole and tier are advisory; the server builds the bet from
       // the ledger row the reference names. Send them only when known.
-      const res = await fetch('/api/bets/create', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentIntentId: payload.m_payment_id,
-          ...(payload.courseId ? { courseId: payload.courseId } : {}),
-          ...(payload.holeId   ? { holeId:   payload.holeId }   : {}),
-          ...(payload.tier     ? { tier:     payload.tier }     : {}),
-        }),
-      })
+      // /api/bets/create is idempotent on the reference, so it is safe to retry.
+      let status: number
+      let data: { betId?: string; error?: string }
+      try {
+        ;({ status, data } = await fetchJson<{ betId?: string; error?: string }>('/api/bets/create', {
+          method: 'POST',
+          retries: 2,
+          timeoutMs: 12_000,
+          body: {
+            paymentIntentId: payload.m_payment_id,
+            ...(payload.courseId ? { courseId: payload.courseId } : {}),
+            ...(payload.holeId   ? { holeId:   payload.holeId }   : {}),
+            ...(payload.tier     ? { tier:     payload.tier }     : {}),
+          },
+        }))
+      } catch (err) {
+        if (err instanceof NetError && err.transient) {
+          // No answer: the payment may well be confirmed; keep asking.
+          setWaiting(true)
+          continue
+        }
+        if (err instanceof NetError && err.status === 401) throw new SignInNeeded(payload.m_payment_id)
+        const message = err instanceof NetError && err.kind === 'http' ? err.message : netErrorMessage(err)
+        console.error('[PaymentReturn] Bet creation failed:', err)
+        throw new Error(message || 'Could not register your shot. Please contact support.')
+      }
 
-      // 202 is inside the "ok" range, so it has to be checked before res.ok
+      // 202 is inside the "ok" range, so it has to be checked before 200
       // or a pending payment would be treated as a created bet.
-      if (res.status === 202) {
+      if (status === 202) {
         setWaiting(true)
         continue
       }
-
-      if (res.ok) return res.json()
-
-      if (res.status === 401) throw new SignInNeeded(payload.m_payment_id)
-
-      const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-
-      console.error('[PaymentReturn] Bet creation failed:', err)
-      throw new Error(err.error ?? 'Could not register your shot. Please contact support.')
+      if (data.betId) return { betId: data.betId }
+      throw new Error(data.error ?? 'Could not register your shot. Please contact support.')
     }
 
     throw new PaymentTimeout(payload.m_payment_id)

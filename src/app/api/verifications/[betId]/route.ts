@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
-import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { RULES, clientIp } from '@/lib/rate-limit'
+import { assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
 import {
-  OPEN_VERIFICATION_STATUSES, ClaimError, assertNotSuspended, assertOpen, claimErrorResponse, transitionBet,
+  OPEN_VERIFICATION_STATUSES, ClaimError, assertOpen, claimErrorResponse, transitionBet,
 } from '@/lib/claims/state-machine'
 import { z } from 'zod'
 import { apiError, parseBody } from '@/lib/api/http'
@@ -17,7 +18,7 @@ import { WitnessesSchema, hasPlayingPartner, replaceWitnesses, witnessesForBet }
 import { hashIdentifier } from '@/lib/risk/hash'
 import { tryRefreshClaimRisk } from '@/lib/risk/rules'
 import { attachCourseContacts } from '@/lib/claims/confirmation'
-import { enqueue } from '@/lib/outbox'
+import { enqueueOnce } from '@/lib/outbox'
 
 const Body = z.object({
   certificatePath: z.string().max(500).nullable().optional(),
@@ -100,13 +101,9 @@ export async function POST(
   try {
     const { betId } = await params
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    const limited = await enforceRateLimit(RULES.claim, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
+    const gate = await gatePlayRequest(request, RULES.claim)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
     const { certificatePath, affidavitPath, witnesses } = body.data
@@ -133,7 +130,7 @@ export async function POST(
       }
     }
 
-    await assertNotSuspended(supabase, user.id)
+    assertProfileNotSuspended(profile)
 
     const admin = createAdminClient()
     const { data: existing } = await admin
@@ -214,9 +211,17 @@ export async function POST(
         ? { affidavit_path: affidavitPath, affidavit_sha256: seals.affidavit.sha256, affidavit_bytes: seals.affidavit.bytes }
         : {}),
     }
-    const { data: saved, error } = existing
+    let { data: saved, error } = existing
       ? await admin.from('verifications').update(record).eq('id', existing.id).select('id').single()
       : await admin.from('verifications').insert({ bet_id: betId, ...record }).select('id').single()
+
+    // Two submissions that raced (a retry on a bad link, two taps): the
+    // second finds the first's row and updates it, as a resubmission would.
+    if (!existing && error?.code === '23505') {
+      log.info('claim.submit_raced', { user_id: user.id, bet_id: betId })
+      const { data: theirs } = await admin.from('verifications').select('id').eq('bet_id', betId).maybeSingle()
+      if (theirs) ({ data: saved, error } = await admin.from('verifications').update(record).eq('id', theirs.id).select('id').single())
+    }
 
     if (error || !saved) {
       await alertOps({ event: 'claim.submit_failed', path: 'claim', summary: 'A hole-in-one claim could not be recorded.', details: { user_id: user.id, bet_id: betId }, err: error })
@@ -230,7 +235,7 @@ export async function POST(
     try {
       if (namedNow.length > 0) await replaceWitnesses(admin, betId, saved.id, namedNow)
       await attachCourseContacts(admin, betId, saved.id, bet.course_id)
-      await enqueue(admin, 'witness_request', { betId })
+      await enqueueOnce(admin, 'witness_request', { betId }, 'betId')
     } catch (err) {
       log.error('claim.witnesses_write_failed', err, { path: 'claim', user_id: user.id, bet_id: betId })
     }

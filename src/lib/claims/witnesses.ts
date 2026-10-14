@@ -79,7 +79,9 @@ export async function replaceWitnesses(admin: SupabaseClient<Database>, betId: s
       }
     } else {
       const { error } = await admin.from('claim_witnesses').insert({ bet_id: betId, verification_id: verificationId, role: w.role, name: w.name, email: w.email, source: 'claimant' })
-      if (error) throw error
+      // 23505: a submission that raced this one named the same person
+      // (migration 047's unique). Their row stands.
+      if (error && error.code !== '23505') throw error
     }
   }
 }

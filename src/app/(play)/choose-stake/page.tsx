@@ -13,6 +13,8 @@ import { FREE_TIER, PROMO_TIER, tierByKey } from '@/lib/tiers'
 import { SAVED_CARD_MAX_STAKE_ZAR, savedCardAllowedForTier } from '@/lib/payfast/saved-card'
 import { useAuth } from '@/context/AuthContext'
 import { formatRand } from '@/lib/format'
+import { netErrorMessage } from '@/lib/net/fetch-json'
+import { chargeKey, clearChargeKey, postForOutcome, settlesCharge } from '@/lib/client/charge-key'
 
 type LoadingStep = 'idle' | 'opening' | 'paying'
 
@@ -156,14 +158,13 @@ export default function ChooseStakePage() {
     setErrorMsg('')
     selectTier(FREE_TIER.tier)
     try {
-      const res = await fetch('/api/bets/free', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ courseId: selectedCourse.id, holeId: selectedHole.id }),
-      })
-      const data = await res.json().catch(() => ({})) as { betId?: string; error?: string; code?: string }
+      // Safe to retry: the server keeps one free swing per account and, when
+      // the first answer was lost on the way back, says which bet it made.
+      const { status, data } = await postForOutcome<{ betId?: string; status?: string | null; error?: string; code?: string }>(
+        '/api/bets/free', { courseId: selectedCourse.id, holeId: selectedHole.id }, { retries: 2, timeoutMs: 15_000 },
+      )
 
-      if (res.ok && data.betId) {
+      if (status === 200 && data.betId) {
         setBetId(data.betId)
         track('free_swing_started', { tier: FREE_TIER.tier })
         router.push('/record')
@@ -175,6 +176,12 @@ export default function ChooseStakePage() {
         return
       }
       if (data.code === 'FREE_SWING_USED') {
+        if (data.betId && data.status === 'active') {
+          // Our own request got through and its answer did not: carry on.
+          setBetId(data.betId)
+          router.push('/record')
+          return
+        }
         // Already taken — on another device, or a second tap. The card goes
         // away behind the sheet; the message in the sheet says why.
         if (user) setFreeSwing({ userId: user.id, value: { eligible: false, used: true, ageVerified: true } })
@@ -185,8 +192,8 @@ export default function ChooseStakePage() {
       }
       setErrorMsg(data.error ?? 'Your free swing could not be started. Please try again.')
       setStep('idle')
-    } catch {
-      setErrorMsg('Your free swing could not be started. Please try again.')
+    } catch (err) {
+      setErrorMsg(netErrorMessage(err, 'Your free swing could not be started. Please try again.'))
       setStep('idle')
     }
   }
@@ -228,14 +235,13 @@ export default function ChooseStakePage() {
     setErrorMsg('')
     selectTier(PROMO_TIER.tier)
     try {
-      const res = await fetch('/api/bets/promo', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: promoSwing.code, courseId: selectedCourse.id, holeId: selectedHole.id }),
-      })
-      const data = await res.json().catch(() => ({})) as { betId?: string; error?: string; code?: string }
+      // Safe to retry: one swing per golfer per code, and a lost answer comes
+      // back as the bet already made.
+      const { status, data } = await postForOutcome<{ betId?: string; status?: string | null; error?: string; code?: string }>(
+        '/api/bets/promo', { code: promoSwing.code, courseId: selectedCourse.id, holeId: selectedHole.id }, { retries: 2, timeoutMs: 15_000 },
+      )
 
-      if (res.ok && data.betId) {
+      if (status === 200 && data.betId) {
         setBetId(data.betId)
         track('promo_swing_started', { tier: PROMO_TIER.tier })
         router.push('/record')
@@ -245,6 +251,12 @@ export default function ChooseStakePage() {
         router.push('/age-check')
         return
       }
+      if (data.code === 'PROMO_CODE_USED' && data.betId && data.status === 'active') {
+        // Our own request got through and its answer did not: carry on.
+        setBetId(data.betId)
+        router.push('/record')
+        return
+      }
       if (data.code?.startsWith('PROMO_CODE_')) {
         // Used up, switched off or already played since it was checked. The
         // card goes away behind the sheet; the message in the sheet says why.
@@ -252,8 +264,8 @@ export default function ChooseStakePage() {
       }
       setErrorMsg(data.error ?? 'Your promo swing could not be started. Please try again.')
       setStep('idle')
-    } catch {
-      setErrorMsg('Your promo swing could not be started. Please try again.')
+    } catch (err) {
+      setErrorMsg(netErrorMessage(err, 'Your promo swing could not be started. Please try again.'))
       setStep('idle')
     }
   }
@@ -264,13 +276,17 @@ export default function ChooseStakePage() {
     setStep('paying')
     setErrorMsg('')
     selectTier(selected)
+    // One key for this purchase: a retry after a lost answer is the same
+    // charge, replayed by the server, never a second one.
+    const keyScope = `saved:${selected}:${selectedHole.id}`
     try {
-      const res = await fetch('/api/payments/payfast/charge', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier: selected, courseId: selectedCourse.id, holeId: selectedHole.id }),
-      })
-      const data = await res.json().catch(() => ({})) as { betId?: string; m_payment_id?: string; interactionUrl?: string | null; error?: string; code?: string }
+      const { status, data } = await postForOutcome<{ betId?: string; m_payment_id?: string; interactionUrl?: string | null; error?: string; code?: string }>(
+        '/api/payments/payfast/charge',
+        { tier: selected, courseId: selectedCourse.id, holeId: selectedHole.id },
+        { idempotencyKey: chargeKey(keyScope), retries: 3, timeoutMs: 20_000 },
+      )
+      if (settlesCharge(status, data)) clearChargeKey(keyScope)
+      const res = { ok: status >= 200 && status < 300, status }
       if (res.ok && data.betId && data.m_payment_id) {
         confirmPayment(data.m_payment_id)
         setBetId(data.betId)
@@ -318,8 +334,10 @@ export default function ChooseStakePage() {
       }
       setErrorMsg(data.error ?? 'Your saved card could not be charged. Pay another way below.')
       setStep('idle')
-    } catch {
-      setErrorMsg('Your saved card could not be charged. Pay another way below.')
+    } catch (err) {
+      // No answer at all. The key is kept: tapping again sends the same
+      // charge, and the server answers from the ledger if it went through.
+      setErrorMsg(netErrorMessage(err, 'Your saved card could not be charged. Pay another way below.'))
       setStep('idle')
     }
   }

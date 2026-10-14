@@ -27,7 +27,8 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { PROMO_TIER } from '@/lib/tiers'
-import { assertNotSuspended, claimErrorResponse, computeExpiresAt } from '@/lib/claims/state-machine'
+import { claimErrorResponse, computeExpiresAt } from '@/lib/claims/state-machine'
+import { ageRefusal, assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
 import { checkTarget } from '@/lib/payfast/target'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import { log } from '@/lib/observability/log'
@@ -49,12 +50,22 @@ const TIER = {
   label: PROMO_TIER.label,
 }
 
-function refuse(refusal: PromoRefusal): NextResponse {
+function refuse(refusal: PromoRefusal, extra: Record<string, unknown> = {}): NextResponse {
   const { status, error } = PROMO_REFUSALS[refusal]
-  return NextResponse.json({ error, code: refusal }, { status })
+  return NextResponse.json({ error, code: refusal, ...extra }, { status })
 }
 
-type Found = { ok: true; code: PromoCodeRow } | { ok: false; refusal: PromoRefusal }
+/**
+ * "Code already used", with the bet it refers to. A phone that sent the
+ * request twice because the first answer was lost on a bad link gets the
+ * bet it made, and carries on to the recorder when it is still active.
+ */
+async function usedResponse(admin: ReturnType<typeof createAdminClient>, promoCodeId: string, userId: string): Promise<NextResponse> {
+  const { data: bet } = await admin.from('bets').select('id, status').eq('user_id', userId).eq('promo_code_id', promoCodeId).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return refuse('PROMO_CODE_USED', { betId: bet?.id ?? null, status: bet?.status ?? null })
+}
+
+type Found = { ok: true; code: PromoCodeRow } | { ok: false; refusal: PromoRefusal; bet?: { id: string; status: string } }
 
 /**
  * The code, if this golfer can play it now. Codes are read with the service
@@ -79,12 +90,13 @@ async function lookUp(
 
   const [{ count, error: countError }, { data: mine }] = await Promise.all([
     admin.from('bets').select('id', { count: 'exact', head: true }).eq('promo_code_id', found.id),
-    supabase.from('bets').select('id').eq('user_id', userId).eq('promo_code_id', found.id).limit(1).maybeSingle(),
+    supabase.from('bets').select('id, status').eq('user_id', userId).eq('promo_code_id', found.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
   ])
   if (countError) throw countError
 
   // "You already had yours" is the truer answer than "they have all gone".
-  if (mine) return { ok: false, refusal: 'PROMO_CODE_USED' }
+  // The bet rides along: a retry after a lost answer carries on to it.
+  if (mine) return { ok: false, refusal: 'PROMO_CODE_USED', bet: mine }
   const refusal = codeRefusal(found, count ?? 0)
   if (refusal) return { ok: false, refusal }
   return { ok: true, code: found }
@@ -121,7 +133,7 @@ export async function GET(request: NextRequest) {
     const found = await lookUp(createAdminClient(), supabase, user.id, query.data.code)
     if (!found.ok) {
       logRefusal(user.id, found.refusal, 'check')
-      return refuse(found.refusal)
+      return refuse(found.refusal, found.bet ? { betId: found.bet.id, status: found.bet.status } : {})
     }
     return NextResponse.json({ code: found.code.code, expiresAt: found.code.expires_at, tier: TIER })
   } catch (err) {
@@ -136,39 +148,25 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-    const limited = await enforceRateLimit(RULES.promo, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
+    const gate = await gatePlayRequest(request, RULES.promo)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
 
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
     const { courseId, holeId } = body.data
 
-    await assertNotSuspended(supabase, user.id)
+    assertProfileNotSuspended(profile)
 
     // ── 18+, same as any other entry. The prize is real money. ──
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('age_verified_at')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (!profile?.age_verified_at) {
-      return NextResponse.json(
-        { error: 'Age verification required', code: 'AGE_NOT_VERIFIED' },
-        { status: 403 },
-      )
-    }
+    const underage = ageRefusal(profile)
+    if (underage) return underage
 
     const admin = createAdminClient()
     const found = await lookUp(admin, supabase, user.id, body.data.code)
     if (!found.ok) {
       logRefusal(user.id, found.refusal, 'play')
-      return refuse(found.refusal)
+      return refuse(found.refusal, found.bet ? { betId: found.bet.id, status: found.bet.status } : {})
     }
     const promo = found.code
 
@@ -200,7 +198,7 @@ export async function POST(request: NextRequest) {
       // or a second device. Not an error worth a 500.
       if (error.code === '23505') {
         log.info('bets.promo.duplicate_refused', { user_id: user.id, promo_code_id: promo.id })
-        return refuse('PROMO_CODE_USED')
+        return usedResponse(admin, promo.id, user.id)
       }
       // The trigger: the last use went to someone else between our count
       // and the insert, or the code was switched off or ran out of date.

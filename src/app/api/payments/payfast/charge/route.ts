@@ -2,9 +2,9 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { assertNotSuspended, claimErrorResponse } from '@/lib/claims/state-machine'
+import { claimErrorResponse } from '@/lib/claims/state-machine'
+import { assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
 import { grantBetForPayment } from '@/lib/claims/grant'
 import { resolvePayfastConfig } from '@/lib/payfast/config'
 import { chargeToken } from '@/lib/payfast/api'
@@ -14,12 +14,13 @@ import type { WalletOutcome } from '@/lib/stitch/api'
 import { SAVED_CARD_DAILY_CAP_CENTS, SAVED_CARD_MAX_STAKE_ZAR, SAVED_CARD_WINDOW_MS, savedCardAllowedForTier } from '@/lib/payfast/saved-card'
 import { checkTarget } from '@/lib/payfast/target'
 import { BET_TIERS } from '@/lib/tiers'
-import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { RULES, clientIp } from '@/lib/rate-limit'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { hashIdentifier } from '@/lib/risk/hash'
 import { log } from '@/lib/observability/log'
 import type { Json } from '@/types/database'
 import { alertOps } from '@/lib/observability/alerts'
+import { findByIdempotencyKey, isIdempotencyConflict, readIdempotencyKey, replayCharge } from '@/lib/payments/idempotency'
 
 const Body = z.object({
   tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]),
@@ -59,17 +60,24 @@ const Body = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    const limited = await enforceRateLimit(RULES.checkout, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
-    await assertNotSuspended(supabase, user.id)
+    const gate = await gatePlayRequest(request, RULES.checkout)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
+    assertProfileNotSuspended(profile)
 
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
     const { tier, courseId, holeId } = body.data
     const tierData = BET_TIERS.find(t => t.tier === tier)!
+
+    // A retry after a lost answer, or a second tap: the first row answers.
+    const idem = readIdempotencyKey(request)
+    if (idem.response) return idem.response
+    const adminEarly = createAdminClient()
+    if (idem.key) {
+      const earlier = await findByIdempotencyKey(adminEarly, user.id, idem.key)
+      if (earlier) return replayCharge(adminEarly, earlier, { userId: user.id, createdIpHash: hashIdentifier('ip', clientIp(request)), declined: 'Your saved card was not charged.' })
+    }
     if (!savedCardAllowedForTier(tierData)) {
       log.warn('payfast.charge.stake_over_limit', { user_id: user.id, tier: tierData.tier, stake_zar: tierData.stakeZAR })
       return NextResponse.json(
@@ -125,6 +133,20 @@ export async function POST(request: NextRequest) {
     if (ledgerErr) {
       await alertOps({ event: 'payfast.charge.ledger_write_failed', path: 'payfast_checkout', summary: 'Could not write the pending ledger row before a saved-card charge; nothing was charged.', details: { user_id: user.id, m_payment_id: mPaymentId }, err: ledgerErr })
       return apiError('payfast.charge.ledger_write_failed', ledgerErr, { path: 'payfast_checkout', message: 'Could not start the payment. Please try again.' })
+    }
+
+    // Stamp the key on the reserved row. A duplicate that raced past the
+    // lookup above is caught here by the unique index: this row has
+    // charged nothing yet, so it goes and the first one answers.
+    if (idem.key) {
+      const { error: keyErr } = await admin.from('payfast_payments').update({ idempotency_key: idem.key }).eq('m_payment_id', mPaymentId)
+      if (isIdempotencyConflict(keyErr)) {
+        await admin.from('payfast_payments').delete().eq('m_payment_id', mPaymentId).eq('status', 'pending')
+        const earlier = await findByIdempotencyKey(admin, user.id, idem.key)
+        if (earlier) return replayCharge(admin, earlier, { userId: user.id, createdIpHash: hashIdentifier('ip', clientIp(request)), declined: 'Your saved card was not charged.' })
+      } else if (keyErr) {
+        log.warn('payfast.charge.key_write_failed', { user_id: user.id, m_payment_id: mPaymentId, error: keyErr.message })
+      }
     }
 
     if (provider === 'stitch' && st?.ok) {

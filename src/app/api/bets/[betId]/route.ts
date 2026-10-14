@@ -4,8 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
-import { assertNotSuspended, assertOpen, claimErrorResponse, transitionBet } from '@/lib/claims/state-machine'
-import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { assertOpen, claimErrorResponse, transitionBet } from '@/lib/claims/state-machine'
+import { assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
+import { RULES } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { apiError, parseBody } from '@/lib/api/http'
 
@@ -26,13 +27,9 @@ export async function PATCH(
   try {
     const { betId } = await params
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-    const limited = await enforceRateLimit(RULES.claim, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
+    const gate = await gatePlayRequest(request, RULES.claim)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
     const { status } = body.data
@@ -55,7 +52,7 @@ export async function PATCH(
       return NextResponse.json({ success: true, alreadyDone: true })
     }
 
-    await assertNotSuspended(supabase, user.id)
+    assertProfileNotSuspended(profile)
     assertOpen(bet)
 
     await transitionBet(createAdminClient(), {

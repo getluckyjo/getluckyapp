@@ -186,6 +186,41 @@ describe('POST /api/verifications/[betId] — submitting a claim', () => {
     expect((await submit('any')).status).toBe(401)
   })
 
+  it('a second submission that raced the first (a retry on a bad link) updates its row: 200, one verification, one witness', async () => {
+    asUser()
+    const bet = ownBet()
+    const c = cert(bet), a = aff(bet)
+    // Just as this request inserts, its twin has already opened the verification.
+    db.beforeInsert = table => {
+      if (table !== 'verifications') return
+      db.beforeInsert = null
+      db.seed('verifications', { bet_id: bet.id, status: 'documents_received', certificate_path: c, affidavit_path: a, updated_by: USER_A.id })
+    }
+    const res = await submit(bet.id as string, { witnesses: PARTNER, certificatePath: c, affidavitPath: a })
+    expect(res.status).toBe(200)
+    expect(db.rows('verifications')).toHaveLength(1)
+    expect(db.rows('verifications')[0]).toMatchObject({ bet_id: bet.id, status: 'documents_received', certificate_path: c })
+    expect(db.rows('claim_witnesses').filter(w => w.source === 'claimant')).toHaveLength(1)
+    expect(db.rows('outbox').filter(j => j.kind === 'witness_request')).toHaveLength(1)
+  })
+
+  it('a witness the twin already named is kept once, and the witness emails are queued once', async () => {
+    asUser()
+    const bet = ownBet()
+    const c = cert(bet), a = aff(bet)
+    db.beforeInsert = table => {
+      if (table !== 'verifications') return
+      db.beforeInsert = null
+      const [v] = db.seed('verifications', { bet_id: bet.id, status: 'documents_received', certificate_path: c, affidavit_path: a, updated_by: USER_A.id })
+      db.seed('claim_witnesses', { bet_id: bet.id, verification_id: (v as { id: string }).id, role: 'witness', name: 'Sipho Dlamini', email: 'sipho@example.com', source: 'claimant', token_hash: 'twin-token' })
+      db.seed('outbox', { kind: 'witness_request', payload: { betId: bet.id }, attempts: 0, next_attempt_at: new Date().toISOString(), done_at: null, failed_at: null })
+    }
+    const res = await submit(bet.id as string, { witnesses: PARTNER, certificatePath: c, affidavitPath: a })
+    expect(res.status).toBe(200)
+    expect(db.rows('claim_witnesses').filter(w => w.source === 'claimant' && w.email === 'sipho@example.com')).toHaveLength(1)
+    expect(db.rows('outbox').filter(j => j.kind === 'witness_request')).toHaveLength(1)
+  })
+
   it('moves an active bet to claimed/win and opens a documents_received verification', async () => {
     asUser()
     const bet = ownBet()
