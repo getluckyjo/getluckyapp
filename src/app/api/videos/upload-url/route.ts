@@ -3,7 +3,9 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { log } from '@/lib/observability/log'
-import { assertOpen, claimErrorResponse } from '@/lib/claims/state-machine'
+import { claimErrorResponse } from '@/lib/claims/state-machine'
+import { assertFootageUploadable } from '@/lib/claims/footage-window'
+import { randomUUID } from 'node:crypto'
 import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
 import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
@@ -23,11 +25,19 @@ const Body = z.object({
  * POST /api/videos/upload-url
  * Body: { betId, mimeType? }
  *
- * Issues a one-shot signed upload slot for the footage of an active,
- * in-window bet the caller owns. The server chooses the object path and
- * records it on the bet as `video_url` before the upload starts; the client
- * never supplies a path. After the upload the client calls
- * /api/videos/uploaded so the server can hash what actually landed.
+ * Issues a one-shot signed upload slot for the footage of a bet the caller
+ * owns that may still receive footage (active, a recorded miss or a claim,
+ * inside the play window plus a grace period: src/lib/claims/footage-window.ts).
+ * The server chooses the object path and records it on the bet as
+ * `video_url` before the upload starts; the client never supplies a path.
+ * After the upload the client calls /api/videos/uploaded so the server can
+ * hash what actually landed.
+ *
+ * Every slot has its own object name (shot-<attempt>.<ext>). A retry after
+ * a PUT whose answer was lost on a bad link gets a fresh name instead of a
+ * "resource already exists" refusal on the old one, and needs no upsert
+ * right on the bucket. The pointer on the bet moves to the newest slot
+ * until the seal, which fixes it; the seal then removes the other attempts.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -56,7 +66,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Bet not found or not yours' }, { status: 403 })
     }
 
-    assertOpen(bet)
+    assertFootageUploadable(bet)
 
     // Sealed footage is final. The hash on the bet belongs to one object; a
     // second slot (say shot.webm after shot.mp4) would let the pointer move
@@ -66,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     const ext = mimeType.toLowerCase().includes('mp4') ? 'mp4' : 'webm'
-    const storagePath = `${user.id}/${betId}/shot.${ext}`
+    const storagePath = `${user.id}/${betId}/shot-${randomUUID().slice(0, 8)}.${ext}`
 
     const { data, error } = await supabase.storage
       .from('shot-videos')

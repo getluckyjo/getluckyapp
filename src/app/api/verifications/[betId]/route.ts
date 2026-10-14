@@ -44,7 +44,7 @@ export async function GET(
     // Verify the bet belongs to this user before returning verification data (prevent IDOR)
     const { data: bet } = await supabase
       .from('bets')
-      .select('id')
+      .select('id, video_sha256')
       .eq('id', betId)
       .eq('user_id', user.id)
       .single()
@@ -52,6 +52,9 @@ export async function GET(
     if (!bet) {
       return NextResponse.json({ verification: null, source: 'not_found' })
     }
+    // Whether the server has hashed the footage yet: the phone may still be
+    // uploading it from a course with no signal.
+    const footageSealed = !!bet.video_sha256
 
     const { data: verification, error } = await supabase
       .from('verifications')
@@ -60,10 +63,10 @@ export async function GET(
       .single()
 
     if (error || !verification) {
-      return NextResponse.json({ verification: null, source: 'not_found' })
+      return NextResponse.json({ verification: null, footageSealed, source: 'not_found' })
     }
 
-    return NextResponse.json({ verification, source: 'database' })
+    return NextResponse.json({ verification, footageSealed, source: 'database' })
   } catch (err) {
     return apiError('claim.status_unhandled', err, { path: 'claim' })
   }
@@ -111,7 +114,7 @@ export async function POST(
     // Ownership: RLS only shows the caller their own bets.
     const { data: bet } = await supabase
       .from('bets')
-      .select('id, status, expires_at, course_id, tier, capture_distance_m')
+      .select('id, status, expires_at, course_id, tier, capture_distance_m, video_sha256')
       .eq('id', betId)
       .eq('user_id', user.id)
       .maybeSingle()
@@ -199,7 +202,9 @@ export async function POST(
 
     const record = {
       status: 'documents_received' as const,
-      footage_received_at: now,
+      // The footage may still be on the phone (no signal at the tee); the
+      // seal in /api/videos/uploaded stamps this once the bytes are hashed.
+      footage_received_at: bet.video_sha256 ? now : null,
       documents_received_at: now,
       updated_by: user.id,
       ...(certificatePath && seals.certificate

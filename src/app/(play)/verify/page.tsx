@@ -8,6 +8,8 @@ import BottomTabBar from '@/components/layout/BottomTabBar'
 import { useBet, BET_TIERS } from '@/context/BetContext'
 import { isGolfDayTier, tierByKey } from '@/lib/tiers'
 import { formatPrize, formatRand } from '@/lib/format'
+import { useUpload } from '@/hooks/useUpload'
+import { fetchJson } from '@/lib/net/fetch-json'
 
 type StepStatus = 'completed' | 'active' | 'pending' | 'failed'
 
@@ -19,7 +21,7 @@ interface VerifyStep {
 }
 
 const INITIAL_STEPS: VerifyStep[] = [
-  { id: 'footage',   title: 'Footage received',   desc: 'Your video is safely uploaded.',              status: 'completed' },
+  { id: 'footage',   title: 'Footage received',   desc: 'Your video is safely uploaded.',              status: 'active' },
   { id: 'documents', title: 'Documents received', desc: 'Certificate and affidavit are with us.',       status: 'active' },
   { id: 'verified',  title: 'Shot verified',      desc: 'Reviewed by our team and the insurer.',        status: 'pending' },
   { id: 'payout',    title: 'Prize paid',         desc: 'Funds transferred to your account.',           status: 'pending' },
@@ -59,6 +61,11 @@ export default function VerifyPage() {
   const { selectedTier, prize, prizeCurrency, betId, selectedCourse, selectedHole, resetSession } = useBet()
   const [steps, setSteps] = useState<VerifyStep[]>(INITIAL_STEPS)
   const [rejected, setRejected] = useState(false)
+  // The footage may still be leaving the phone. The server's word (the
+  // sealed hash) or the upload manager's: either completes the first step.
+  const [footageSealed, setFootageSealed] = useState(false)
+  const { state: upload } = useUpload(betId)
+  const footageIn = footageSealed || upload?.status === 'done'
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const pollIntervalRef = useRef(10_000)
   const errorCountRef = useRef(0)
@@ -76,40 +83,39 @@ export default function VerifyPage() {
   // there is no insurer on that claim, so the screen must not name one.
   const winning = prize !== null ? formatPrize(prize, prizeCurrency) : formatRand(tierData.winZAR)
   const selfCovered = isGolfDayTier(selectedTier)
-  const shownSteps = selfCovered
+  const shownSteps = (selfCovered
     ? steps.map(s => s.id !== 'verified' ? s : {
         ...s,
         desc: s.status === 'failed' ? 'The evidence didn\u2019t meet the bar for a verified hole-in-one.' : 'Reviewed by our team.',
       })
     : steps
+  ).map(s => s.id !== 'footage' ? s : footageIn
+    ? { ...s, status: 'completed' as const, desc: 'Your video is safely uploaded.' }
+    : { ...s, status: 'active' as const, desc: 'Still uploading from your phone. Keep the app open when you have signal.' })
   const payoutDate = new Date()
   payoutDate.setDate(payoutDate.getDate() + 7)
   const payoutEta = payoutDate.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' })
 
-  // Simulated progression (fallback / demo)
-  useEffect(() => {
-    const t1 = setTimeout(() => {
-      setSteps(prev => applyProgress(prev, 2))
-    }, 5000)
-    return () => clearTimeout(t1)
-  }, [])
-
-  // Real polling from Supabase (when betId is real)
+  // The claim's state from the server, polled every 10 s (backing off to a
+  // minute on a bad link) until it is approved or rejected.
   useEffect(() => {
     if (!betId) return
+    let stopped = false
 
     async function poll() {
+      let terminal = false
       try {
-        const res = await fetch(`/api/verifications/${betId}`)
-        if (!res.ok) throw new Error('poll failed')
-        const { verification } = await res.json()
-        if (verification?.status) {
-          const isRejected = verification.status === 'rejected'
-          const activeIndex = STATUS_TO_STEPS[verification.status] ?? 1
+        const { data } = await fetchJson<{ verification: { status?: string } | null; footageSealed?: boolean }>(`/api/verifications/${betId}`, { timeoutMs: 12_000, retries: 0, waitForOnlineMs: 0 })
+        if (stopped) return
+        if (data.footageSealed) setFootageSealed(true)
+        const status = data.verification?.status
+        if (status) {
+          const isRejected = status === 'rejected'
+          const activeIndex = STATUS_TO_STEPS[status] ?? 1
           setSteps(prev => (isRejected ? applyRejection(prev) : applyProgress(prev, activeIndex)))
           setRejected(isRejected)
+          terminal = status === 'approved' || isRejected
         }
-        // Reset on success
         errorCountRef.current = 0
         pollIntervalRef.current = 10_000
       } catch (err) {
@@ -118,12 +124,12 @@ export default function VerifyPage() {
         errorCountRef.current += 1
         pollIntervalRef.current = Math.min(10_000 * Math.pow(2, errorCountRef.current), 60_000)
       }
-      // Schedule next poll with current interval
-      pollRef.current = setTimeout(poll, pollIntervalRef.current)
+      if (!stopped && !terminal) pollRef.current = setTimeout(poll, pollIntervalRef.current)
     }
 
-    poll()
+    void poll()
     return () => {
+      stopped = true
       if (pollRef.current) clearTimeout(pollRef.current)
     }
   }, [betId])

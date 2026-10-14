@@ -32,6 +32,8 @@ export type AnalyticsEvent =
   | 'card_removed'
   | 'card_add_started'
   | 'bet_created'
+  | 'footage_recorded'
+  | 'footage_sealed'
   | 'result_declared'
   | 'claim_submitted'
   | 'feedback_sent'

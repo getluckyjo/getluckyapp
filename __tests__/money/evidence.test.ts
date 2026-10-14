@@ -126,7 +126,7 @@ describe('POST /api/videos/upload-url — capture attestation', () => {
     asUser()
     const bet = ownBet()
     expect((await call({ betId: bet.id, mimeType: 'video/webm;codecs=vp9' })).status).toBe(200)
-    expect(bet.video_url).toBe(`${USER_A.id}/${bet.id}/shot.webm`)
+    expect(bet.video_url).toMatch(new RegExp(`^${USER_A.id}/${bet.id}/shot-[0-9a-f]{8}\\.webm$`))
     for (const mimeType of ['video/quicktime', 'application/octet-stream', 'image/png', 'text/html'])
       expect((await call({ betId: bet.id, mimeType })).status, mimeType).toBe(400)
   })

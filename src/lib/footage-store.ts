@@ -18,8 +18,13 @@ const DB_NAME = 'getlucky-footage'
 const STORE = 'footage'
 const VERSION = 1
 
-/** How long a shot stays on the phone with nothing done about it. */
-export const FOOTAGE_TTL_MS = 48 * 60 * 60 * 1000
+/**
+ * How long a shot stays on the phone with nothing done about it. A week:
+ * the footage window on the server is the play window plus seven days
+ * (src/lib/claims/footage-window.ts), and a phone that was off the grid
+ * for a weekend must still be able to deliver.
+ */
+export const FOOTAGE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 
 export interface StoredSession {
   selectedCourse: unknown
@@ -126,6 +131,25 @@ export async function markFootageSealed(betId: string): Promise<void> {
   }
 }
 
+/** Delete the local copy only once the server has the hash; an unsealed shot is the upload manager's to finish. */
+export async function deleteFootageIfSealed(betId: string): Promise<boolean> {
+  const db = await open()
+  if (!db) return false
+  try {
+    const tx = db.transaction(STORE, 'readwrite')
+    const store = tx.objectStore(STORE)
+    const row = (await request(store.get(betId))) as StoredFootage | undefined
+    if (!row || !row.sealed) { await done(tx); return false }
+    store.delete(betId)
+    await done(tx)
+    return true
+  } catch {
+    return false
+  } finally {
+    db.close()
+  }
+}
+
 export async function deleteFootage(betId: string): Promise<void> {
   const db = await open()
   if (!db) return
@@ -140,14 +164,21 @@ export async function deleteFootage(betId: string): Promise<void> {
   }
 }
 
+/** Inside its time, with a sane timestamp. */
+export function isFreshFootage(r: StoredFootage, now: number): boolean {
+  return Number.isFinite(r.savedAt) && now - r.savedAt < FOOTAGE_TTL_MS && now - r.savedAt >= 0
+}
+
 /**
  * What to do with what the phone still holds: restore the newest shot that
- * is not past its time, and name the rest for deletion. Pure, so it can be
+ * is not past its time into the session, keep every other unsealed one
+ * uploading, and name the stale ones for deletion. Pure, so it can be
  * tested without a browser.
  */
-export function pickRecovery(records: StoredFootage[], now: number): { restore: StoredFootage | null; stale: string[] } {
-  const fresh = records.filter(r => Number.isFinite(r.savedAt) && now - r.savedAt < FOOTAGE_TTL_MS && now - r.savedAt >= 0)
+export function pickRecovery(records: StoredFootage[], now: number): { restore: StoredFootage | null; keepUploading: string[]; stale: string[] } {
+  const fresh = records.filter(r => isFreshFootage(r, now))
   const newest = fresh.reduce<StoredFootage | null>((best, r) => (best === null || r.savedAt > best.savedAt ? r : best), null)
-  const stale = records.filter(r => r !== newest).map(r => r.betId)
-  return { restore: newest, stale }
+  const keepUploading = fresh.filter(r => !r.sealed).map(r => r.betId)
+  const stale = records.filter(r => !isFreshFootage(r, now)).map(r => r.betId)
+  return { restore: newest, keepUploading, stale }
 }

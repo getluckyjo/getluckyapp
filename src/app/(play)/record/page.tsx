@@ -7,6 +7,7 @@ import PhoneFrame from '@/components/layout/PhoneFrame'
 import { GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 import type { CaptureInput } from '@/lib/claims/capture'
+import { track } from '@/lib/analytics'
 
 const MAX_SECONDS = 120 // 2 minutes max
 
@@ -37,6 +38,13 @@ export default function RecordPage() {
       router.replace('/select-course')
     }
   }, [selectedCourse, selectedHole, router])
+  // And a bet: footage with no bet id has nowhere to go (the server refuses
+  // it), so a golfer who lands here without one goes back to pay first.
+  useEffect(() => {
+    if (selectedCourse && selectedHole && !betId) {
+      router.replace('/choose-stake')
+    }
+  }, [selectedCourse, selectedHole, betId, router])
 
   const holeLabel = selectedHole
     ? `Hole ${selectedHole.holeNumber} · Par ${selectedHole.par} · ${selectedHole.distanceMetres}m`
@@ -141,8 +149,12 @@ export default function RecordPage() {
           ...(started.position ? { lat: started.position.lat, lng: started.position.lng, accuracyM: started.position.accuracyM } : {}),
         }
       : undefined
+    if (!betId) { router.replace('/choose-stake'); return }
+    // What the course does to clips: size and length per phone, so the
+    // upload design (one PUT today, chunks if these grow) follows real numbers.
+    track('footage_recorded', { bytes: blob.size, seconds: capture ? Math.round(capture.durationMs / 1000) : null, mime: mimeType.split(';')[0], ios: /iPhone|iPad/i.test(navigator.userAgent) })
     // Resolves once the shot is on the phone; the upload carries on behind.
-    await startBackgroundUpload(blob, mimeType, betId ?? 'pending', capture)
+    await startBackgroundUpload(blob, mimeType, betId, capture)
     router.push('/confirm')
   }, [setVideoBlob, startBackgroundUpload, betId, router])
 
