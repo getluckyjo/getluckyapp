@@ -117,8 +117,7 @@ export default function TryAgainPage() {
           src="/marketing/courses/zimbali.jpg"
           alt=""
           fill
-          priority
-          sizes="480px"
+          sizes="100vw"
           className="v2-photo"
           style={{ objectPosition: '62% 100%' }}
         />

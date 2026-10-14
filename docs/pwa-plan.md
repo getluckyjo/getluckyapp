@@ -70,7 +70,9 @@ Keep the five the designer drew: **Home, Winners, Play, Club, Account.** They ar
 | `/_next/static/*` (hashed) | precache + cache-first |
 | Google Fonts CSS and files, `/fonts/*`, `/brand/*`, `/icons/*` | cache-first, 1 year |
 | `/marketing/*`, `/_next/image` | stale-while-revalidate, 60 entries, 30 days |
-| Page HTML on the allow-list (`/home`, `/leaderboard`, `/membership`, `/account`, `/history`, `/select-course`, `/splash`, `/onboarding`, `/auth`, `/terms`, `/privacy`, `/responsible-play`) | stale-while-revalidate |
+| Page HTML on the allow-list (`/home`, `/leaderboard`, `/membership`, `/account`, `/history`, `/select-course`, `/splash`, `/onboarding`, `/auth`, `/terms`, `/privacy`, `/responsible-play`) | stale-while-revalidate; `source`, `utm_*` and `fbclid` dropped from the cache key |
+| The play screens (`/home`, `/select-course`, `/choose-stake`, `/record`, `/confirm`, `/result/miss`, `/result/claim`, `/verify`, `/history`) | warmed into the same page cache once per session after sign-in (`WARM_PAGES` message from `PlayRoutesWarmup`); only a plain 200 is kept |
+| `/` exactly | network-only (reads the session cookie and redirects); the offline fallback applies to it. The manifest starts at `/home?source=pwa`, so an icon launch with no signal shows the app |
 | RSC payloads for the same allow-list | network-first, 3 s timeout |
 | Everything on the deny list (`/api/*`, `/auth/callback`, `/auth/confirm`, `/payment-return`, `/admin/*`, `/witness/*`, `/monitoring`, `/serwist/*`, Supabase, PayFast, Sentry) | network-only, explicitly |
 | Any other document that fails | branded `/~offline` fallback |

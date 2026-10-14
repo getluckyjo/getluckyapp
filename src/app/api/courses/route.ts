@@ -3,10 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { apiError } from '@/lib/api/http'
 import { isHolePlayable } from '@/lib/holes'
 
-// Cache courses for 5 min, serve stale for 24h while revalidating
+// Cache courses for 5 min on the phone and at Vercel's edge, serve stale
+// for 24h while revalidating: the list changes when an admin edits a course,
+// and the phone on the course gets the edge's copy from the nearest point.
 const CACHE_HEADERS = {
-  'Cache-Control': 'public, max-age=300, stale-while-revalidate=86400',
+  'Cache-Control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=86400',
 }
+
+/** What the list screen reads; the rest of the row (coordinates, notes, audit columns) stays home. */
+const COURSE_COLUMNS = 'id, name, location_text, region, country, lat, lng, image_url, is_partner'
 
 /**
  * GET /api/courses — every listed course with its active par-3 holes,
@@ -37,7 +42,7 @@ export async function GET() {
     const supabase = await createClient()
     const { data: courses, error } = await supabase
       .from('courses')
-      .select('*, holes(id, hole_number, par, distance_metres)')
+      .select(`${COURSE_COLUMNS}, holes(id, hole_number, par, distance_metres)`)
       .eq('holes.is_active', true)
       .order('is_partner', { ascending: false })
       .order('name')

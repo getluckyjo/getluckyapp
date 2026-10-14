@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { coursePhotoCandidates, localCoursePhoto, remoteCoursePhoto, LOCAL_PHOTOS, REMOTE_PHOTOS } from '@/lib/course-photo'
+import { courseThumbCandidates, coursePhotoCandidates, localCoursePhoto, remoteCoursePhoto, LOCAL_PHOTOS, REMOTE_PHOTOS } from '@/lib/course-photo'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -34,11 +34,15 @@ describe('course photos', () => {
     expect(coursePhotoCandidates('Unknown Links', null)).toEqual([])
     expect(coursePhotoCandidates('Unknown Links', 'https://x/db.jpg')).toEqual(['https://x/db.jpg'])
     expect(localCoursePhoto('Paarl Golf Club')).toBe('/marketing/courses/paarl.jpg')
+    expect(courseThumbCandidates('Zimbali Country Club', 'https://x/db.jpg')[0]).toBe('/marketing/courses/thumbs/zimbali.webp')
+    expect(courseThumbCandidates('Zimbali Country Club', 'https://x/db.jpg').slice(1)).toEqual(coursePhotoCandidates('Zimbali Country Club', 'https://x/db.jpg'))
+    expect(courseThumbCandidates('Unknown Links', null)).toEqual([])
   })
 
   it('every LOCAL_PHOTOS entry points at a committed file, so a card never 404s into the fallback', () => {
     for (const [, slug] of LOCAL_PHOTOS) {
       expect(existsSync(join(process.cwd(), 'public', 'marketing', 'courses', `${slug}.jpg`)), slug).toBe(true)
+      expect(existsSync(join(process.cwd(), 'public', 'marketing', 'courses', 'thumbs', `${slug}.webp`)), `${slug} thumb (npm run photos:thumbs)`).toBe(true)
     }
     for (const [, , url] of REMOTE_PHOTOS) expect(url.startsWith('https://')).toBe(true)
   })

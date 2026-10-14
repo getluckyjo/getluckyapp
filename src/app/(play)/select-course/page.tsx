@@ -10,7 +10,8 @@ import BottomTabBar from '@/components/layout/BottomTabBar'
 import { SearchIcon, GolfBallIcon } from '@/components/icons'
 import { useBet } from '@/context/BetContext'
 import type { Course, Hole } from '@/context/BetContext'
-import { coursePhotoCandidates } from '@/lib/course-photo'
+import { courseThumbCandidates } from '@/lib/course-photo'
+import { fetchJson } from '@/lib/net/fetch-json'
 import { MIN_HOLE_METRES, holeUnavailableReason, isHolePlayable } from '@/lib/holes'
 
 interface ApiHole {
@@ -33,6 +34,28 @@ interface ApiCourse {
   image_url: string | null
   is_partner: boolean
   holes: ApiHole[]
+}
+
+/**
+ * The last list this phone saw, so the screen fills at once on the course
+ * and the network only refreshes it. A day is plenty: courses change when
+ * an admin edits one, and checkout is the judge of what is playable.
+ */
+const SNAPSHOT_KEY = 'glg:courses:v1'
+const SNAPSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000
+
+function readSnapshot(): ApiCourse[] | null {
+  try {
+    const raw = localStorage.getItem(SNAPSHOT_KEY)
+    if (!raw) return null
+    const { at, courses } = JSON.parse(raw) as { at: number; courses: ApiCourse[] }
+    if (!Array.isArray(courses) || Date.now() - at > SNAPSHOT_MAX_AGE_MS) return null
+    return courses
+  } catch { return null }
+}
+
+function writeSnapshot(courses: ApiCourse[]) {
+  try { localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({ at: Date.now(), courses })) } catch { /* storage full or blocked */ }
 }
 
 /** Chip that narrows the list to courses open for the challenge. */
@@ -75,7 +98,7 @@ function toContextHole(h: ApiHole, courseId: string): Hole {
  */
 function CourseThumb({ name, src }: { name: string; src: string | null }) {
   const [failedCount, setFailedCount] = useState(0)
-  const candidates = coursePhotoCandidates(name, src)
+  const candidates = courseThumbCandidates(name, src)
   const photo = candidates[failedCount]
   if (!photo) {
     return (
@@ -113,25 +136,37 @@ export default function SelectCoursePage() {
 
   // Sets state only from the response callbacks, so the initial load can
   // run from an effect; the Retry button resets the flags itself first.
-  function fetchCourses() {
-    return fetch('/api/courses')
-      .then(r => r.json())
-      .then(data => {
-        setCourses(data.courses ?? [])
+  // A GET with retries: two more tries with backoff, waiting for signal
+  // first. The phone's last list is shown while it runs, and stays if the
+  // network never answers.
+  function fetchCourses(haveSnapshot: boolean) {
+    return fetchJson<{ courses?: ApiCourse[] }>('/api/courses', { timeoutMs: 12_000, retries: 2 })
+      .then(({ data }) => {
+        const list = data.courses ?? []
+        setCourses(list)
+        writeSnapshot(list)
         setLoading(false)
       })
       .catch(() => {
-        setFetchError(true)
+        if (!haveSnapshot) setFetchError(true)
         setLoading(false)
       })
   }
 
-  useEffect(() => { fetchCourses() }, [])
+  useEffect(() => {
+    const snapshot = readSnapshot()
+    if (snapshot && snapshot.length > 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the phone's own copy, shown before the network is asked
+      setCourses(snapshot)
+      setLoading(false)
+    }
+    fetchCourses(!!snapshot && snapshot.length > 0)
+  }, [])
 
   function retry() {
     setLoading(true)
     setFetchError(false)
-    fetchCourses()
+    fetchCourses(false)
   }
 
   // Regions ordered by how many courses they hold, so the busiest provinces

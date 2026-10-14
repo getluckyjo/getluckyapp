@@ -12,6 +12,7 @@
     "check:design": "node scripts/check-design-package.mjs",
     "pwa:assets": "node scripts/pwa/generate-assets.mjs",
     "photos:fetch": "tsx scripts/fetch-course-photos.mts",
+    "photos:thumbs": "node scripts/course-thumbs.mjs",
     "install:qr": "node scripts/pwa/generate-install-qr.mjs",
     "test:staging": "vitest run __tests__/staging",
     "typecheck": "tsc --noEmit",

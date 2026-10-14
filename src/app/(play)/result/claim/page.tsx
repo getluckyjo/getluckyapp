@@ -14,9 +14,11 @@ import { formatPrize, formatRand } from '@/lib/format'
 import { useAuth } from '@/context/AuthContext'
 import { createClient } from '@/lib/supabase/client'
 import { useShareVideo } from '@/hooks/useShareVideo'
-import { WitnessSchema, type WitnessInput } from '@/lib/claims/witnesses'
+import { checkWitness, type WitnessDraft } from '@/lib/claims/witness-check'
+import { downscaleImage } from '@/lib/claims/downscale'
+import { clearClaimDraft, readClaimDraft, writeClaimDraft } from '@/lib/claim-draft-store'
+import { NetError, netErrorMessage, fetchJson } from '@/lib/net/fetch-json'
 
-type WitnessDraft = { role: WitnessInput['role']; name: string; email: string }
 const EMPTY_WITNESSES: WitnessDraft[] = [
   { role: 'witness', name: '', email: '' },
   { role: 'witness', name: '', email: '' },
@@ -97,6 +99,30 @@ export default function ClaimPage() {
     { id: 'affidavit',   title: '4-ball affidavit',   desc: 'Signed by the golfers you played with.',          done: false },
   ])
   const [loading, setLoading] = useState(false)
+  const [draftLoaded, setDraftLoaded] = useState(false)
+  // Who saw it. A row counts once both fields parse; the first playing
+  // partner is required, the rest are optional. Same schema as the server.
+  const [witnesses, setWitnesses] = useState<WitnessDraft[]>(EMPTY_WITNESSES)
+  const [witnessError, setWitnessError] = useState<string | null>(null)
+
+  // What was typed and uploaded before the app was backgrounded or the tab
+  // dropped comes back, per bet, until the claim is in.
+  useEffect(() => {
+    if (!betId) return
+    // Off the render pass: the draft is the phone's own, read once the bet is known.
+    const t = setTimeout(() => {
+      const draft = readClaimDraft(betId)
+      if (draft) {
+        if (draft.witnesses.length === EMPTY_WITNESSES.length) setWitnesses(draft.witnesses)
+        setSteps(prev => prev.map(s => {
+          const doc = draft.documents[s.id]
+          return doc && s.id !== 'video' ? { ...s, done: true, storagePath: doc.storagePath, fileName: doc.fileName } : s
+        }))
+      }
+      setDraftLoaded(true)
+    }, 0)
+    return () => clearTimeout(t)
+  }, [betId])
 
   async function handleUpload(stepId: string) {
     return new Promise<void>(resolve => {
@@ -107,34 +133,41 @@ export default function ClaimPage() {
         const file = input.files?.[0]
         if (!file) { resolve(); return }
 
-        // File size validation (max 10 MB)
-        if (file.size > 10 * 1024 * 1024) {
-          showToast('File too large — max 10 MB')
-          resolve()
-          return
-        }
-
         // Mark step as uploading
         setSteps(prev =>
           prev.map(s => s.id === stepId ? { ...s, uploading: true } : s)
         )
 
         let storagePath: string | undefined
+        let failure = 'Upload failed — please try again'
 
         // Attempt Supabase Storage upload
         try {
+          // A phone photo is redrawn at 1600 px before it leaves the phone;
+          // the bucket's 10 MB limit then only ever meets a PDF.
+          const body = await downscaleImage(file)
+          if (body.size > 10 * 1024 * 1024) {
+            showToast('File too large — max 10 MB')
+            setSteps(prev => prev.map(s => s.id === stepId ? { ...s, uploading: false } : s))
+            resolve()
+            return
+          }
           const supabase = createClient()
           // Storage policy: a user may only write under their own folder, and
           // never overwrite. A fresh name per attempt keeps retries working.
-          const safeName = file.name.replace(/[^A-Za-z0-9._-]/g, '_').slice(-80) || 'document'
+          const safeName = (body === file ? file.name : file.name.replace(/\.[A-Za-z0-9]+$/, '') + '.jpg').replace(/[^A-Za-z0-9._-]/g, '_').slice(-80) || 'document'
           const path = `${user?.id ?? 'anonymous'}/${betId ?? 'mock'}/${stepId}/${Date.now()}-${safeName}`
-          const { data, error } = await supabase.storage
-            .from('verification-docs')
-            .upload(path, file, { upsert: false })
+          // 90 s is plenty for a few hundred kilobytes on any signal that
+          // will ever finish; past that the golfer is told, not left waiting.
+          const upload = supabase.storage.from('verification-docs').upload(path, body, { upsert: false, contentType: body.type || file.type || undefined })
+          const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), 90_000))
+          const { data, error } = await Promise.race([upload, timeout])
           if (error) console.error('[claim] Upload rejected:', error.message)
           storagePath = data?.path
         } catch (err) {
           console.error('[claim] Upload failed:', err)
+          if (err instanceof Error && err.message === 'UPLOAD_TIMEOUT') failure = 'The upload took too long. Check your signal and tap to try again.'
+          else if (typeof navigator !== 'undefined' && navigator.onLine === false) failure = 'No signal. Tap to try again when you have bars.'
         }
 
         // Clear uploading state
@@ -148,7 +181,7 @@ export default function ClaimPage() {
             prev.map(s => s.id === stepId ? { ...s, done: true, storagePath, fileName: file.name } : s)
           )
         } else {
-          showToast('Upload failed — please try again')
+          showToast(failure)
         }
 
         resolve()
@@ -164,15 +197,19 @@ export default function ClaimPage() {
   const allDone = steps.filter(s => s.id !== 'video').every(s => s.done)
   const doneCount = steps.filter(s => s.id !== 'video' ? s.done : videoChip.tone === 'ok').length
 
-  // Who saw it. A row counts once both fields parse; the first playing
-  // partner is required, the rest are optional. Same schema as the server.
-  const [witnesses, setWitnesses] = useState<WitnessDraft[]>(EMPTY_WITNESSES)
-  const [witnessError, setWitnessError] = useState<string | null>(null)
   const filledWitnesses = witnesses.filter(w => w.name.trim() || w.email.trim())
-  const parsedWitnesses = filledWitnesses.map(w => WitnessSchema.safeParse(w))
-  const witnessesValid = parsedWitnesses.every(r => r.success)
-  const hasPartner = parsedWitnesses.some(r => r.success && r.data.role === 'witness')
+  const parsedWitnesses = filledWitnesses.map(checkWitness)
+  const witnessesValid = parsedWitnesses.every(r => r.ok)
+  const hasPartner = parsedWitnesses.some(r => r.ok && r.data.role === 'witness')
   const canSubmit = allDone && witnessesValid && hasPartner && !loading
+
+  // Every change goes to the phone's draft once the draft has been read.
+  useEffect(() => {
+    if (!betId || !draftLoaded) return
+    const documents: Record<string, { storagePath: string; fileName: string }> = {}
+    for (const s of steps) if (s.id !== 'video' && s.storagePath) documents[s.id] = { storagePath: s.storagePath, fileName: s.fileName ?? 'document' }
+    writeClaimDraft(betId, { witnesses, documents })
+  }, [betId, draftLoaded, witnesses, steps])
 
   function updateWitness(i: number, field: 'name' | 'email', value: string) {
     setWitnessError(null)
@@ -187,31 +224,32 @@ export default function ClaimPage() {
     const affidavitStep = steps.find(s => s.id === 'affidavit')
 
     try {
-      const res = await fetch(`/api/verifications/${betId ?? 'mock'}`, {
+      // Safe to retry: a second submission that lands updates the first.
+      await fetchJson(`/api/verifications/${betId ?? 'mock'}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+        retries: 2,
+        timeoutMs: 20_000,
+        body: {
           certificatePath: certificateStep?.storagePath ?? null,
           affidavitPath: affidavitStep?.storagePath ?? null,
-          witnesses: parsedWitnesses.flatMap(r => (r.success ? [r.data] : [])),
-        }),
+          witnesses: parsedWitnesses.flatMap(r => (r.ok ? [r.data] : [])),
+        },
       })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({})) as { error?: string; code?: string }
-        if (body.code === 'DOCUMENT_MISSING') {
+    } catch (err) {
+      if (err instanceof NetError && err.kind === 'http') {
+        if (err.code === 'DOCUMENT_MISSING') {
           // The browser-side upload did not land. Let them upload again.
           setSteps(prev => prev.map(s => (s.id === 'video' ? s : { ...s, done: false, storagePath: undefined, fileName: undefined })))
         }
-        setWitnessError(body.error ?? 'Your claim could not be submitted. Please try again.')
-        setLoading(false)
-        return
+        setWitnessError(err.message || 'Your claim could not be submitted. Please try again.')
+      } else {
+        setWitnessError(netErrorMessage(err, 'Your claim could not be submitted. Please check your connection and try again.'))
       }
-    } catch {
-      setWitnessError('Your claim could not be submitted. Please check your connection and try again.')
       setLoading(false)
       return
     }
 
+    if (betId) clearClaimDraft(betId)
     setLoading(false)
     haptics.success()
     track('claim_submitted')
