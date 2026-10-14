@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContext'
+import { BetProvider } from '@/context/BetContext'
 import PwaChrome from '@/components/pwa/PwaChrome'
 import FontLoader from '@/components/pwa/FontLoader'
 import splash from '@/lib/pwa/splash.json'
@@ -77,8 +78,10 @@ export default function RootLayout({
       </head>
       <body>
         <AuthProvider>
-          {children}
-          <PwaChrome />
+          <BetProvider>
+            {children}
+            <PwaChrome />
+          </BetProvider>
           <FontLoader href={GOOGLE_FONTS} />
         </AuthProvider>
       </body>

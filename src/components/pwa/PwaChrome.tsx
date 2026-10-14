@@ -5,6 +5,7 @@ import ServiceWorkerManager from './ServiceWorkerManager'
 import SessionTracker from './SessionTracker'
 import InstallPrompt from './InstallPrompt'
 import FeedbackButton from './FeedbackButton'
+import UploadManagerBoot from './UploadManagerBoot'
 // Catches Chrome's install dialog from boot, for screens that offer it later.
 import '@/lib/pwa/install'
 
@@ -26,6 +27,7 @@ export default function PwaChrome() {
   return (
     <>
       <ServiceWorkerManager />
+      <UploadManagerBoot />
       <SessionTracker />
       <InstallPrompt />
       {FEEDBACK_ENABLED && <FeedbackButton />}

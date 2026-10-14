@@ -2,7 +2,8 @@
 
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import type { CaptureInput } from '@/lib/claims/capture'
-import { deleteFootage, loadFootage, markFootageSealed, pickRecovery, saveFootage } from '@/lib/footage-store'
+import { deleteFootage, deleteFootageIfSealed, loadFootage, pickRecovery, saveFootage } from '@/lib/footage-store'
+import { getUploadManager } from '@/lib/upload'
 
 // Re-export shared tier definitions so existing client imports keep working
 export { BET_TIERS } from '@/lib/tiers'
@@ -25,8 +26,6 @@ export interface Hole {
   distanceMetres: number
 }
 
-type UploadStatus = 'idle' | 'uploading' | 'done' | 'error'
-
 interface BetSession {
   selectedCourse: Course | null
   selectedHole: Hole | null
@@ -41,8 +40,6 @@ interface BetSession {
   /** The recorder's report for the footage in hand, so a retry carries it too. */
   capture: CaptureInput | null
   declaredResult: 'hole_in_one' | 'miss' | null
-  uploadStatus: UploadStatus
-  uploadProgress: number // 0–100
 }
 
 interface BetContextType extends BetSession {
@@ -55,9 +52,11 @@ interface BetContextType extends BetSession {
   declareResult: (result: 'hole_in_one' | 'miss') => void
   resetSession: () => void
   /**
-   * Keeps the footage on the phone, then uploads it in the background.
-   * Resolves once the local copy is written (or found unwritable), before
-   * the upload: the caller can leave the recorder knowing the shot is safe.
+   * Keeps the footage on the phone, then hands it to the upload manager
+   * (src/lib/upload), which gets it to the server however long the signal
+   * takes. Resolves once the local copy is written (or found unwritable),
+   * before the upload: the caller can leave the recorder knowing the shot
+   * is safe. Progress is read with useUpload(betId).
    */
   startBackgroundUpload: (blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) => Promise<void>
   /** False until the phone's stored footage has been checked; the guards on confirm and result wait for it. */
@@ -75,14 +74,7 @@ const defaultSession: BetSession = {
   videoBlob: null,
   capture: null,
   declaredResult: null,
-  uploadStatus: 'idle',
-  uploadProgress: 0,
 }
-
-/** No upload progress for this long and the attempt is abandoned so the retry can show. */
-export const UPLOAD_STALL_MS = 45_000
-/** The whole upload, however slowly it moves. Clubhouse Wi-Fi at 100 kB/s still sends a 2-minute clip inside this. */
-export const UPLOAD_TIMEOUT_MS = 5 * 60_000
 
 const BetContext = createContext<BetContextType | null>(null)
 
@@ -116,95 +108,25 @@ export function BetProvider({ children }: { children: ReactNode }) {
     setSession(s => ({ ...s, declaredResult: result }))
   }
   function resetSession() {
+    // The local copy goes only once the server has the hash. An unsealed
+    // shot stays for the upload manager, whatever screen the golfer is on.
     const betId = sessionRef.current.betId
-    if (betId) void deleteFootage(betId)
+    if (betId) void deleteFootageIfSealed(betId)
     setSession(defaultSession)
   }
 
-  async function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput, opts: { alreadyStored?: boolean } = {}) {
-    setSession(s => ({ ...s, capture: capture ?? s.capture, uploadStatus: 'uploading', uploadProgress: 0 }))
-
+  async function startBackgroundUpload(blob: Blob, mimeType: string, betId: string, capture?: CaptureInput) {
+    setSession(s => ({ ...s, capture: capture ?? s.capture }))
     // The phone's copy first: from here a reload or a killed tab loses
     // nothing, and the next start resumes the upload.
-    if (!opts.alreadyStored) {
-      const { selectedCourse, selectedHole, selectedTier, prize, prizeCurrency } = sessionRef.current
-      await saveFootage({ betId, blob, mimeType, capture: capture ?? null, session: { selectedCourse, selectedHole, selectedTier, prize, prizeCurrency }, savedAt: Date.now(), sealed: false })
-    }
-
-    // Fire-and-forget — upload runs in the background
-    ;(async () => {
-      try {
-        const urlRes = await fetch('/api/videos/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ betId, mimeType, ...(capture ? { capture } : {}) }),
-        })
-        const urlJson = await urlRes.json().catch(() => ({}))
-        if (urlRes.status === 409 && urlJson?.code === 'FOOTAGE_SEALED') {
-          // The server already has this shot, hashed: an earlier attempt
-          // finished before the phone heard about it.
-          void markFootageSealed(betId)
-          setSession(s => ({ ...s, uploadStatus: 'done', uploadProgress: 100 }))
-          return
-        }
-        const { signedUrl } = urlJson
-
-        if (signedUrl) {
-          await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest()
-            xhr.open('PUT', signedUrl)
-            // The bare type: the bucket's allow-list (migration 042) names
-            // video/mp4 and video/webm, not every codecs variant.
-            xhr.setRequestHeader('Content-Type', mimeType.split(';')[0].trim())
-            // A connection that stays open without moving is a failure too:
-            // no byte for UPLOAD_STALL_MS, or UPLOAD_TIMEOUT_MS in all, ends
-            // the attempt so the retry can show instead of a spinner forever.
-            let stall: ReturnType<typeof setTimeout> | undefined
-            const armStall = () => {
-              if (stall) clearTimeout(stall)
-              stall = setTimeout(() => xhr.abort(), UPLOAD_STALL_MS)
-            }
-            const settle = (fn: () => void) => { if (stall) clearTimeout(stall); fn() }
-            xhr.timeout = UPLOAD_TIMEOUT_MS
-            xhr.upload.onprogress = (e) => {
-              armStall()
-              if (e.lengthComputable) {
-                const pct = Math.round((e.loaded / e.total) * 100)
-                setSession(s => ({ ...s, uploadProgress: pct }))
-              }
-            }
-            xhr.onload = () => settle(() => (xhr.status < 300 ? resolve() : reject(new Error(`Upload ${xhr.status}`))))
-            xhr.onerror = () => settle(() => reject(new Error('Network error')))
-            xhr.ontimeout = () => settle(() => reject(new Error('Upload timed out')))
-            xhr.onabort = () => settle(() => reject(new Error('Upload stalled')))
-            armStall()
-            xhr.send(blob)
-          })
-
-          // The server reads the object back and records its hash, size and
-          // its own timestamp on the bet. Without this the footage is
-          // uploaded but not sealed, so treat a failure as an upload failure.
-          const sealRes = await fetch('/api/videos/uploaded', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ betId }),
-          })
-          if (!sealRes.ok) throw new Error(`Seal ${sealRes.status}`)
-        } else {
-          throw new Error('No upload slot')
-        }
-
-        void markFootageSealed(betId)
-        setSession(s => ({ ...s, uploadStatus: 'done', uploadProgress: 100 }))
-      } catch (err) {
-        console.error('[upload] Background upload failed:', err)
-        setSession(s => ({ ...s, uploadStatus: 'error' }))
-      }
-    })()
+    const { selectedCourse, selectedHole, selectedTier, prize, prizeCurrency } = sessionRef.current
+    await saveFootage({ betId, blob, mimeType, capture: capture ?? null, session: { selectedCourse, selectedHole, selectedTier, prize, prizeCurrency }, savedAt: Date.now(), sealed: false })
+    void getUploadManager().enqueue({ betId, blob, mimeType, capture: capture ?? null, alreadyStored: true })
   }
 
-  // After a restart: put back the newest shot the phone still holds, and
-  // finish its upload if the server never sealed it. Older ones go.
+  // After a restart: put back the newest shot the phone still holds. The
+  // upload manager (booted at the root) finishes every unsealed one; only
+  // shots past their time are deleted here.
   useEffect(() => {
     let cancelled = false
     ;(async () => {
@@ -223,10 +145,7 @@ export function BetProvider({ children }: { children: ReactNode }) {
           betId: restore.betId,
           videoBlob: restore.blob,
           capture: restore.capture,
-          uploadStatus: restore.sealed ? 'done' : s.uploadStatus,
-          uploadProgress: restore.sealed ? 100 : s.uploadProgress,
         }))
-        if (!restore.sealed) void startBackgroundUpload(restore.blob, restore.mimeType, restore.betId, restore.capture ?? undefined, { alreadyStored: true })
       } catch {
         /* no stored footage, or no storage: the flow starts fresh */
       } finally {

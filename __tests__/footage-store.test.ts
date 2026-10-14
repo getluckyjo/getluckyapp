@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import 'fake-indexeddb/auto'
 import { IDBFactory } from 'fake-indexeddb'
-import { FOOTAGE_TTL_MS, deleteFootage, loadFootage, markFootageSealed, pickRecovery, saveFootage, type StoredFootage } from '@/lib/footage-store'
+import { FOOTAGE_TTL_MS, deleteFootage, deleteFootageIfSealed, loadFootage, markFootageSealed, pickRecovery, saveFootage, type StoredFootage } from '@/lib/footage-store'
 
 const NOW = Date.parse('2026-12-11T09:00:00Z')
 const SESSION = { selectedCourse: { id: 'c1', name: 'Fancourt' }, selectedHole: { id: 'h1', holeNumber: 7 }, selectedTier: 'tier_1', prize: null, prizeCurrency: 'ZAR' as const }
@@ -45,6 +45,16 @@ describe('the store', () => {
     expect(await rows[0].blob.text()).toBe('take two')
   })
 
+  it('deleteFootageIfSealed removes only a sealed shot; an unsealed one stays for the upload', async () => {
+    await saveFootage(record('bet-1'))
+    expect(await deleteFootageIfSealed('bet-1')).toBe(false)
+    expect(await loadFootage()).toHaveLength(1)
+    await markFootageSealed('bet-1')
+    expect(await deleteFootageIfSealed('bet-1')).toBe(true)
+    expect(await loadFootage()).toEqual([])
+    expect(await deleteFootageIfSealed('bet-missing')).toBe(false)
+  })
+
   it('marks a shot sealed and deletes one on request; unknown ids are no-ops', async () => {
     await saveFootage(record('bet-1'))
     await markFootageSealed('bet-1')
@@ -72,13 +82,19 @@ describe('the store', () => {
 })
 
 describe('pickRecovery', () => {
-  it('restores the newest shot inside the window and names the rest stale', () => {
+  it('restores the newest shot inside the window, keeps every other unsealed one uploading, and names only the expired stale', () => {
     const older = record('bet-old', { savedAt: NOW - 3_600_000 })
+    const olderSealed = record('bet-old-sealed', { savedAt: NOW - 7_200_000, sealed: true })
     const newest = record('bet-new', { savedAt: NOW - 60_000 })
     const expired = record('bet-expired', { savedAt: NOW - FOOTAGE_TTL_MS - 1 })
-    const { restore, stale } = pickRecovery([older, expired, newest], NOW)
+    const { restore, keepUploading, stale } = pickRecovery([older, expired, newest, olderSealed], NOW)
     expect(restore?.betId).toBe('bet-new')
-    expect(stale.sort()).toEqual(['bet-expired', 'bet-old'])
+    expect(keepUploading.sort()).toEqual(['bet-new', 'bet-old'])
+    expect(stale).toEqual(['bet-expired'])
+  })
+
+  it('a week on the phone, not two days: a weekend off the grid still delivers', () => {
+    expect(FOOTAGE_TTL_MS).toBe(7 * 24 * 3_600_000)
   })
 
   it('nothing fresh → nothing to restore, everything stale', () => {
@@ -99,6 +115,6 @@ describe('pickRecovery', () => {
   })
 
   it('empty in, empty out', () => {
-    expect(pickRecovery([], NOW)).toEqual({ restore: null, stale: [] })
+    expect(pickRecovery([], NOW)).toEqual({ restore: null, keepUploading: [], stale: [] })
   })
 })

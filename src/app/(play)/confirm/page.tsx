@@ -7,6 +7,8 @@ import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
 import { useBet } from '@/context/BetContext'
+import { useUpload } from '@/hooks/useUpload'
+import { uploadChip } from '@/lib/upload/chip'
 
 /**
  * Confirm — "Did it go in?" in the V2 system.
@@ -16,7 +18,8 @@ import { useBet } from '@/context/BetContext'
  */
 export default function ConfirmPage() {
   const router = useRouter()
-  const { videoBlob, betId, capture, selectedCourse, selectedHole, declareResult, uploadStatus, uploadProgress, startBackgroundUpload, hydrated } = useBet()
+  const { videoBlob, betId, selectedCourse, selectedHole, declareResult, hydrated } = useBet()
+  const { state: upload, retry } = useUpload(betId)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const hasVideo = !!(videoBlob && videoBlob.size > 0)
@@ -49,11 +52,7 @@ export default function ConfirmPage() {
 
   if (!hasVideo) return null
 
-  const saveChip =
-    uploadStatus === 'uploading' ? { tone: 'busy', label: `Saving video · ${uploadProgress}%` } :
-    uploadStatus === 'error'     ? { tone: 'error', label: 'Video not saved. Tap to retry' } :
-    uploadStatus === 'done'      ? { tone: 'ok', label: 'Video saved' } :
-    null
+  const saveChip = uploadChip(upload)
 
   return (
     <PhoneFrame statusTheme="dark">
@@ -83,25 +82,16 @@ export default function ConfirmPage() {
             )}
 
             <div className="cf-chips">
-              {saveChip ? (
-                <button
-                  type="button"
-                  className={`cf-chip cf-chip--${saveChip.tone}`}
-                  disabled={saveChip.tone !== 'error'}
-                  onClick={() => {
-                    if (saveChip.tone === 'error' && videoBlob && betId) {
-                      void startBackgroundUpload(videoBlob, videoBlob.type || 'video/webm', betId, capture ?? undefined)
-                    }
-                  }}
-                >
-                  {saveChip.tone === 'busy' && <span className="cf-spinner" aria-hidden />}
-                  {saveChip.label}
-                </button>
-              ) : <span />}
-              <span className={`cf-chip${uploadStatus === 'done' ? ' cf-chip--ok' : ' cf-chip--busy'}`}>
-                {uploadStatus !== 'done' && <span className="cf-spinner" aria-hidden />}
-                {uploadStatus === 'done' ? 'Footage received' : 'Securing footage'}
-              </span>
+              <button
+                type="button"
+                className={`cf-chip cf-chip--${saveChip.tone}`}
+                disabled={!saveChip.retry}
+                onClick={() => { if (saveChip.retry) retry() }}
+                aria-live="polite"
+              >
+                {saveChip.spinner && <span className="cf-spinner" aria-hidden />}
+                {saveChip.label}
+              </button>
             </div>
           </div>
 
@@ -110,7 +100,6 @@ export default function ConfirmPage() {
               type="button"
               className="btn-lime btn-lime--block"
               onClick={handleHoleInOne}
-              disabled={uploadStatus !== 'done'}
             >
               Yes, it went in!
             </button>
@@ -121,6 +110,7 @@ export default function ConfirmPage() {
 
           <p className="cf-note">
             Your honest declaration is the first step. A claim needs this footage, the course certificate and a 4-ball affidavit.
+            {saveChip.tone !== 'ok' && ' The video stays on your phone and finishes uploading by itself, even with no signal here.'}
           </p>
         </div>
       </div>

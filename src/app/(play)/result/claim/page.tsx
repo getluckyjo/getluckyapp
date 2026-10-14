@@ -7,6 +7,8 @@ import { track } from '@/lib/analytics'
 import { haptics } from '@/lib/haptics'
 import AppHeader from '@/components/layout/AppHeader'
 import { useBet, BET_TIERS } from '@/context/BetContext'
+import { useUpload } from '@/hooks/useUpload'
+import { uploadChip } from '@/lib/upload/chip'
 import { tierByKey } from '@/lib/tiers'
 import { formatPrize, formatRand } from '@/lib/format'
 import { useAuth } from '@/context/AuthContext'
@@ -40,6 +42,8 @@ interface UploadStep {
 export default function ClaimPage() {
   const router = useRouter()
   const { betId, resetSession, videoBlob, selectedTier, prize, prizeCurrency, selectedCourse, selectedHole, hydrated } = useBet()
+  const { state: upload, retry: retryUpload } = useUpload(betId)
+  const videoChip = uploadChip(upload)
   const { user } = useAuth()
   // tierByKey, not BET_TIERS: a free swing is a real bet with a real prize.
   const tierData = tierByKey(selectedTier) ?? BET_TIERS[1]
@@ -154,8 +158,11 @@ export default function ClaimPage() {
     })
   }
 
-  const allDone = steps.every(s => s.done)
-  const doneCount = steps.filter(s => s.done).length
+  // The documents are the golfer's to supply; the video is on its way by
+  // itself and attaches to the claim when the server seals it, so it never
+  // holds up the submission.
+  const allDone = steps.filter(s => s.id !== 'video').every(s => s.done)
+  const doneCount = steps.filter(s => s.id !== 'video' ? s.done : videoChip.tone === 'ok').length
 
   // Who saw it. A row counts once both fields parse; the first playing
   // partner is required, the rest are optional. Same schema as the server.
@@ -243,36 +250,41 @@ export default function ClaimPage() {
 
           <ul className="cl-steps">
             {steps.map((step, i) => {
-              const actionable = !step.done && !step.uploading
+              // The video's row reports the upload manager, not a file pick.
+              const isVideo = step.id === 'video'
+              const shown = isVideo
+                ? { ...step, done: videoChip.tone === 'ok', uploading: videoChip.spinner, desc: videoChip.tone === 'ok' ? step.desc : videoChip.label }
+                : step
+              const actionable = isVideo ? videoChip.retry : !shown.done && !shown.uploading
               return (
                 <li key={step.id}>
                   <button
                     type="button"
-                    className={`cl-step${step.done ? ' is-done' : ''}${step.uploading ? ' is-uploading' : ''}`}
-                    onClick={() => actionable && handleUpload(step.id)}
+                    className={`cl-step${shown.done ? ' is-done' : ''}${shown.uploading ? ' is-uploading' : ''}`}
+                    onClick={() => { if (!actionable) return; if (isVideo) retryUpload(); else void handleUpload(step.id) }}
                     disabled={!actionable}
-                    aria-label={step.done ? `${step.title}: uploaded` : `Upload ${step.title}`}
+                    aria-label={shown.done ? `${shown.title}: uploaded` : isVideo ? `${shown.title}: ${shown.desc}` : `Upload ${shown.title}`}
                   >
                     <span className="vf-step-dot" aria-hidden>
-                      {step.uploading ? (
+                      {shown.uploading ? (
                         <span className="cf-spinner cf-spinner--green" />
-                      ) : step.done ? (
+                      ) : shown.done ? (
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 5 5 9-10" /></svg>
                       ) : (
                         i + 1
                       )}
                     </span>
                     <span className="cl-step-text">
-                      <span className="cl-step-title">{step.title}</span>
-                      <span className="cl-step-desc">{step.uploading ? 'Uploading…' : step.done && step.fileName ? `Uploaded · ${step.fileName}` : step.desc}</span>
+                      <span className="cl-step-title">{shown.title}</span>
+                      <span className="cl-step-desc">{isVideo ? shown.desc : shown.uploading ? 'Uploading…' : shown.done && shown.fileName ? `Uploaded · ${shown.fileName}` : shown.desc}</span>
                     </span>
-                    {actionable && <span className="cl-step-cta">Upload</span>}
+                    {actionable && <span className="cl-step-cta">{isVideo ? 'Retry' : 'Upload'}</span>}
                   </button>
                 </li>
               )
             })}
           </ul>
-          <p className="cl-hint">Photo, scan or PDF. Up to 10 MB each.</p>
+          <p className="cl-hint">Photo, scan or PDF. Up to 10 MB each.{videoChip.tone !== 'ok' && ' Your footage attaches itself to the claim when it finishes uploading; you can submit before then.'}</p>
 
           <section className="acct-card" style={{ marginTop: 16 }}>
             <header className="acct-card-head"><h2>Who saw it</h2></header>

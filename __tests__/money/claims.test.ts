@@ -19,6 +19,7 @@ import { PATCH as patchBet, GET as getBet } from '@/app/api/bets/[betId]/route'
 import { POST as submitClaim, GET as getVerification } from '@/app/api/verifications/[betId]/route'
 import { POST as uploadUrl } from '@/app/api/videos/upload-url/route'
 import { POST as sealVideo, MAX_FOOTAGE_BYTES } from '@/app/api/videos/uploaded/route'
+import { FOOTAGE_UPLOAD_GRACE_MS } from '@/lib/claims/footage-window'
 import { farFromCourse } from '@/lib/claims/capture'
 import { THRESHOLDS } from '@/lib/risk/thresholds'
 
@@ -295,10 +296,24 @@ describe('POST /api/videos/upload-url — footage slot', () => {
     const res = await uploadUrl(jsonRequest('http://x', { betId: bet.id, mimeType: 'video/mp4', storagePath: 'ignored/by/server' }) as never)
     const body = await res.json()
     expect(res.status).toBe(200)
-    expect(body.storagePath).toBe(`${USER_A.id}/${bet.id}/shot.mp4`)
+    expect(body.storagePath).toMatch(new RegExp(`^${USER_A.id}/${bet.id}/shot-[0-9a-f]{8}\\.mp4$`))
     expect(body.signedUrl).toContain(body.storagePath)
     expect(bet.video_url).toBe(body.storagePath)
     expect(bet.updated_by).toBe(USER_A.id)
+  })
+
+  it('every slot has its own object name and the pointer moves to the newest, until the seal fixes it', async () => {
+    asUser()
+    const bet = ownBet()
+    const first = await (await uploadUrl(jsonRequest('http://x', { betId: bet.id }) as never)).json()
+    const second = await (await uploadUrl(jsonRequest('http://x', { betId: bet.id }) as never)).json()
+    expect(first.storagePath).not.toBe(second.storagePath)
+    expect(bet.video_url).toBe(second.storagePath)
+    bet.video_sha256 = 'sealed'
+    const third = await uploadUrl(jsonRequest('http://x', { betId: bet.id }) as never)
+    expect(third.status).toBe(409)
+    expect((await third.json()).code).toBe('FOOTAGE_SEALED')
+    expect(bet.video_url).toBe(second.storagePath)
   })
 
   it('403 for a bet the caller does not own', async () => {
@@ -308,12 +323,25 @@ describe('POST /api/videos/upload-url — footage slot', () => {
     expect(bet.video_url).toBeUndefined()
   })
 
-  it('409 once the bet is resolved and 410 once the window has closed', async () => {
+  it('a recorded miss or a claim may still deliver its footage inside the grace period; a verified bet may not', async () => {
     asUser()
-    const resolved = ownBet({ status: 'miss' })
-    expect((await uploadUrl(jsonRequest('http://x', { betId: resolved.id }) as never)).status).toBe(409)
-    const expired = ownBet({ expires_at: PAST })
-    expect((await uploadUrl(jsonRequest('http://x', { betId: expired.id }) as never)).status).toBe(410)
+    const miss = ownBet({ status: 'miss' })
+    expect((await uploadUrl(jsonRequest('http://x', { betId: miss.id }) as never)).status).toBe(200)
+    const claimed = ownBet({ status: 'claimed', expires_at: PAST })
+    expect((await uploadUrl(jsonRequest('http://x', { betId: claimed.id }) as never)).status).toBe(200)
+    const verified = ownBet({ status: 'verified' })
+    expect((await uploadUrl(jsonRequest('http://x', { betId: verified.id }) as never)).status).toBe(409)
+  })
+
+  it('410 FOOTAGE_WINDOW_CLOSED once the play window plus the grace period has passed', async () => {
+    asUser()
+    const longAgo = new Date(Date.now() - FOOTAGE_UPLOAD_GRACE_MS - 60_000).toISOString()
+    const expired = ownBet({ expires_at: longAgo })
+    const res = await uploadUrl(jsonRequest('http://x', { betId: expired.id }) as never)
+    expect(res.status).toBe(410)
+    expect((await res.json()).code).toBe('FOOTAGE_WINDOW_CLOSED')
+    const stillInGrace = ownBet({ expires_at: PAST })
+    expect((await uploadUrl(jsonRequest('http://x', { betId: stillInGrace.id }) as never)).status).toBe(200)
   })
 
   it('400 without a betId and 401 without a session', async () => {
@@ -377,14 +405,41 @@ describe('POST /api/videos/uploaded — sealing the footage', () => {
     expect(bet.video_sha256).toBeUndefined()
   })
 
-  it('404 when nothing landed in storage, 400 when no slot was issued, 404 for others\' bets', async () => {
+  it('404 FOOTAGE_MISSING when nothing landed yet or no slot was issued (the client then asks for a slot); 404 for others\' bets', async () => {
     asUser()
     const noObject = ownBet({ video_url: `${USER_A.id}/missing/shot.webm` })
-    expect((await seal(noObject.id as string)).status).toBe(404)
+    const r1 = await seal(noObject.id as string)
+    expect(r1.status).toBe(404)
+    expect((await r1.json()).code).toBe('FOOTAGE_MISSING')
     const noSlot = ownBet()
-    expect((await seal(noSlot.id as string)).status).toBe(400)
+    const r2 = await seal(noSlot.id as string)
+    expect(r2.status).toBe(404)
+    expect((await r2.json()).code).toBe('FOOTAGE_MISSING')
     asUser(USER_B)
     expect((await seal(noObject.id as string)).status).toBe(404)
+  })
+
+  it('the seal stamps an open claim\'s footage_received_at and removes the other attempts\' objects', async () => {
+    asUser()
+    const bet = ownBet({ video_url: `${USER_A.id}/b/shot-2222bbbb.webm` })
+    db.seed('verifications', { bet_id: bet.id, status: 'documents_received', footage_received_at: null })
+    db.putObject('shot-videos', `${USER_A.id}/b/shot-1111aaaa.webm`, 'an earlier attempt that never sealed')
+    db.putObject('shot-videos', `${USER_A.id}/b/shot-2222bbbb.webm`, FOOTAGE)
+    const res = await seal(bet.id as string)
+    expect(res.status).toBe(200)
+    expect(db.find('verifications', v => v.bet_id === bet.id)!.footage_received_at).toBeTruthy()
+    expect(db.objectPaths('shot-videos')).toEqual([`${USER_A.id}/b/shot-2222bbbb.webm`])
+  })
+
+  it('a claim submitted before the footage sealed leaves footage_received_at empty; the GET says whether it has sealed', async () => {
+    asUser()
+    const bet = ownBet()
+    const res = await submitClaim(jsonRequest('http://x', { witnesses: [{ role: 'witness', name: 'Sipho Dlamini', email: 'sipho@example.com' }] }) as never, params(bet.id as string))
+    expect(res.status).toBe(200)
+    expect(db.find('verifications', v => v.bet_id === bet.id)!.footage_received_at).toBeNull()
+    expect((await (await getVerification(new Request('http://x') as never, params(bet.id as string))).json()).footageSealed).toBe(false)
+    bet.video_sha256 = 'abc'
+    expect((await (await getVerification(new Request('http://x') as never, params(bet.id as string))).json()).footageSealed).toBe(true)
   })
 })
 

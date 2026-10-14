@@ -1491,6 +1491,7 @@ body {
 }
 .cf-chip--ok { background: var(--lime); }
 .cf-chip--error { background: #e40014; color: var(--white); cursor: pointer; }
+.cf-chip--wait { background: #f3c84b; color: var(--green-dark); cursor: pointer; }
 .cf-chip:disabled { cursor: default; opacity: 1; }
 .cf-spinner {
   width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;

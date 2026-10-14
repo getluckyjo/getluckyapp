@@ -40,7 +40,7 @@ export const RULES = {
   promo:       { name: 'promo',       perUser: 20,  perIp: 600,  windowSeconds: ONE_HOUR    } as RateRule, // checking and playing a code; a club day shares one IP, a guesser does not get far
   golfDay:     { name: 'golf_day',    perUser: 20,  perIp: 1500, windowSeconds: ONE_HOUR    } as RateRule, // joining and swinging; 200 players can share the clubhouse Wi-Fi
   claim:       { name: 'claim',       perUser: 20,  perIp: 600,  windowSeconds: TEN_MINUTES } as RateRule,
-  upload:      { name: 'upload',      perUser: 20,  perIp: 600,  windowSeconds: TEN_MINUTES } as RateRule,
+  upload:      { name: 'upload',      perUser: 60,  perIp: 1800, windowSeconds: TEN_MINUTES } as RateRule, // seal-first: up to three calls per attempt, and a flaky link retries
   ageCheck:    { name: 'age_check',   perUser: 10,  perIp: 300,  windowSeconds: ONE_HOUR    } as RateRule,
   membership:  { name: 'membership',  perUser: 60,  perIp: null, windowSeconds: TEN_MINUTES } as RateRule,
   admin:       { name: 'admin',       perUser: 600, perIp: null, windowSeconds: TEN_MINUTES } as RateRule,

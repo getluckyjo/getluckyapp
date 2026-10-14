@@ -10,6 +10,10 @@ import { useBet, BET_TIERS } from '@/context/BetContext'
 import { isNoStakeTier, tierByKey } from '@/lib/tiers'
 import { useAuth } from '@/context/AuthContext'
 import { useShareVideo } from '@/hooks/useShareVideo'
+import { useUpload } from '@/hooks/useUpload'
+import { uploadChip } from '@/lib/upload/chip'
+import { fetchJson } from '@/lib/net/fetch-json'
+import { browserOnline } from '@/lib/net/online'
 
 /**
  * Miss — "Great swing." The coming-back beat, so it takes the same photo
@@ -21,6 +25,11 @@ export default function TryAgainPage() {
   const { selectedTier, betId, resetSession, videoBlob, selectedCourse, selectedHole, hydrated } = useBet()
   const { profile } = useAuth()
   const [toast, setToast] = useState<string | null>(null)
+  const { state: upload, retry: retryUpload } = useUpload(betId)
+  const chip = uploadChip(upload)
+  // Whether the server has the result. Off the grid it is told when the
+  // signal returns; the footage upload carries on regardless.
+  const [resultSaved, setResultSaved] = useState<'pending' | 'saved' | 'later'>('pending')
 
   // Guard: require an active bet session (after the phone's stored footage has been checked)
   useEffect(() => {
@@ -48,13 +57,25 @@ export default function TryAgainPage() {
     setTimeout(() => setToast(null), 2500)
   }
 
+  // Record the miss. The server is idempotent (a repeat is 200 alreadyDone),
+  // so the request may retry across a flaky link; when it still cannot get
+  // through, the next 'online' tries once more.
   useEffect(() => {
     if (!betId) return
-    fetch(`/api/bets/${betId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'miss', declared_result: 'miss' }),
-    }).catch(() => {})
+    let cancelled = false
+    let unsub = () => {}
+    const save = async () => {
+      try {
+        await fetchJson(`/api/bets/${betId}`, { method: 'PATCH', body: { status: 'miss', declared_result: 'miss' }, retries: 4, backoffMs: [1_000, 3_000, 8_000, 20_000], timeoutMs: 12_000 })
+        if (!cancelled) setResultSaved('saved')
+      } catch {
+        if (cancelled) return
+        setResultSaved('later')
+        unsub = browserOnline.subscribe(online => { if (online) { unsub(); void save() } })
+      }
+    }
+    void save()
+    return () => { cancelled = true; unsub() }
   }, [betId])
 
   function handlePlayAgain() {
@@ -121,6 +142,12 @@ export default function TryAgainPage() {
             )}
             <h1 className="v2-title">{'Great\nswing.'}</h1>
             <p className="v2-sub">The ace is coming.{'\n'}It&apos;s just a matter of time.</p>
+            {(chip.tone !== 'ok' || resultSaved === 'later') && (
+              <button type="button" className={`cf-chip cf-chip--${chip.tone}`} style={{ marginTop: 10 }} disabled={!chip.retry} onClick={() => { if (chip.retry) retryUpload() }} aria-live="polite">
+                {chip.spinner && <span className="cf-spinner" aria-hidden />}
+                {chip.tone === 'ok' ? 'We\u2019ll record your result when you\u2019re back online' : chip.label}
+              </button>
+            )}
 
             <div className="miss-actions">
               <button type="button" className="btn-lime" onClick={handlePlayAgain}>

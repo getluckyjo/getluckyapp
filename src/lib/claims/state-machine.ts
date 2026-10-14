@@ -63,6 +63,7 @@ export const OPEN_VERIFICATION_STATUSES: readonly VerificationStatus[] = ['pendi
 export type ClaimErrorCode =
   | 'INVALID_TRANSITION'
   | 'BET_EXPIRED'
+  | 'FOOTAGE_WINDOW_CLOSED'
   | 'BET_NOT_FOUND'
   | 'VERIFICATION_NOT_FOUND'
   | 'ACCOUNT_SUSPENDED'
