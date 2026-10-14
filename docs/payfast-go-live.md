@@ -218,8 +218,11 @@ Pay token directly, so a native Apple Pay sheet inside the app without
 PayFast's page is not possible with PayFast.
 
 **Since 13 October 2026 the in-app Apple Pay and Google Pay sheets come
-from Stitch, not PayFast: see `docs/stitch-go-live.md`.** Until Stitch is
-switched on, what follows still applies.
+from Stitch, not PayFast: see `docs/stitch-go-live.md`.** The button that
+sent iPhones to PayFast's hosted page was removed on 14 October: with
+Apple Pay not enabled on the merchant it was a dead end, and no payment
+reached the ledger from it. What follows describes that button for the
+record; the server still accepts `hosted: true` and nothing sends it.
 
 What the app does: on a device where Apple Pay is set up
 (Safari on iPhone, iPad or Mac; `window.ApplePaySession`), the stake sheet

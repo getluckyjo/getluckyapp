@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useSyncExternalStore } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import PhoneFrame from '@/components/layout/PhoneFrame'
 import { track } from '@/lib/analytics'
@@ -26,8 +26,6 @@ interface PromoSwing { code: string }
 
 declare global {
   interface Window {
-    /** Safari on an Apple device with Apple Pay set up; absent everywhere else. */
-    ApplePaySession?: { canMakePayments(): boolean }
     /** PayFast's Onsite modal, defined by onsite/engine.js once loaded. */
     payfast_do_onsite_payment?: (
       opts: { uuid: string; return_url?: string; cancel_url?: string },
@@ -35,8 +33,6 @@ declare global {
     ) => void
   }
 }
-
-const subscribeNever = () => () => {}
 
 /** Load PayFast's Onsite script once; resolves when the modal function exists. */
 function loadOnsiteEngine(src: string, timeoutMs = 6000): Promise<void> {
@@ -94,11 +90,11 @@ export default function ChooseStakePage() {
   // the box ticked is refused in the modal. Ticking it is the golfer's call.
   const [saveCard, setSaveCard]     = useState(false)
   // Apple Pay and Google Pay through Stitch open their sheet right here
-  // (WalletButtons). Until Stitch is switched on for Apple Pay, a device
-  // that has it gets a button to PayFast's hosted page instead, where the
-  // sheet lives. Read once from the browser; false on the server and elsewhere.
+  // (WalletButtons), once Stitch is switched on. Until then there is no
+  // wallet button: the one that sent iPhones to PayFast's hosted page
+  // (13 October) depended on PayFast having Apple Pay enabled for the
+  // merchant, and without that it was a dead end. The modal works for all.
   const wallets = walletPublicConfig()
-  const applePayHosted = useSyncExternalStore(subscribeNever, () => !wallets.applePay && !!window.ApplePaySession?.canMakePayments?.(), () => false)
   const savedCard = user ? savedCardState : null
   // One tap is for stakes up to R250 (no 3-D Secure on a token charge); a
   // bigger stake goes through PayFast's checkout, same as with no card.
@@ -683,9 +679,6 @@ export default function ChooseStakePage() {
                       onBusy={busy => { if (busy && selected) { setErrorMsg(''); selectTier(selected) } }}
                     />
                   )}
-                  {applePayHosted && (
-                    <button type="button" className="stake-apple-pay" aria-label={`Pay ${formatRand(activeTier.stakeZAR)} with Apple Pay`} onClick={() => handleConfirmPayment({ hosted: true })} disabled={loading} />
-                  )}
                 </>
               ) : (
                 <>
@@ -709,9 +702,6 @@ export default function ChooseStakePage() {
                       onError={(_wallet, message) => { setErrorMsg(message); setStep('idle') }}
                       onBusy={busy => { if (busy && selected) { setErrorMsg(''); selectTier(selected) } }}
                     />
-                  )}
-                  {applePayHosted && (
-                    <button type="button" className="stake-apple-pay" aria-label={`Pay ${formatRand(activeTier.stakeZAR)} with Apple Pay`} onClick={() => handleConfirmPayment({ hosted: true })} disabled={loading} />
                   )}
                   {savedCard ? (
                     <p className="stake-free-note">
