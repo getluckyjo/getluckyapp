@@ -2,20 +2,21 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { assertNotSuspended, claimErrorResponse } from '@/lib/claims/state-machine'
+import { claimErrorResponse } from '@/lib/claims/state-machine'
+import { assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
 import { grantBetForPayment } from '@/lib/claims/grant'
 import { resolveStitchConfig } from '@/lib/stitch/config'
 import { initiateWalletTransaction, type WalletKind } from '@/lib/stitch/api'
 import { checkTarget } from '@/lib/payfast/target'
 import { BET_TIERS } from '@/lib/tiers'
-import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { RULES, clientIp } from '@/lib/rate-limit'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
 import { hashIdentifier } from '@/lib/risk/hash'
 import { log } from '@/lib/observability/log'
 import { alertOps } from '@/lib/observability/alerts'
 import type { Json } from '@/types/database'
+import { findByIdempotencyKey, isIdempotencyConflict, readIdempotencyKey, replayCharge } from '@/lib/payments/idempotency'
 
 const Body = z.object({
   tier: z.enum(BET_TIERS.map(t => t.tier) as [string, ...string[]]),
@@ -65,12 +66,10 @@ export async function POST(request: NextRequest) {
     }
     const config = cfg.config
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    const limited = await enforceRateLimit(RULES.checkout, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
-    await assertNotSuspended(supabase, user.id)
+    const gate = await gatePlayRequest(request, RULES.checkout)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
+    assertProfileNotSuspended(profile)
 
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
@@ -85,6 +84,15 @@ export async function POST(request: NextRequest) {
     const amountCents = tierData.stakeZAR * 100
     const walletKind: WalletKind = wallet
 
+    // A retry after a lost answer, or a second tap: the first row answers.
+    const idem = readIdempotencyKey(request)
+    if (idem.response) return idem.response
+    const declined = 'The payment was not approved. Pay another way below.'
+    if (idem.key) {
+      const earlier = await findByIdempotencyKey(admin, user.id, idem.key)
+      if (earlier) return replayCharge(admin, earlier, { userId: user.id, createdIpHash: hashIdentifier('ip', clientIp(request)), declined })
+    }
+
     const { error: ledgerErr } = await admin.from('payfast_payments').insert({
       m_payment_id: mPaymentId,
       user_id: user.id,
@@ -94,8 +102,14 @@ export async function POST(request: NextRequest) {
       amount_cents: amountCents,
       status: 'pending',
       provider: 'stitch',
+      ...(idem.key ? { idempotency_key: idem.key } : {}),
       raw_payload: { source: 'wallet', wallet: walletKind } as Json,
     })
+    if (isIdempotencyConflict(ledgerErr) && idem.key) {
+      // A duplicate raced past the lookup: the first row answers.
+      const earlier = await findByIdempotencyKey(admin, user.id, idem.key)
+      if (earlier) return replayCharge(admin, earlier, { userId: user.id, createdIpHash: hashIdentifier('ip', clientIp(request)), declined })
+    }
     if (ledgerErr) {
       await alertOps({ event: 'stitch.charge.ledger_write_failed', path: 'payfast_checkout', summary: 'Could not write the pending ledger row before a wallet charge; nothing was charged.', details: { user_id: user.id, m_payment_id: mPaymentId }, err: ledgerErr })
       return apiError('stitch.charge.ledger_write_failed', ledgerErr, { path: 'payfast_checkout', message: 'Could not start the payment. Please try again.' })

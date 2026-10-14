@@ -29,9 +29,10 @@ import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { FREE_TIER } from '@/lib/tiers'
-import { assertNotSuspended, claimErrorResponse, computeExpiresAt } from '@/lib/claims/state-machine'
+import { claimErrorResponse, computeExpiresAt } from '@/lib/claims/state-machine'
+import { ageRefusal, assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
 import { checkTarget } from '@/lib/payfast/target'
-import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { RULES, clientIp } from '@/lib/rate-limit'
 import { log } from '@/lib/observability/log'
 import { z } from 'zod'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
@@ -119,33 +120,19 @@ export async function POST(request: NextRequest) {
       return fullyBooked('FREE_SWING_PAUSED')
     }
 
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
-    const limited = await enforceRateLimit(RULES.freeSwing, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
+    const gate = await gatePlayRequest(request, RULES.freeSwing)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
 
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
     const { courseId, holeId } = body.data
 
-    await assertNotSuspended(supabase, user.id)
+    assertProfileNotSuspended(profile)
 
     // ── 18+, same as any other entry. The prize is real money. ──
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('age_verified_at')
-      .eq('id', user.id)
-      .maybeSingle()
-
-    if (!profile?.age_verified_at) {
-      return NextResponse.json(
-        { error: 'Age verification required', code: 'AGE_NOT_VERIFIED' },
-        { status: 403 },
-      )
-    }
+    const underage = ageRefusal(profile)
+    if (underage) return underage
 
     // ── One per account. The index below is what enforces it; this is the
     // friendly answer for the ordinary case. ──
@@ -157,12 +144,7 @@ export async function POST(request: NextRequest) {
       .limit(1)
       .maybeSingle()
 
-    if (taken) {
-      return NextResponse.json(
-        { error: 'You have already played your free swing. Choose a stake to play again.', code: 'FREE_SWING_USED' },
-        { status: 409 },
-      )
-    }
+    if (taken) return usedResponse(supabase, user.id)
 
     // ── The target must be a real, active, long-enough par-3 at a partner course ──
     const refused = await checkTarget(supabase, courseId, holeId)
@@ -192,10 +174,7 @@ export async function POST(request: NextRequest) {
       // second device. Not an error worth a 500.
       if (error.code === '23505') {
         log.info('bets.free.duplicate_refused', { user_id: user.id })
-        return NextResponse.json(
-          { error: 'You have already played your free swing. Choose a stake to play again.', code: 'FREE_SWING_USED' },
-          { status: 409 },
-        )
+        return usedResponse(supabase, user.id)
       }
       // The day's cap, or the pause switch (migration 038): the trigger said no.
       const capped = capRefusalFromDbError(error)
@@ -216,4 +195,17 @@ export async function POST(request: NextRequest) {
     if (known) return known
     return apiError('bets.free.unhandled', err, { path: 'bets_create' })
   }
+}
+
+/**
+ * "Already played", with the bet it refers to. A phone that sent the request
+ * twice because the first answer was lost on a bad link gets the bet it
+ * made, and carries on to the recorder when it is still active.
+ */
+async function usedResponse(supabase: Awaited<ReturnType<typeof createClient>>, userId: string): Promise<NextResponse> {
+  const { data: bet } = await supabase.from('bets').select('id, status').eq('user_id', userId).eq('tier', FREE_TIER.tier).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return NextResponse.json(
+    { error: 'You have already played your free swing. Choose a stake to play again.', code: 'FREE_SWING_USED', betId: bet?.id ?? null, status: bet?.status ?? null },
+    { status: 409 },
+  )
 }

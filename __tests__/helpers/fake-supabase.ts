@@ -60,7 +60,8 @@ interface Result<T = unknown> {
 
 const UNIQUE: Record<string, (string | string[])[]> = {
   bets: ['payment_intent_id', ['golf_day_id', 'user_id', 'golf_day_slot']],
-  payfast_payments: ['m_payment_id'],
+  payfast_payments: ['m_payment_id', ['user_id', 'idempotency_key']],
+  claim_witnesses: [['bet_id', 'email', 'source']],
   verifications: ['bet_id'],
   beta_access: ['value'],
   promo_codes: ['code'],
@@ -77,7 +78,7 @@ const UNIQUE: Record<string, (string | string[])[]> = {
 
 /** Column defaults the database applies and the routes rely on (migration 045: every ledger row has a provider). */
 const DEFAULTS: Record<string, Row> = {
-  payfast_payments: { provider: 'payfast', provider_ref: null },
+  payfast_payments: { provider: 'payfast', provider_ref: null, idempotency_key: null },
   payment_cards: { provider: 'payfast' },
 }
 

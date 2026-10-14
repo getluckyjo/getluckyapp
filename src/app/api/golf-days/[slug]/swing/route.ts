@@ -22,12 +22,12 @@
  */
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { apiError, parseBody, uuid } from '@/lib/api/http'
-import { assertNotSuspended, claimErrorResponse, computeExpiresAt } from '@/lib/claims/state-machine'
+import { claimErrorResponse, computeExpiresAt } from '@/lib/claims/state-machine'
+import { ageRefusal, assertProfileNotSuspended, gatePlayRequest } from '@/lib/api/gate'
 import { checkTarget } from '@/lib/payfast/target'
-import { RULES, clientIp, enforceRateLimit } from '@/lib/rate-limit'
+import { RULES, clientIp } from '@/lib/rate-limit'
 import { log } from '@/lib/observability/log'
 import { hashIdentifier } from '@/lib/risk/hash'
 import { GOLF_DAY_TIER } from '@/lib/tiers'
@@ -40,19 +40,28 @@ type Ctx = { params: Promise<{ slug: string }> }
 
 const Body = z.object({ holeId: uuid })
 
-function refuse(refusal: GolfDayRefusal): NextResponse {
+function refuse(refusal: GolfDayRefusal, extra: Record<string, unknown> = {}): NextResponse {
   const { status, error } = GOLF_DAY_REFUSALS[refusal]
-  return NextResponse.json({ error, code: refusal }, { status })
+  return NextResponse.json({ error, code: refusal, ...extra }, { status })
+}
+
+/**
+ * "Swing already taken", with the bet it refers to. A phone that sent the
+ * request twice because the first answer was lost on a bad link gets the
+ * bet it made, and carries on to the recorder when it is still active.
+ */
+async function usedResponse(admin: ReturnType<typeof createAdminClient>, opts: { golfDayId: string; userId: string; holeId: string; trip: boolean }): Promise<NextResponse> {
+  let q = admin.from('bets').select('id, status').eq('user_id', opts.userId).eq('golf_day_id', opts.golfDayId)
+  if (opts.trip) q = q.eq('hole_id', opts.holeId)
+  const { data: bet } = await q.order('created_at', { ascending: false }).limit(1).maybeSingle()
+  return refuse(opts.trip ? 'GOLF_DAY_ROUND_USED' : 'GOLF_DAY_SWING_USED', { betId: bet?.id ?? null, status: bet?.status ?? null })
 }
 
 export async function POST(request: Request, { params }: Ctx) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-
-    const limited = await enforceRateLimit(RULES.golfDay, { userId: user.id, ip: clientIp(request) })
-    if (limited) return limited
+    const gate = await gatePlayRequest(request, RULES.golfDay)
+    if (!gate.ok) return gate.response
+    const { user, supabase, profile } = gate
 
     const body = await parseBody(request, Body)
     if (!body.ok) return body.response
@@ -61,13 +70,11 @@ export async function POST(request: Request, { params }: Ctx) {
     const { slug } = await params
     if (!GOLF_DAY_SLUG_PATTERN.test(slug)) return refuse('GOLF_DAY_NOT_FOUND')
 
-    await assertNotSuspended(supabase, user.id)
+    assertProfileNotSuspended(profile)
 
     // ── 18+, same as any other entry. The prize is real money. ──
-    const { data: profile } = await supabase.from('profiles').select('age_verified_at').eq('id', user.id).maybeSingle()
-    if (!profile?.age_verified_at) {
-      return NextResponse.json({ error: 'Age verification required', code: 'AGE_NOT_VERIFIED' }, { status: 403 })
-    }
+    const underage = ageRefusal(profile)
+    if (underage) return underage
 
     const admin = createAdminClient()
     const day = await golfDayBySlug(admin, slug)
@@ -90,7 +97,7 @@ export async function POST(request: Request, { params }: Ctx) {
     ])
     if (joinedError) throw joinedError
     if (!joined) return refuse('GOLF_DAY_NOT_JOINED')
-    if (swingTaken) return refuse(trip ? 'GOLF_DAY_ROUND_USED' : 'GOLF_DAY_SWING_USED')
+    if (swingTaken) return usedResponse(admin, { golfDayId: day.id, userId: user.id, holeId, trip })
 
     const hole = (holes.get(day.id) ?? []).find(h => h.holeId === holeId)
     if (!hole) return refuse('GOLF_DAY_WRONG_HOLE')
@@ -125,7 +132,7 @@ export async function POST(request: Request, { params }: Ctx) {
       // 23505: a double tap or a second device got there first.
       if (error.code === '23505') {
         log.info('golf_days.swing_duplicate_refused', { user_id: user.id, golf_day_id: day.id })
-        return refuse(trip ? 'GOLF_DAY_ROUND_USED' : 'GOLF_DAY_SWING_USED')
+        return usedResponse(admin, { golfDayId: day.id, userId: user.id, holeId, trip })
       }
       const refusal = refusalFromDbError(error)
       if (refusal) {

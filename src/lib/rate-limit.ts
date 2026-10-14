@@ -94,8 +94,12 @@ export async function enforceRateLimit(rule: RateRule, scope: RateScope): Promis
   if (scope.userId && rule.perUser > 0) checks.push({ kind: 'user', id: scope.userId, limit: rule.perUser })
   if (scope.ip && rule.perIp) checks.push({ kind: 'ip', id: scope.ip, limit: rule.perIp })
 
-  for (const c of checks) {
-    const result = await hit(`${rule.name}:${c.kind}:${c.id}`, c.limit, rule.windowSeconds)
+  // Both counters at once: one round trip to the database, not two in a
+  // row, on every play request. The IP counter is bumped even when the
+  // user limit refuses, which the loose IP limits can absorb.
+  const results = await Promise.all(checks.map(c => hit(`${rule.name}:${c.kind}:${c.id}`, c.limit, rule.windowSeconds)))
+  for (const [i, c] of checks.entries()) {
+    const result = results[i]
     if (!result) continue // backend down: fail open, already logged
     if (!result.allowed) {
       const retryAfter = Math.max(1, Math.ceil((Date.parse(result.reset_at) - Date.now()) / 1000))

@@ -13,6 +13,7 @@
  * Shown only where a wallet is both configured (src/lib/stitch/public.ts)
  * and available on the device. Nothing here is rendered on the server.
  */
+import { chargeKey, clearChargeKey, postForOutcome, settlesCharge } from '@/lib/client/charge-key'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Script from 'next/script'
 import { applePayRequest, encodeWalletToken, googlePayReadyRequest, googlePayRequest, walletPublicConfig, type GooglePayPublicConfig } from '@/lib/stitch/public'
@@ -81,14 +82,16 @@ const applePaySession = (): ApplePaySessionCtor | null => {
   return ctor && typeof ctor.canMakePayments === 'function' && ctor.canMakePayments() ? ctor : null
 }
 
-async function postCharge(body: Record<string, unknown>): Promise<{ status: number; data: WalletChargeResponse }> {
-  const res = await fetch('/api/payments/wallet/charge', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
-  const data = await res.json().catch(() => ({})) as WalletChargeResponse
-  return { status: res.status, data }
+/**
+ * The charge, with one key per purchase: a retry after a lost answer is the
+ * same charge, replayed by the server from the ledger, never a second one.
+ * Two tries at most: the wallet sheet waits only so long for our answer.
+ */
+async function postCharge(body: { tier: string; holeId: string; wallet: string } & Record<string, unknown>): Promise<{ status: number; data: WalletChargeResponse }> {
+  const scope = `${body.wallet}:${body.tier}:${body.holeId}`
+  const outcome = await postForOutcome<WalletChargeResponse>('/api/payments/wallet/charge', body, { idempotencyKey: chargeKey(scope), retries: 2, timeoutMs: 15_000 })
+  if (settlesCharge(outcome.status, outcome.data)) clearChargeKey(scope)
+  return outcome
 }
 
 export default function WalletButtons({ amountZAR, tier, courseId, holeId, disabled, onOutcome, onError, onBusy }: Props) {

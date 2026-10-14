@@ -75,6 +75,31 @@ export async function enqueue<K extends JobKind>(admin: Admin, kind: K, payload:
   return data.id
 }
 
+/**
+ * Enqueue unless a job of this kind for the same `payload[field]` is still
+ * waiting: a claim submitted twice on a bad link asks its witnesses once.
+ * Returns the waiting job's id when one was found.
+ */
+export async function enqueueOnce<K extends JobKind>(admin: Admin, kind: K, payload: JobPayloads[K], field: keyof JobPayloads[K] & string): Promise<number> {
+  const value = String((payload as Record<string, unknown>)[field])
+  const { data: waiting } = await admin
+    .from('outbox')
+    .select('id')
+    .eq('kind', kind)
+    // PostgREST's json-path filter; the typed client only knows columns.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .eq(`payload->>${field}` as any, value)
+    .is('done_at', null)
+    .is('failed_at', null)
+    .limit(1)
+    .maybeSingle()
+  if (waiting) {
+    log.info('outbox.already_queued', { kind, id: waiting.id })
+    return waiting.id
+  }
+  return enqueue(admin, kind, payload)
+}
+
 export interface DrainResult { claimed: number; done: number; retried: number; dead: number }
 
 export async function drainOutbox(admin: Admin, opts: { now?: Date; limit?: number } = {}): Promise<DrainResult> {

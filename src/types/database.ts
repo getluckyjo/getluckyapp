@@ -431,6 +431,7 @@ export interface Database {
           refunded_at: string | null
           provider: 'payfast' | 'stitch'
           provider_ref: string | null
+          idempotency_key: string | null
           created_at: string
         }
         Insert: {
@@ -448,6 +449,7 @@ export interface Database {
           refunded_at?: string | null
           provider?: 'payfast' | 'stitch'
           provider_ref?: string | null
+          idempotency_key?: string | null
           created_at?: string
         }
         Update: {
@@ -465,6 +467,7 @@ export interface Database {
           refunded_at?: string | null
           provider?: 'payfast' | 'stitch'
           provider_ref?: string | null
+          idempotency_key?: string | null
           created_at?: string
         }
         Relationships: []

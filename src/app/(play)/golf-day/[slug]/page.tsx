@@ -12,6 +12,8 @@ import { useBet } from '@/context/BetContext'
 import { useRefreshSignal } from '@/hooks/useRefreshSignal'
 import { useIsStandalone } from '@/hooks/useIsStandalone'
 import { setGolfDayTab } from '@/hooks/useGolfDayTab'
+import { netErrorMessage } from '@/lib/net/fetch-json'
+import { postForOutcome } from '@/lib/client/charge-key'
 import { track } from '@/lib/analytics'
 import { promptInstall } from '@/lib/pwa/install'
 import { formatPrize } from '@/lib/format'
@@ -195,13 +197,12 @@ export default function GolfDayPage() {
     setBusy('swing')
     setError('')
     try {
-      const res = await fetch(`/api/golf-days/${encodeURIComponent(slug)}/swing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ holeId: hole.holeId }),
-      })
-      const body = await res.json().catch(() => ({})) as { betId?: string; prize?: number; currency?: PrizeCurrency; error?: string; code?: string }
-      if (res.ok && body.betId) {
+      // Safe to retry: one swing per golfer per golf day (or per hole on a
+      // trip), and a lost answer comes back as the bet already made.
+      const { status, data: body } = await postForOutcome<{ betId?: string; status?: string | null; prize?: number; currency?: PrizeCurrency; error?: string; code?: string }>(
+        `/api/golf-days/${encodeURIComponent(slug)}/swing`, { holeId: hole.holeId }, { retries: 2, timeoutMs: 15_000 },
+      )
+      if (status === 200 && body.betId) {
         track('golf_day_swing_started', { golf_day: slug })
         goRecord(body.betId, hole, body.prize ?? data.golfDay.prize, body.currency ?? data.golfDay.currency)
         return
@@ -210,11 +211,16 @@ export default function GolfDayPage() {
         router.push(`/age-check?next=${encodeURIComponent(golfDayPath(slug))}`)
         return
       }
+      if ((body.code === 'GOLF_DAY_SWING_USED' || body.code === 'GOLF_DAY_ROUND_USED') && body.betId && body.status === 'active') {
+        // Our own request got through and its answer did not: carry on.
+        goRecord(body.betId, hole, data.golfDay.prize, data.golfDay.currency)
+        return
+      }
       setError(body.error ?? 'Your swing could not be started. Please try again.')
       setPicked(null)
       setReload(n => n + 1)
-    } catch {
-      setError('Your swing could not be started. Please try again.')
+    } catch (err) {
+      setError(netErrorMessage(err, 'Your swing could not be started. Please try again.'))
     } finally {
       setBusy(null)
     }

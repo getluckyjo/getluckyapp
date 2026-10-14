@@ -78,8 +78,41 @@ it in the app's voice.
 | `POST /api/videos/uploaded` | `200 alreadyRecorded` once sealed; `404 FOOTAGE_MISSING` until the bytes land |
 | `POST /api/videos/upload-url` | a new slot each time until the seal, then `409 FOOTAGE_SEALED` |
 | `PATCH /api/bets/:id` (miss) | `200 alreadyDone` |
+| `POST /api/payments/payfast/charge`, `POST /api/payments/wallet/charge` with `Idempotency-Key` | the first row's outcome, `replayed: true`: `200 { betId }`, `409 CHARGE_UNKNOWN`, or `402`; nothing sent to the provider again |
+| `POST /api/bets/free`, `POST /api/bets/promo`, `POST /api/golf-days/:slug/swing` | `409 *_USED { betId, status }`: the bet already made; the phone carries on to it while it is `active` |
+| `POST /api/bets/create` | the bet the reference already produced |
+| `POST /api/verifications/:betId` | a second submission that raced the first updates its row; a witness named twice is kept once |
 
 Rate limit `upload` is 60 per golfer per 10 minutes (three calls per attempt).
+
+## Money is charged once
+
+A saved-card or wallet charge that gets no answer back (the request left,
+the reply did not arrive) used to be charged again on the next tap. Now
+the stake sheet mints one key per purchase (`src/lib/client/charge-key.ts`,
+kept in `sessionStorage` under the method, tier and hole) and sends it as
+`Idempotency-Key`. The ledger row carries it under a unique index per
+golfer (migration 047). A repeat with the same key, a retry or two taps
+that raced, is answered from that row and nothing goes to PayFast or
+Stitch. The key is dropped on any answer that settles the purchase and
+kept on a lost answer and on `CHARGE_UNKNOWN`, so the next tap is the
+same charge, not a second one. The saved-card charge stamps the key on the
+row the locked reserve step made; a twin that raced past the lookup hits
+the index there, drops its own pending row and replays the first.
+
+The free, promo and golf-day swings were already one per golfer; now
+their "already used" answer carries the bet it refers to, so a phone whose
+first answer was lost goes on to the recorder instead of a dead end.
+
+`/payment-return` asks `/api/bets/create` with retries and a 12 s
+timeout, waits up to 30 s for signal before the first try, treats a lost
+request as "still waiting", and asks for longer at the tail (up to about
+67 s) before saying the payment could not be confirmed.
+
+Every play route passes `gatePlayRequest` (`src/lib/api/gate.ts`): the
+rate-limit counters and the profile read go to the database together,
+and the user and IP counters are bumped in parallel. One round trip
+fewer per request on a slow link.
 
 ## Telemetry
 
@@ -94,3 +127,7 @@ phone mid-upload, unlock, the progress resumes; airplane mode mid-upload,
 the chip says waiting, off again, it finishes; tap Home mid-upload,
 `bets.video_sha256` is still written; declare a miss while uploading, it
 still seals; kill the app mid-upload, relaunch, it resumes.
+
+Saved-card Pay with the connection dropped as the request leaves (airplane
+mode right after the tap): the sheet says no connection, the tap again
+sends the same key, PayFast shows one charge and the app one bet.
