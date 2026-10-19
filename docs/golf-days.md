@@ -217,6 +217,76 @@ Before the link goes out:
    every round. Hole it and the $5,000 is yours."). Upload RGC's logo in
    the admin, then copy the message from the speech-bubble button.
 
+## The NGC Amateur, Sun City
+
+The Nedbank Golf Challenge Amateur ("NGC Amateur", run by Sun
+International's Sheridan Hughes) at Sun City, 25–28 October 2026: a
+practice nine on the Sunday, then three rounds of Stableford, Monday at
+the Lost City and Tuesday and Wednesday at the Gary Player CC. Get Lucky
+sponsors a R100,000 Hole-in-One Challenge on two of the rounds. At Wild
+Coast Sun in April it was a set-up on the tee with Johannes at the hole;
+from Sun City on it runs in the app.
+
+| | |
+|---|---|
+| Link | `https://www.getluckyholeinone.com/golf-day/ngc-sun-city` |
+| Dates | Monday 26 and Tuesday 27 October 2026: a trip of two rounds |
+| Holes | Mon 26 Oct: Lost City 3, 161 m (white). Tue 27 Oct: Gary Player CC 16, 163 m (club tee) |
+| Prize | R100,000, every player, either round. Declared to Indwe under the Santam policy, like the Wild Coast event |
+| Places | 150, provisional: the event is fully booked, and Sheridan is to give the count |
+| Join code | `NGC26`, in Sheridan's email to the entrants, never in a WhatsApp message |
+| Tab | "NGC", with the pin flag |
+| Look | Host "NGC Amateur", venue "Sun City", NGC's greens from nedbankgolfchallenge.com: ink #022c22, accent #10a867, white card, page #f0f2f2 (ink on card 15:1). Tagline "Lost City on Monday, Gary Player on Tuesday. Hole either and it’s yours." Picture: Johannes's aerial of the Gary Player CC with the Nedbank Golf Challenge badge laid over the hills (`public/golf-days/ngc-sun-city/hero.jpg`, a photo, 1000 × 800: the frame's own 5:4, so nothing is cropped). A soft shade sits under the badge's white "In honour of Gary Player" so it reads over the fairway |
+
+Ken Payet, the tournament director, recommended Lost City 3 and Gary
+Player 16 (14 September 2026) and will set both tees over 150 m, the one
+thing Johannes asked for. The famous Lost City par 3 is the 13th, over
+the crocodile pit, 157 m from the white tees: the alternative if Ken
+agrees. Johannes offered two rounds, one a course, so Wednesday has no
+swing. Gary Player's round is the Tuesday, which leaves a day to check a
+claim before the event ends; moving it to Wednesday is a date change on
+the hole in the admin.
+
+No screen, message or email for this event mentions Indwe or Santam:
+Nedbank is the title sponsor, and Sheridan said (14 September 2026) that a
+financial services provider cannot have exposure at its events. The
+screens already say only "paid by Get Lucky".
+
+Two rounds a player: at 150 players, 300 swings, and at 1 in 12,500 a
+swing about a 2.4% chance that someone wins.
+
+Made in production on 19 October 2026 (by Claude, through Supabase, with
+Johannes's account as its creator). Before the link goes out:
+
+1. Supabase, Authentication → Rate Limits: raise the email limit before
+   Sheridan's email lands. Up to 150 entrants may sign in within the hour.
+2. Declare the entries to Indwe.
+3. Set the places to Sheridan's count plus a few.
+4. The picture: upload `hero.jpg` in the admin (Look → Picture, as a
+   photo), then put the four colours back, since an upload replaces them
+   with ones suggested from the photo. Or, once this file is deployed,
+   point the look's hero at `/golf-days/ngc-sun-city/hero.jpg`. Sheridan
+   to confirm the badge may be shown.
+
+The admin's message button gives the trip message, which says "A free
+swing every round"; this event has a third round without one, so for a
+players' WhatsApp group send this instead:
+
+```
+⛳ *NGC Amateur Sun City × Get Lucky* 🍀
+
+A free swing in each of the first two rounds. *R100 000* if one drops. 💰
+
+📲 *Before Monday:* tap the link, enter the code from Sheridan's email, hit *Join* and sign in, then add it to your home screen and calendar.
+https://www.getluckyholeinone.com/golf-day/ngc-sun-city
+
+🏌️ *On the day:* open the *NGC* tab, tap the day's hole when you get there and get a mate to film it.
+Mon 26 Oct: Lost City 3
+Tue 27 Oct: Gary Player CC 16
+
+18+. One swing a round. Swing like the rent's due. 🍀
+```
+
 ## Every golf day
 
 ### Home screen
