@@ -236,7 +236,7 @@ from Sun City on it runs in the app.
 | Places | 150, provisional: the event is fully booked, and Sheridan is to give the count |
 | Join code | `NGC26`, in Sheridan's email to the entrants, never in a WhatsApp message |
 | Tab | "NGC", with the pin flag |
-| Look | Host "NGC Amateur", venue "Sun City", NGC's greens from nedbankgolfchallenge.com: ink #022c22, accent #10a867, white card, page #f0f2f2 (ink on card 15:1). Tagline "Lost City on Monday, Gary Player on Tuesday. Hole either and it’s yours." No picture yet: NGC's logo in colour, once Sheridan sends it and says it may be shown |
+| Look | Host "NGC Amateur", venue "Sun City", NGC's greens from nedbankgolfchallenge.com: ink #022c22, accent #10a867, white card, page #f0f2f2 (ink on card 15:1). Tagline "Lost City on Monday, Gary Player on Tuesday. Hole either and it’s yours." Picture: Johannes's aerial of the Gary Player CC with the Nedbank Golf Challenge badge laid over the hills (`public/golf-days/ngc-sun-city/hero.jpg`, a photo, 1000 × 800: the frame's own 5:4, so nothing is cropped). A soft shade sits under the badge's white "In honour of Gary Player" so it reads over the fairway |
 
 Ken Payet, the tournament director, recommended Lost City 3 and Gary
 Player 16 (14 September 2026) and will set both tees over 150 m, the one
@@ -262,7 +262,11 @@ Johannes's account as its creator). Before the link goes out:
    Sheridan's email lands. Up to 150 entrants may sign in within the hour.
 2. Declare the entries to Indwe.
 3. Set the places to Sheridan's count plus a few.
-4. Upload NGC's logo in the admin, as a logo.
+4. The picture: upload `hero.jpg` in the admin (Look → Picture, as a
+   photo), then put the four colours back, since an upload replaces them
+   with ones suggested from the photo. Or, once this file is deployed,
+   point the look's hero at `/golf-days/ngc-sun-city/hero.jpg`. Sheridan
+   to confirm the badge may be shown.
 
 The admin's message button gives the trip message, which says "A free
 swing every round"; this event has a third round without one, so for a
