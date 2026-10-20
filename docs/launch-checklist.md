@@ -5,20 +5,21 @@ do it. Tick each line in the pull request that closes it, or here.
 
 ## Decisions this list follows (16 September 2026)
 
-- **No staging project.** The app has no real users yet, so there is one
-  Supabase project: production. The `STAGING_*` scripts, the RLS suite and
-  the load test stay in the repo but are not run; every one of them refuses
-  the production ref by design and that is left as is.
+- **A staging project, since 20 October 2026.** `get-lucky-staging` (ref
+  `xljtarudcljijbtdvajf`, eu-west-1) carries migrations 001 to 047 and the seed
+  accounts (`seed-admin@getlucky.test`, `golfer01` to `golfer24`), and the
+  Vercel Preview environment points at it. The RLS suite, the load test and
+  the independent audit's active testing run there. Production stays its own
+  project; every staging script still refuses the production ref.
 - **No closed beta.** The site goes live open, and the first small group of
   golfers plays for real; what they find gets fixed as it comes. The beta
   gate and the feedback button stay in the code, off. `BETA-TESTING.md`
   keeps the install instructions and the phone checks, which still apply
   to that first group.
-- **Consequence for previews:** a Vercel preview has no database it is
-  allowed to use, so PR previews do not start. Review a change by CI
-  (typecheck, lint, tests, build), then deploy to production. No guard is
-  relaxed: production still refuses sandbox PayFast, previews still refuse
-  the production database.
+- **Consequence for previews:** PR previews boot against staging with
+  PayFast in sandbox mode. Review a change on its preview URL as well as by
+  CI. No guard is relaxed: production still refuses sandbox PayFast, previews
+  still refuse the production database.
 
 ## 1. Database (production)
 
@@ -83,7 +84,7 @@ Preview:
 - [ ] An uptime monitor (Vercel, Better Stack, or similar) polls `https://www.getluckyholeinone.com/api/health` once a minute and alerts on anything but 200. The first call answers `{ ok: true, db: 'ok', … }`.
 - [ ] Independent penetration test of the claim and payment paths booked or done.
 - [ ] Vercel Web Analytics enabled on the project; the funnel events listed in `BETA-TESTING.md` show up from the first golfers.
-- Not run, by decision: the event-day load test (`docs/batch-12-scale.md`) and the query timings (`docs/batch-6-admin-queries.md`). Both need a non-production project. At the expected volume (about one entry a minute on an event day) the first event is the load test; watch the admin pages and the ITN logs during it. If a staging project is ever created, both run unchanged.
+- [ ] The event-day load test (`docs/batch-12-scale.md`) and the query timings (`docs/batch-6-admin-queries.md`) run against staging, with the results pasted into those documents.
 
 ## 6. The day before
 

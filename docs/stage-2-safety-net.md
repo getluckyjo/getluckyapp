@@ -12,6 +12,14 @@ misconfiguration does not silence them.
 
 ## 1. Staging environment
 
+**Status (20 October 2026).** `get-lucky-staging` exists (ref `xljtarudcljijbtdvajf`,
+eu-west-1, same organisation as production). Migrations 001 to 047 are
+applied and recorded in `public.schema_migrations`, the seed accounts are
+in, the Preview environment on Vercel points at it, and its Auth site URL
+and redirect list are set. Still to do by hand: the Google provider on the
+staging project, the Send Email hook, a PayFast sandbox merchant account in
+the Preview variables, and the three `STAGING_*` GitHub Actions secrets.
+
 **Design.** One extra Supabase project ("get-lucky-staging") that every
 Vercel *Preview* deployment talks to. Production keeps its own project. The
 app itself enforces the split at start-up (`src/instrumentation.ts`): a
